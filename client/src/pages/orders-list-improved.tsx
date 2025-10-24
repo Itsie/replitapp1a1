@@ -414,19 +414,20 @@ export default function OrdersList() {
       ),
     },
     {
-      id: "totalGross",
+      accessorKey: "totalGross",
       header: "Gesamt (Brutto)",
-      cell: () => (
-        <Tooltip>
-          <TooltipTrigger>
-            <span className="text-muted-foreground">—</span>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Feature noch nicht verfügbar</p>
-          </TooltipContent>
-        </Tooltip>
-      ),
-      enableSorting: false,
+      cell: ({ row }) => {
+        const total = row.original.totalGross;
+        if (total === null || total === undefined) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        return (
+          <div className="text-right font-medium min-w-[100px]">
+            {formatCurrency(Number(total))}
+          </div>
+        );
+      },
+      enableSorting: true,
     },
     {
       id: "actions",
@@ -504,7 +505,7 @@ export default function OrdersList() {
         order.dueDate ? formatDate(order.dueDate) : "",
         order.sizeTable ? "Ja" : "Nein",
         order.printAssets.filter(a => a.required).length.toString(),
-        "—",
+        order.totalGross ? Number(order.totalGross).toFixed(2).replace('.', ',') : "",
       ].join(";"))
     ];
     
