@@ -11,7 +11,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -41,71 +40,61 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Custom sidebar width
-  const style = {
-    "--sidebar-width": "16rem",
-    "--sidebar-width-icon": "3rem",
-  };
-
   return (
-    <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
-        <AppSidebar />
-        
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="flex h-14 items-center px-4 gap-4">
-              <SidebarTrigger data-testid="button-sidebar-toggle" />
-              
-              <div className="flex items-center gap-2 mr-4">
-                <span className="font-bold text-lg" data-testid="text-app-title">1aShirt</span>
+    <div className="flex min-h-screen">
+      <AppSidebar />
+      
+      <div className="flex-1 flex flex-col">
+        {/* Top Bar */}
+        <header className="sticky top-0 z-40 h-14 border-b bg-background/80 backdrop-blur">
+          <div className="flex h-full items-center px-6 gap-4">
+            {/* Center: Global Search */}
+            <form onSubmit={handleGlobalSearch} className="flex-1 flex justify-center">
+              <div className="relative w-full md:w-[520px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Globale Suche..."
+                  className="w-full pl-9"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  data-testid="input-global-search"
+                />
               </div>
+            </form>
+            
+            {/* Right: Theme Toggle + User Menu */}
+            <nav className="flex items-center gap-2">
+              <ThemeToggle />
               
-              <form onSubmit={handleGlobalSearch} className="flex-1 max-w-md">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="search"
-                    placeholder="Globale Suche..."
-                    className="w-full pl-8"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    data-testid="input-global-search"
-                  />
-                </div>
-              </form>
-              
-              <nav className="flex items-center gap-2 ml-auto">
-                <ThemeToggle />
-                
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="relative" data-testid="button-user-menu">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback>
-                          <User className="h-4 w-4" />
-                        </AvatarFallback>
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem data-testid="menu-profile">Profil</DropdownMenuItem>
-                    <DropdownMenuItem data-testid="menu-settings">Einstellungen</DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem data-testid="menu-logout">Abmelden</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </nav>
-            </div>
-          </header>
-          
-          <main className="flex-1 overflow-auto">
-            <div className="container max-w-7xl mx-auto px-6 py-4">
-              {children}
-            </div>
-          </main>
-        </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative" data-testid="button-user-menu">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback>
+                        <User className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem data-testid="menu-profile">Profil</DropdownMenuItem>
+                  <DropdownMenuItem data-testid="menu-settings">Einstellungen</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem data-testid="menu-logout">Abmelden</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </nav>
+          </div>
+        </header>
+        
+        {/* Main Content */}
+        <main className="flex-1 overflow-auto">
+          <div className="mx-auto w-full px-6 py-4 max-w-[1600px] 2xl:max-w-[1920px]">
+            {children}
+          </div>
+        </main>
       </div>
-    </SidebarProvider>
+    </div>
   );
 }
