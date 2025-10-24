@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
-import { Search, Plus, LayoutGrid, Table as TableIcon, FileText } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { Search, Plus, Eye, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -24,13 +23,11 @@ import {
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import type { OrderWithRelations, Department, OrderSource, WorkflowState } from "@shared/schema";
+import type { OrderWithRelations, OrderSource, WorkflowState } from "@shared/schema";
 import { useDebounce } from "@/hooks/use-debounce";
 
-type ViewMode = "card" | "table";
-
 export default function OrdersList() {
-  const [viewMode, setViewMode] = useState<ViewMode>("card");
+  const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [department, setDepartment] = useState<string>("");
   const [source, setSource] = useState<string>("");
@@ -55,7 +52,11 @@ export default function OrdersList() {
   
   const formatDate = (date: string | Date | null) => {
     if (!date) return "—";
-    return new Date(date).toLocaleDateString("de-DE");
+    return new Date(date).toLocaleDateString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
   };
   
   const getSourceBadgeVariant = (source: OrderSource) => {
@@ -82,12 +83,16 @@ export default function OrdersList() {
       accessorKey: "title",
       header: "Titel",
       cell: ({ row }) => (
-        <div className="font-medium">{row.original.title}</div>
+        <div className="font-medium min-w-[200px]">{row.original.title}</div>
       ),
+      enableSorting: true,
     },
     {
       accessorKey: "customer",
       header: "Kunde",
+      cell: ({ row }) => (
+        <div className="min-w-[150px]">{row.original.customer}</div>
+      ),
     },
     {
       accessorKey: "department",
@@ -113,21 +118,41 @@ export default function OrdersList() {
           {row.original.workflow}
         </Badge>
       ),
+      enableSorting: true,
     },
     {
       accessorKey: "dueDate",
       header: "Fälligkeit",
-      cell: ({ row }) => formatDate(row.original.dueDate),
+      cell: ({ row }) => (
+        <div className="min-w-[100px]">{formatDate(row.original.dueDate)}</div>
+      ),
+      enableSorting: true,
     },
     {
       id: "sizeTable",
       header: "Größentabelle",
-      cell: ({ row }) => row.original.sizeTable ? "✓" : "—",
+      cell: ({ row }) => (
+        <div className="text-center">{row.original.sizeTable ? "✓" : "—"}</div>
+      ),
     },
     {
       id: "assets",
       header: "Druckdaten",
-      cell: ({ row }) => row.original.printAssets.length || "—",
+      cell: ({ row }) => (
+        <div className="text-center">{row.original.printAssets.length || "—"}</div>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Aktionen",
+      cell: ({ row }) => (
+        <Link href={`/orders/${row.original.id}`}>
+          <Button variant="ghost" size="sm" data-testid={`button-view-${row.original.id}`}>
+            <Eye className="h-4 w-4 mr-1" />
+            View
+          </Button>
+        </Link>
+      ),
     },
   ];
   
@@ -213,59 +238,53 @@ export default function OrdersList() {
             <SelectItem value="ABGERECHNET">Abgerechnet</SelectItem>
           </SelectContent>
         </Select>
-        
-        <div className="flex gap-1 border rounded-md p-1">
-          <Button
-            variant={viewMode === "card" ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("card")}
-            data-testid="button-view-card"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === "table" ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("table")}
-            data-testid="button-view-table"
-          >
-            <TableIcon className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
       
-      {isLoading ? (
-        viewMode === "card" ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i}>
-                <CardHeader className="space-y-2">
-                  <Skeleton className="h-5 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-5/6" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="border rounded-lg">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {columns.map((col, i) => (
-                    <TableHead key={i}>
-                      <Skeleton className="h-4 w-24" />
+      <div className="border rounded-lg overflow-hidden">
+        <div className="relative overflow-x-auto max-h-[calc(100vh-280px)]">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id} className="sticky top-0 bg-background z-10 border-b">
+                      {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 font-medium hover:text-foreground transition-colors"
+                          onClick={header.column.getToggleSortingHandler()}
+                          aria-label={`Sort by ${header.column.columnDef.header}`}
+                          aria-sort={
+                            header.column.getIsSorted() === "asc"
+                              ? "ascending"
+                              : header.column.getIsSorted() === "desc"
+                              ? "descending"
+                              : "none"
+                          }
+                        >
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                          {header.column.getIsSorted() === "asc" ? (
+                            <ArrowUp className="h-4 w-4" />
+                          ) : header.column.getIsSorted() === "desc" ? (
+                            <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-50" />
+                          )}
+                        </button>
+                      ) : (
+                        flexRender(header.column.columnDef.header, header.getContext())
+                      )}
                     </TableHead>
                   ))}
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {[...Array(5)].map((_, i) => (
+              ))}
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                [...Array(8)].map((_, i) => (
                   <TableRow key={i}>
                     {columns.map((_, j) => (
                       <TableCell key={j}>
@@ -273,114 +292,54 @@ export default function OrdersList() {
                       </TableCell>
                     ))}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )
-      ) : orders.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Keine Aufträge gefunden</h3>
-            <p className="text-sm text-muted-foreground mb-4" data-testid="text-no-orders">
-              Erstellen Sie einen neuen Auftrag, um loszulegen.
-            </p>
-            <Link href="/orders/new">
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Neuer Auftrag
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      ) : viewMode === "card" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {orders.map((order) => (
-            <Link key={order.id} href={`/orders/${order.id}`}>
-              <Card data-testid={`card-order-${order.id}`} className="hover-elevate cursor-pointer transition-shadow">
-                <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-3">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-base truncate" data-testid={`text-title-${order.id}`}>
-                      {order.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground truncate" data-testid={`text-customer-${order.id}`}>
-                      {order.customer}
-                    </p>
-                  </div>
-                  <Badge variant={getSourceBadgeVariant(order.source)} data-testid={`badge-source-${order.id}`}>
-                    {order.source}
-                  </Badge>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" data-testid={`badge-department-${order.id}`}>
-                      {order.department}
-                    </Badge>
-                    <Badge variant={getWorkflowBadgeVariant(order.workflow)} data-testid={`badge-workflow-${order.id}`}>
-                      {order.workflow}
-                    </Badge>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span data-testid={`text-duedate-${order.id}`}>
-                      Fällig: {formatDate(order.dueDate)}
-                    </span>
-                    {order.sizeTable && (
-                      <Badge variant="secondary" className="text-xs" data-testid={`badge-sizetable-${order.id}`}>
-                        Größentabelle
-                      </Badge>
-                    )}
-                  </div>
-                  
-                  {order.printAssets.length > 0 && (
-                    <div className="text-xs text-muted-foreground" data-testid={`text-assets-${order.id}`}>
-                      {order.printAssets.length} Druckdaten
+                ))
+              ) : orders.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-64 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                        <Search className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <h3 className="text-lg font-semibold mb-2">Keine Aufträge gefunden</h3>
+                      <p className="text-sm text-muted-foreground mb-4" data-testid="text-no-orders">
+                        {searchQuery || department || source || workflow
+                          ? "Keine Aufträge entsprechen den Filterkriterien."
+                          : "Erstellen Sie einen neuen Auftrag, um loszulegen."}
+                      </p>
+                      <Link href="/orders/new">
+                        <Button>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Neuer Auftrag
+                        </Button>
+                      </Link>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <div className="border rounded-lg">
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  ))}
+                  </TableCell>
                 </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-testid={`row-order-${row.original.id}`}
-                  className="cursor-pointer"
-                  onClick={() => window.location.href = `/orders/${row.original.id}`}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
+              ) : (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-testid={`row-order-${row.original.id}`}
+                    className="cursor-pointer hover-elevate"
+                    onClick={(e) => {
+                      // Don't navigate if clicking on the action button or link
+                      const target = e.target as HTMLElement;
+                      if (target.closest('button, a')) return;
+                      setLocation(`/orders/${row.original.id}`);
+                    }}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
-      )}
+      </div>
     </>
   );
 }

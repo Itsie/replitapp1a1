@@ -1,0 +1,102 @@
+Step 2.1c – Replace the JSON textarea for size tables with a 2-step Roster Editor. No new endpoints, no DB schema changes.
+
+Goal:
+Make it trivial to define sizes, jersey numbers (required), and optional player names for team orders. 
+No JSON input by the user. Save using existing POST /api/orders/:id/size with a structured rows JSON.
+
+Scope constraints:
+- Do NOT add new API routes or DB fields. Use POST /api/orders/:id/size as is.
+- Keep SizeTable.schema string and SizeTable.rows JSON. We will store a per-item rows array instead of an aggregated count.
+- No planning/JTL/billing changes.
+
+UI/Flow:
+
+A) Open “Größentabelle anlegen” → Modal with 2 steps (shadcn/ui Dialog + Stepper):
+   Step 1: Größen & Mengen
+   Step 2: Spieler/Roster (Nummer Pflicht, Name optional)
+
+B) Step 1 – Größen & Mengen
+   - Presets (Segmented control):
+     • ALPHA: XS, S, M, L, XL, XXL
+     • NUMERIC (EU Kids/Adults): 116, 128, 140, 152, 164, S, M, L, XL, XXL
+     • CUSTOM: List builder (Chips) with add/remove
+   - Grid with all sizes as columns; each cell = quantity input (0..200), default 0
+   - Quick actions:
+     • “+1 auf alle” / “Alle leeren”
+     • “Summe: X Stück”
+   - Continue → generates item rows for Step 2
+
+C) Step 2 – Spieler/Roster
+   - Table with columns: # (running index), Größe (select), Nummer (required), Name (optional)
+   - Auto-generation: for each size/qty from Step 1, create that many rows (size is prefilled)
+   - Bulk tools:
+     • “Nummern von 1..X auto-zuweisen” (start value editable)
+     • “Name aus Zwischenablage einfügen” (one name per Zeile -> fills down)
+     • CSV Import (optional): columns allowed: size,number,name (map columns in a small dialog)
+   - Validation:
+     • Nummer required, integer 0–99 (configurable bound 0–999 ok)
+     • Nummern innerhalb eines Auftrags eindeutig (warn + highlight, allow override via checkbox „Duplikate erlauben“ OFF by default)
+     • Name optional, max 30 chars
+     • Größe required (prefilled)
+   - Keyboard UX:
+     • Enter → next cell; Shift+Enter → previous; Arrow keys move
+     • Add/Remove row buttons per Zeile
+   - Live summary (right): Counts by size as badges (S:5, M:4, L:3 …), Total N
+
+D) Save
+   - Save button posts to POST /api/orders/:id/size with:
+     {
+       "scheme": "ALPHA" | "NUMERIC" | "CUSTOM",
+       "rows": [
+         { "size":"M", "number":10, "name":"Müller" },
+         { "size":"M", "number":7,  "name":"Schmidt" },
+         { "size":"L", "number":4 }
+       ],
+       "comment": "z. B. Heimtrikots 24/25"
+     }
+   - Server must accept this rows format (array of items) just like earlier; no schema change
+   - On success, detail page shows a compact summary (counts by size + first X roster entries)
+
+E) Order detail – Größen Tab (read & minor edit)
+   - If a size table exists:
+     • Show read-only table with Size | Number | Name (paginate if long)
+     • Show counts by size as chips
+     • Actions: “CSV export”, “PDF Arbeitsliste” (simple server/client-side generation; if not ready, leave CSV export and mark PDF as TODO)
+   - Edit button opens the same 2-step editor prefilled
+
+F) CSV Import/Export
+   - CSV Export: header row: size,number,name
+   - CSV Import: simple mapping dialog (detect header if present)
+   - Validate on import and show conflict report (e.g., duplicate numbers)
+
+Tech details:
+
+Frontend:
+- Use shadcn/ui: Dialog, Tabs/Stepper, Table, Input, Select, Badge, Toast, Alert.
+- Keep existing TanStack Query wiring. No new API endpoints. 
+- Component structure suggestion:
+  /client/src/components/sizeTable/StepSizes.tsx
+  /client/src/components/sizeTable/StepRoster.tsx
+  /client/src/components/sizeTable/UploadCsv.tsx
+  /client/src/pages/orders/SizeTableDialog.tsx  (wraps both steps)
+- Provide utilities:
+  - presetAlpha = ["XS","S","M","L","XL","XXL"]
+  - presetNumeric = ["116","128","140","152","164","S","M","L","XL","XXL"]
+  - makeRosterFromCounts(countsBySize): TItem[]
+  - validateRoster(items): { ok, errors[] }  (duplicate numbers, invalid number range, empty sizes)
+- Keep German labels and microcopy:
+  - “Größentabelle anlegen”, “Größen & Mengen”, “Spieler/Roster”, “Nummern automatisch vergeben”, “Aus Zwischenablage einfügen”, “CSV importieren”, “Speichern”, “Abbrechen”, “Duplikate erlauben” (default aus)
+
+Backend:
+- No route changes. Ensure POST /api/orders/:id/size accepts rows: TItem[] (list of items) besides any previous aggregated format.
+- Optionally normalize: if rows are item-level, store as-is in SizeTable.rows JSON. (No Prisma migration.)
+- GET /api/orders (list) may compute the “size table ✓” badge if sizeTable.rows length > 0.
+
+Acceptance:
+- User can create a roster for 14 mixed sizes without typing JSON.
+- Autonumber assigns a continuous range (configurable start) and avoids duplicates unless explicitly allowed.
+- CSV import works and merges/overwrites in the editor before saving.
+- Saved size table reappears correctly in detail with counts and roster.
+- No new DB fields or endpoints. Existing POST /api/orders/:id/size is used.
+
+Stay strictly in scope. No extra features. Use only existing codebase and schema.
