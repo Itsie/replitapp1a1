@@ -59,7 +59,7 @@ export default function OrderNew() {
       shipStreet: null,
       shipZip: null,
       shipCity: null,
-      shipCountry: "DE",
+      shipCountry: null,
     },
   });
   
@@ -373,7 +373,20 @@ export default function OrderNew() {
                           <Checkbox
                             id="useAlternateShipping"
                             checked={useAlternateShipping}
-                            onCheckedChange={(checked) => setUseAlternateShipping(checked as boolean)}
+                            onCheckedChange={(checked) => {
+                              const isChecked = checked as boolean;
+                              setUseAlternateShipping(isChecked);
+                              // Set default country when enabling alternate shipping
+                              if (isChecked) {
+                                form.setValue('shipCountry', 'DE');
+                              } else {
+                                // Clear all shipping fields when disabling
+                                form.setValue('shipStreet', null);
+                                form.setValue('shipZip', null);
+                                form.setValue('shipCity', null);
+                                form.setValue('shipCountry', null);
+                              }
+                            }}
                             data-testid="checkbox-alternate-shipping"
                           />
                           <label
