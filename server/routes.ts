@@ -1,9 +1,12 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertOrderSchema, updateOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertPositionSchema, updatePositionSchema } from "@shared/schema";
+import { insertOrderSchema, updateOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertOrderAssetSchema, insertPositionSchema, updatePositionSchema } from "@shared/schema";
 import { z } from "zod";
 import { Decimal } from "@prisma/client/runtime/library";
+import { upload } from "./upload";
+import path from "path";
+import fs from "fs";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/orders - List orders with filters
@@ -241,8 +244,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // POST /api/orders/:id/assets - Add print asset
-  app.post("/api/orders/:id/assets", async (req, res) => {
+  // POST /api/orders/:id/print-assets - Add print asset (legacy)
+  app.post("/api/orders/:id/print-assets", async (req, res) => {
     try {
       const validated = insertPrintAssetSchema.parse(req.body);
       const order = await storage.addPrintAsset(req.params.id, validated);
@@ -256,6 +259,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error adding print asset:", error);
       res.status(500).json({ error: "Failed to add print asset" });
+    }
+  });
+  
+  // GET /api/orders/:id/assets - List all order assets
+  app.get("/api/orders/:id/assets", async (req, res) => {
+    try {
+      const assets = await storage.getOrderAssets(req.params.id);
+      res.json(assets);
+    } catch (error) {
+      if (error instanceof Error && error.message === "Order not found") {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      console.error("Error fetching assets:", error);
+      res.status(500).json({ error: "Failed to fetch assets" });
+    }
+  });
+  
+  // POST /api/orders/:id/assets - Create asset with path or url
+  app.post("/api/orders/:id/assets", async (req, res) => {
+    try {
+      const validated = insertOrderAssetSchema.parse(req.body);
+      const asset = await storage.createOrderAsset(req.params.id, validated);
+      res.status(201).json(asset);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error) {
+        if (error.message === "Order not found") {
+          return res.status(404).json({ error: "Order not found" });
+        }
+        if (error.message === "UNC path must start with // or \\\\") {
+          return res.status(400).json({ error: "UNC path must start with // or \\\\" });
+        }
+      }
+      console.error("Error creating asset:", error);
+      res.status(500).json({ error: "Failed to create asset" });
+    }
+  });
+  
+  // POST /api/orders/:id/assets/upload - Upload file(s)
+  app.post("/api/orders/:id/assets/upload", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      
+      const orderId = req.params.id;
+      const file = req.file;
+      
+      // Extract metadata from form fields
+      const kind = req.body.kind || "FILE";
+      const label = req.body.label || file.originalname;
+      const required = req.body.required === "true" || req.body.required === true;
+      const notes = req.body.notes || null;
+      
+      // Build public URL
+      const publicUrl = `/uploads/orders/${orderId}/${file.filename}`;
+      
+      // Get file extension
+      const ext = path.extname(file.originalname).toLowerCase();
+      
+      // Create asset in database
+      const asset = await storage.createOrderAsset(orderId, {
+        kind,
+        label,
+        url: publicUrl,
+        ext: ext || null,
+        size: file.size,
+        required,
+        notes,
+        path: null,
+      });
+      
+      res.status(201).json(asset);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error && error.message === "Order not found") {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      console.error("Error uploading file:", error);
+      res.status(500).json({ error: "Failed to upload file" });
+    }
+  });
+  
+  // DELETE /api/orders/:id/assets/:assetId - Delete asset
+  app.delete("/api/orders/:id/assets/:assetId", async (req, res) => {
+    try {
+      const result = await storage.deleteOrderAsset(req.params.id, req.params.assetId);
+      
+      // If a file path was returned, delete the file from disk
+      if (result.filePath) {
+        const fullPath = path.join(process.cwd(), result.filePath);
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+        }
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === "Asset not found") {
+          return res.status(404).json({ error: "Asset not found" });
+        }
+        if (error.message === "Asset does not belong to this order") {
+          return res.status(403).json({ error: "Asset does not belong to this order" });
+        }
+      }
+      console.error("Error deleting asset:", error);
+      res.status(500).json({ error: "Failed to delete asset" });
     }
   });
   

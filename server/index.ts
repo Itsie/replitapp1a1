@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import path from "path";
 import { registerRoutes } from "./routes";
 import { setupVite, log } from "./vite";
 
@@ -9,6 +10,9 @@ const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
+
+// Serve uploaded files statically
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, message: "1aShirt API is running" });
