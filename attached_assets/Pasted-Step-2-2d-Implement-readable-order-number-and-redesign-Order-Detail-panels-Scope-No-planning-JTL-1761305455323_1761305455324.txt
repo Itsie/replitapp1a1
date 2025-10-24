@@ -1,0 +1,92 @@
+Step 2.2d – Implement readable order number and redesign Order Detail panels.
+Scope: No planning/JTL import/billing changes. Keep existing endpoints; only extend schema minimally and adjust display.
+
+PART A) Readable order number (global sequence)
+Goal:
+- INTERNAL orders: sequential format "INT-<year>-<number>" starting at INT-2025-1000 and increasing.
+- JTL orders: keep their original AU number as display number (e.g. "AU12345").
+- App shows displayOrderNumber consistently (lists, details), backend still uses id for routing.
+
+Schema:
+- Prisma model Order: add
+  displayOrderNumber String? @unique
+- Create table OrderSequence:
+  model OrderSequence {
+    id        Int    @id @default(autoincrement())
+    year      Int    @unique
+    current   Int    @default(999) // so first assigned is 1000 after increment
+  }
+
+Backend logic (transactional):
+- On create of INTERNAL order:
+  1) const year = new Date().getFullYear()
+  2) upsert OrderSequence for {year}; increment `current` atomically in a transaction
+  3) const seq = current + 1; const display = `INT-${year}-${seq}`
+  4) set order.displayOrderNumber = display
+- On JTL import:
+  - set order.displayOrderNumber = row['Auftragsnummer'] (AU-Nummer) if present, else fallback to jtlOrderNumber
+- Expose displayOrderNumber in GET /api/orders and /api/orders/:id
+
+UI changes:
+- Orders list: add/replace column "Auftragsnummer" showing displayOrderNumber. Sortable.
+- Order detail header: show displayOrderNumber under the title, with small copy-to-clipboard.
+
+Safety:
+- Use Prisma transaction for increment to avoid duplicates.
+- On conflict, retry once then 500.
+
+PART B) Order Detail panels (show real data)
+Goal:
+- Show all relevant customer/contact and address fields in structured cards. No empty giant panels.
+
+Layout (shadcn/ui):
+- 2-column responsive grid (lg:grid-cols-2, gap-4)
+  Left column:
+    Card "Kunde"
+      - Firma (company) or "—"
+      - Ansprechpartner: contactFirstName + contactLastName or "—"
+      - E-Mail (mailto link), Telefon (tel link)
+    Card "Rechnungsadresse"
+      - billStreet
+      - billZip billCity
+      - billCountry
+    If shipping differs (any ship* present):
+      Card "Lieferadresse"
+        - shipStreet
+        - shipZip shipCity
+        - shipCountry
+  Right column:
+    Card "Auftrag"
+      - Abteilung (department badge)
+      - Quelle (source badge)
+      - Workflow (badge)
+      - Fälligkeitsdatum (formatted DD.MM.YYYY or "—")
+      - Standort (location or "—")
+      - Erstellt am (createdAt formatted)
+    Card "Anhänge"
+      - Required assets count / optional count
+      - Button "Druckdaten öffnen" → switch to tab
+- In the small meta line directly under title:
+  `${displayOrderNumber} • ${department} • ${workflow}` as muted text.
+
+"Für Produktion freigeben" action:
+- Button sits top-right in the detail header action bar.
+- Use Confirm Dialog (shadcn) before POST /api/orders/:id/submit.
+- Disabled if no required PrintAsset; tooltip: "Benötigte Druckdaten fehlen".
+- On success: toast "Zur Produktion freigegeben"; update workflow badge live.
+- On 412: show shadcn Alert in Druckdaten-Tab and toast error.
+
+No breaking changes:
+- Keep all existing endpoints and their validation. Only add displayOrderNumber in responses.
+- Do not change POST /api/orders body except that INTERNAL creation now assigns displayOrderNumber.
+- Do not modify planning/JTL/billing modules.
+
+Acceptance:
+- Creating INTERNAL order produces "INT-<year>-<1000+>" sequentially.
+- JTL-imported orders display AU numbers.
+- Orders list shows "Auftragsnummer" column (sortable).
+- Detail page shows full customer/contact + both addresses (billing + optional shipping) in cards.
+- "Für Produktion freigeben" is visually integrated, guarded by confirm, disabled when missing required asset, and updates state correctly.
+- Dark/Light mode preserved, no layout jumps, no API regressions.
+
+Stay strictly in scope. No extra features. Use only the existing codebase and schema.
