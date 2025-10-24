@@ -1,0 +1,48 @@
+TASK: Optimize and refactor the Orders overview table (client/src/pages/orders/index.tsx)
+
+ISSUES
+1. Table columns are visually misaligned and inconsistent between table and card view.
+2. The “Beschaffung” (Procurement) column is not needed and should be removed.
+3. The “Quelle” field shows “INTERNAL” instead of the localized “Intern”.
+4. Switching between table and card view freezes or crashes the browser.
+5. Filter dropdowns (department, source, status) take too much horizontal space at the top.
+
+GOAL
+Streamline and stabilize the Orders overview for better usability and performance.
+
+REQUIREMENTS
+
+A) TABLE STRUCTURE
+- Keep columns in this order:
+  Titel | Kunde | Abteilung | Quelle | Status | Fälligkeit | Größe | Druckdaten | Gesamt (Brutto) | Aktionen
+- Remove “Beschaffung”.
+- Localize “INTERNAL” → “Intern” and “EXTERNAL” → “Extern”.
+- Align numeric and date columns (Gesamt, Fälligkeit) right.
+- Ensure consistent row height, padding, and icon alignment.
+
+B) PERFORMANCE
+- Optimize table rendering for larger data sets (no full re-render when switching between card/table).
+- Fix crash when toggling view mode (likely due to missing memoization or stale state in useEffect).
+- Use lazy loading or virtualization for rows if needed (TanStack or react-virtualized).
+
+C) FILTER + LAYOUT
+- Move filter dropdowns into a collapsible "Filter" panel (button toggle).
+- Keep the search bar visible at all times.
+- Add debounce (250ms) to global search input to reduce rerenders.
+
+D) STYLE + UX
+- Replace English system terms with German labels:
+  • “Internal” → “Intern”
+  • “Due” → “Fälligkeit”
+  • “Print Data” → “Druckdaten”
+  • “Total” → “Gesamt (Brutto)”
+- Fix column width calculation to prevent header misalignment.
+- Hover state for rows should be subtle (gray overlay, no text shift).
+- Make sure keyboard navigation (Tab, Arrow Down) still works.
+
+ACCEPTANCE CRITERIA
+- Table renders instantly (no freeze when toggling views).
+- “Intern” label appears correctly.
+- Layout stable (no column drift).
+- Removed “Beschaffung”.
+- Filters work and don’t dominate the header area.

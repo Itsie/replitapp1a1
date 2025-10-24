@@ -116,6 +116,9 @@ export default function OrdersList() {
   // Quick filters
   const [activeQuickFilters, setActiveQuickFilters] = useState<Set<QuickFilter>>(new Set());
   
+  // Filter panel state
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  
   // Read initial search query from URL
   const urlParams = new URLSearchParams(window.location.search);
   const initialQuery = urlParams.get("q") || "";
@@ -151,7 +154,7 @@ export default function OrdersList() {
     }
   }, [location]);
   
-  const debouncedSearch = useDebounce(searchQuery, 300);
+  const debouncedSearch = useDebounce(searchQuery, 250);
   
   const buildQueryString = () => {
     const params = new URLSearchParams();
@@ -281,7 +284,8 @@ export default function OrdersList() {
   const orders = filteredOrders.slice(0, MAX_ROWS);
   const isRowLimitReached = filteredOrders.length > MAX_ROWS;
   
-  const columns: ColumnDef<OrderWithRelations>[] = [
+  // Memoize columns for performance optimization
+  const columns: ColumnDef<OrderWithRelations>[] = useMemo(() => [
     {
       id: "select",
       header: ({ table }) => (
@@ -341,11 +345,14 @@ export default function OrdersList() {
     {
       accessorKey: "source",
       header: "Quelle",
-      cell: ({ row }) => (
-        <Badge variant={getSourceBadgeVariant(row.original.source)}>
-          {row.original.source}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const sourceLabel = row.original.source === "INTERNAL" ? "Intern" : row.original.source;
+        return (
+          <Badge variant={getSourceBadgeVariant(row.original.source)}>
+            {sourceLabel}
+          </Badge>
+        );
+      },
     },
     {
       accessorKey: "workflow",
@@ -359,13 +366,15 @@ export default function OrdersList() {
     },
     {
       accessorKey: "dueDate",
-      header: "Fälligkeit",
+      header: () => <div className="text-right">Fälligkeit</div>,
       cell: ({ row }) => {
         const { label, variant } = getDueDateStatus(row.original.dueDate);
         return (
-          <Badge variant={variant} className="min-w-[100px] justify-center">
-            {label}
-          </Badge>
+          <div className="flex justify-end">
+            <Badge variant={variant} className="min-w-[100px] justify-center">
+              {label}
+            </Badge>
+          </div>
         );
       },
       enableSorting: true,
@@ -400,57 +409,6 @@ export default function OrdersList() {
       },
     },
     {
-      id: "procurement",
-      header: "Beschaffung",
-      cell: ({ row }) => {
-        const positions = row.original.positions || [];
-        if (positions.length === 0) {
-          return <span className="text-muted-foreground">—</span>;
-        }
-        
-        const procurementCounts = positions.reduce((acc, pos: any) => {
-          acc[pos.procurement] = (acc[pos.procurement] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-
-        const ordered = procurementCounts["ORDERED"] || 0;
-        const inStock = procurementCounts["IN_STOCK"] || 0;
-        const none = procurementCounts["NONE"] || 0;
-
-        if (ordered > 0) {
-          return (
-            <Tooltip>
-              <TooltipTrigger>
-                <Badge variant="outline" className="text-orange-600 border-orange-600">
-                  Bestellt ({ordered})
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{ordered} Position(en) bestellt{inStock > 0 && `, ${inStock} auf Lager`}{none > 0 && `, ${none} keine`}</p>
-              </TooltipContent>
-            </Tooltip>
-          );
-        }
-        
-        if (inStock > 0) {
-          return (
-            <Tooltip>
-              <TooltipTrigger>
-                <Badge variant="outline" className="text-green-600 border-green-600">
-                  Lager ({inStock})
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{inStock} Position(en) auf Lager{none > 0 && `, ${none} keine`}</p>
-              </TooltipContent>
-            </Tooltip>
-          );
-        }
-
-        return <span className="text-muted-foreground">—</span>;
-      },
-    },
-    {
       accessorKey: "totalGross",
       header: "Gesamt (Brutto)",
       cell: ({ row }) => {
@@ -478,7 +436,7 @@ export default function OrdersList() {
       ),
       enableHiding: false,
     },
-  ];
+  ], []);
   
   const table = useReactTable({
     data: orders,
@@ -532,18 +490,21 @@ export default function OrdersList() {
     
     const csvRows = [
       headers.join(";"),
-      ...dataToExport.map(order => [
-        order.displayOrderNumber || "",
-        `"${order.title.replace(/"/g, '""')}"`,
-        `"${order.customer.replace(/"/g, '""')}"`,
-        order.department,
-        order.source,
-        order.workflow,
-        order.dueDate ? formatDate(order.dueDate) : "",
-        order.sizeTable ? "Ja" : "Nein",
-        order.printAssets.filter(a => a.required).length.toString(),
-        order.totalGross ? Number(order.totalGross).toFixed(2).replace('.', ',') : "",
-      ].join(";"))
+      ...dataToExport.map(order => {
+        const sourceLabel = order.source === "INTERNAL" ? "Intern" : order.source;
+        return [
+          order.displayOrderNumber || "",
+          `"${order.title.replace(/"/g, '""')}"`,
+          `"${order.customer.replace(/"/g, '""')}"`,
+          order.department,
+          sourceLabel,
+          order.workflow,
+          order.dueDate ? formatDate(order.dueDate) : "",
+          order.sizeTable ? "Ja" : "Nein",
+          order.printAssets.filter(a => a.required).length.toString(),
+          order.totalGross ? Number(order.totalGross).toFixed(2).replace('.', ',') : "",
+        ].join(";");
+      })
     ];
     
     const csvContent = csvRows.join("\n");
@@ -695,8 +656,8 @@ export default function OrdersList() {
         </div>
       </div>
       
-      {/* Search & Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-4">
+      {/* Search Bar - Always Visible */}
+      <div className="flex gap-2 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -708,49 +669,71 @@ export default function OrdersList() {
           />
         </div>
         
-        <Select value={department || "ALL"} onValueChange={(val) => setDepartment(val === "ALL" ? "" : val)}>
-          <SelectTrigger data-testid="select-department" className="w-full sm:w-48">
-            <SelectValue placeholder="Abteilung" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Alle Abteilungen</SelectItem>
-            <SelectItem value="TEAMSPORT">Teamsport</SelectItem>
-            <SelectItem value="TEXTILVEREDELUNG">Textilveredelung</SelectItem>
-            <SelectItem value="STICKEREI">Stickerei</SelectItem>
-            <SelectItem value="DRUCK">Druck</SelectItem>
-            <SelectItem value="SONSTIGES">Sonstiges</SelectItem>
-          </SelectContent>
-        </Select>
-        
-        <Select value={source || "ALL"} onValueChange={(val) => setSource(val === "ALL" ? "" : val)}>
-          <SelectTrigger data-testid="select-source" className="w-full sm:w-40">
-            <SelectValue placeholder="Quelle" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Alle Quellen</SelectItem>
-            <SelectItem value="JTL">JTL</SelectItem>
-            <SelectItem value="INTERNAL">Intern</SelectItem>
-          </SelectContent>
-        </Select>
-        
-        <Select value={workflow || "ALL"} onValueChange={(val) => setWorkflow(val === "ALL" ? "" : val)}>
-          <SelectTrigger data-testid="select-workflow" className="w-full sm:w-48">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Alle Status</SelectItem>
-            <SelectItem value="ENTWURF">Entwurf</SelectItem>
-            <SelectItem value="NEU">Neu</SelectItem>
-            <SelectItem value="PRUEFUNG">Prüfung</SelectItem>
-            <SelectItem value="FUER_PROD">Für Produktion</SelectItem>
-            <SelectItem value="IN_PROD">In Produktion</SelectItem>
-            <SelectItem value="WARTET_FEHLTEILE">Wartet Fehlteile</SelectItem>
-            <SelectItem value="FERTIG">Fertig</SelectItem>
-            <SelectItem value="ZUR_ABRECHNUNG">Zur Abrechnung</SelectItem>
-            <SelectItem value="ABGERECHNET">Abgerechnet</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Filter Toggle Button */}
+        <Button
+          variant="outline"
+          size="default"
+          onClick={() => setFilterPanelOpen(!filterPanelOpen)}
+          data-testid="button-toggle-filters"
+          className="gap-2"
+        >
+          <Settings2 className="h-4 w-4" />
+          Filter
+          {(department || source || workflow) && (
+            <Badge variant="secondary" className="ml-1 px-1.5">
+              {[department, source, workflow].filter(Boolean).length}
+            </Badge>
+          )}
+        </Button>
       </div>
+      
+      {/* Collapsible Filter Panel */}
+      {filterPanelOpen && (
+        <div className="flex flex-col sm:flex-row gap-4 mb-4 p-4 border rounded-lg bg-muted/30">
+          <Select value={department || "ALL"} onValueChange={(val) => setDepartment(val === "ALL" ? "" : val)}>
+            <SelectTrigger data-testid="select-department" className="w-full sm:w-48">
+              <SelectValue placeholder="Abteilung" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Alle Abteilungen</SelectItem>
+              <SelectItem value="TEAMSPORT">Teamsport</SelectItem>
+              <SelectItem value="TEXTILVEREDELUNG">Textilveredelung</SelectItem>
+              <SelectItem value="STICKEREI">Stickerei</SelectItem>
+              <SelectItem value="DRUCK">Druck</SelectItem>
+              <SelectItem value="SONSTIGES">Sonstiges</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Select value={source || "ALL"} onValueChange={(val) => setSource(val === "ALL" ? "" : val)}>
+            <SelectTrigger data-testid="select-source" className="w-full sm:w-40">
+              <SelectValue placeholder="Quelle" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Alle Quellen</SelectItem>
+              <SelectItem value="JTL">JTL</SelectItem>
+              <SelectItem value="INTERNAL">Intern</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Select value={workflow || "ALL"} onValueChange={(val) => setWorkflow(val === "ALL" ? "" : val)}>
+            <SelectTrigger data-testid="select-workflow" className="w-full sm:w-48">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Alle Status</SelectItem>
+              <SelectItem value="ENTWURF">Entwurf</SelectItem>
+              <SelectItem value="NEU">Neu</SelectItem>
+              <SelectItem value="PRUEFUNG">Prüfung</SelectItem>
+              <SelectItem value="FUER_PROD">Für Produktion</SelectItem>
+              <SelectItem value="IN_PROD">In Produktion</SelectItem>
+              <SelectItem value="WARTET_FEHLTEILE">Wartet Fehlteile</SelectItem>
+              <SelectItem value="FERTIG">Fertig</SelectItem>
+              <SelectItem value="ZUR_ABRECHNUNG">Zur Abrechnung</SelectItem>
+              <SelectItem value="ABGERECHNET">Abgerechnet</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       
       {/* Quick Filters */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -1033,7 +1016,7 @@ export default function OrdersList() {
                       <div className="mt-3 flex flex-wrap gap-2 text-xs">
                         <Badge variant="outline">{order.department}</Badge>
                         <Badge variant={getSourceBadgeVariant(order.source)}>
-                          {order.source}
+                          {order.source === "INTERNAL" ? "Intern" : order.source}
                         </Badge>
                         <Badge variant={getWorkflowBadgeVariant(order.workflow)}>
                           {order.workflow}
