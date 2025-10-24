@@ -127,7 +127,9 @@ export default function OrderNew() {
     createMutation.mutate(data);
   };
 
-  const isFormValid = form.formState.isValid && positions.length > 0;
+  // Check if form is valid by checking if there are no errors
+  const hasNoFormErrors = Object.keys(form.formState.errors).length === 0;
+  const isFormValid = hasNoFormErrors && positions.length > 0;
   
   // Collect missing required fields
   const getMissingFields = () => {
