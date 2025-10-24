@@ -552,7 +552,16 @@ export default function OrderNew() {
                                 type="date"
                                 {...field}
                                 value={field.value ? new Date(field.value).toISOString().split('T')[0] : ""}
-                                onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    // Convert to ISO datetime string
+                                    const date = new Date(e.target.value);
+                                    date.setHours(12, 0, 0, 0); // Set to noon to avoid timezone issues
+                                    field.onChange(date.toISOString());
+                                  } else {
+                                    field.onChange(null);
+                                  }
+                                }}
                               />
                             </FormControl>
                             <FormMessage />
