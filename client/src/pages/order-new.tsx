@@ -128,6 +128,27 @@ export default function OrderNew() {
 
   const isFormValid = form.formState.isValid && positions.length > 0;
   
+  // Collect missing required fields
+  const getMissingFields = () => {
+    const missing: string[] = [];
+    const errors = form.formState.errors;
+    
+    if (errors.title) missing.push("Titel");
+    if (errors.customer) missing.push("Kunde (Anzeigename)");
+    if (errors.customerEmail) missing.push("E-Mail");
+    if (errors.customerPhone) missing.push("Telefon");
+    if (errors.billStreet) missing.push("Rechnungsadresse: Straße");
+    if (errors.billZip) missing.push("Rechnungsadresse: PLZ");
+    if (errors.billCity) missing.push("Rechnungsadresse: Stadt");
+    
+    if (positions.length === 0) missing.push("Mindestens eine Position");
+    
+    return missing;
+  };
+  
+  const missingFields = getMissingFields();
+  const showValidationHint = !isFormValid && (form.formState.isSubmitted || Object.keys(form.formState.touchedFields).length > 0);
+  
   return (
     <div className="min-h-screen flex flex-col w-full">
       <div className="border-b">
@@ -591,23 +612,41 @@ export default function OrderNew() {
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 border-t bg-background z-10">
-        <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4 flex justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setLocation("/orders")}
-            data-testid="button-cancel"
-          >
-            Abbrechen
-          </Button>
-          <Button
-            type="submit"
-            disabled={!isFormValid || createMutation.isPending}
-            onClick={form.handleSubmit(onSubmit)}
-            data-testid="button-create"
-          >
-            {createMutation.isPending ? "Wird erstellt..." : "Auftrag erstellen"}
-          </Button>
+        <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4">
+          {showValidationHint && missingFields.length > 0 && (
+            <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-destructive mb-1">Bitte füllen Sie folgende Pflichtfelder aus:</h4>
+                  <ul className="list-disc list-inside text-sm text-destructive/90 space-y-1">
+                    {missingFields.map((field) => (
+                      <li key={field}>{field}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setLocation("/orders")}
+              data-testid="button-cancel"
+            >
+              Abbrechen
+            </Button>
+            <Button
+              type="submit"
+              disabled={!isFormValid || createMutation.isPending}
+              onClick={form.handleSubmit(onSubmit)}
+              data-testid="button-create"
+            >
+              {createMutation.isPending ? "Wird erstellt..." : "Auftrag erstellen"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
