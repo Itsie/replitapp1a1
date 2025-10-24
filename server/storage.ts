@@ -224,11 +224,17 @@ export class PrismaStorage implements IStorage {
       include: {
         printAssets: true,
         sizeTable: true,
+        positions: true,
       },
     });
     
     if (!order) {
       throw new Error('Order not found');
+    }
+    
+    // Check if at least one position exists
+    if (!order.positions || order.positions.length === 0) {
+      throw new Error('At least one position is required');
     }
     
     // Check if at least one required print asset exists

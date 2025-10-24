@@ -131,7 +131,7 @@ export default function OrderNew() {
   const isFormValid = form.formState.isValid && positions.length > 0;
   
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col w-full">
       {/* Header */}
       <div className="border-b">
         <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4">
@@ -148,7 +148,7 @@ export default function OrderNew() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto pb-24">
+      <div className="flex-1 overflow-auto">
         <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
