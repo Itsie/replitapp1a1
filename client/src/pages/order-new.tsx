@@ -14,11 +14,28 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { insertOrderSchema, type InsertOrder } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { PositionsEditor } from "@/components/positions-editor";
+
+type LocalPosition = {
+  id?: number;
+  articleName: string;
+  articleNumber: string | null;
+  qty: number;
+  unit: string;
+  unitPriceNet: number;
+  vatRate: number;
+  procurement: string;
+  supplierNote: string | null;
+  lineNet?: number;
+  lineVat?: number;
+  lineGross?: number;
+};
 
 export default function OrderNew() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [useAlternateShipping, setUseAlternateShipping] = useState(false);
+  const [positions, setPositions] = useState<LocalPosition[]>([]);
   
   const form = useForm<InsertOrder>({
     resolver: zodResolver(insertOrderSchema),
@@ -47,8 +64,41 @@ export default function OrderNew() {
   
   const createMutation = useMutation({
     mutationFn: async (data: InsertOrder) => {
-      const res = await apiRequest("POST", "/api/orders", data);
-      return await res.json();
+      // Step 1: Create the order
+      const orderRes = await apiRequest("POST", "/api/orders", data);
+      if (!orderRes.ok) {
+        const errorText = await orderRes.text();
+        throw new Error(errorText || "Auftrag konnte nicht erstellt werden");
+      }
+      const order = await orderRes.json();
+
+      // Step 2: Create positions if any
+      if (positions.length > 0) {
+        const positionsToCreate = positions.map(p => ({
+          articleName: p.articleName,
+          articleNumber: p.articleNumber,
+          qty: p.qty,
+          unit: p.unit,
+          unitPriceNet: p.unitPriceNet,
+          vatRate: p.vatRate,
+          procurement: p.procurement,
+          supplierNote: p.supplierNote,
+        }));
+
+        const posRes = await apiRequest("POST", `/api/orders/${order.id}/positions`, positionsToCreate);
+        if (!posRes.ok) {
+          const errorText = await posRes.text();
+          // Order was created but positions failed - show warning but still navigate
+          toast({
+            title: "Warnung",
+            description: `Auftrag wurde erstellt, aber Positionen konnten nicht gespeichert werden: ${errorText}`,
+            variant: "destructive",
+          });
+          return order;
+        }
+      }
+
+      return order;
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
@@ -531,6 +581,12 @@ export default function OrderNew() {
                 />
               </CardContent>
             </Card>
+
+            {/* Positions Editor */}
+            <PositionsEditor
+              positions={positions}
+              onChange={setPositions}
+            />
             
             <div className="flex justify-end gap-2">
               <Button
