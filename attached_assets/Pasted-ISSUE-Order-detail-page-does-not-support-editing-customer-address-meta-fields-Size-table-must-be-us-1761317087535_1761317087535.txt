@@ -1,0 +1,54 @@
+ISSUE
+Order detail page does not support editing customer/address/meta fields. Size table must be usable for ALL orders (JTL and INTERNAL). JTL orders keep core fields read-only, but size table and print assets remain editable.
+
+GOAL
+Implement proper order editing (backend + frontend) and make the size table tab available for all orders. Add production gate: for TEAMSPORT require a size table before submit; other departments do not block.
+
+TASKS
+
+A) Backend: PATCH /api/orders/:id
+- Add endpoint that updates the following fields with validation:
+  customer: company, contactFirstName, contactLastName, customerEmail, customerPhone
+  billTo:   billStreet, billZip, billCity, billCountry
+  shipTo:   shipStreet?, shipZip?, shipCity?, shipCountry?
+  meta:     title, customerName, department, dueDate, location, notes
+- Rules:
+  • If order.source === 'jtl': deny changes to company + addresses (return 409). Allow dueDate, location, notes.
+  • If order.workflow === 'in_production': deny all structural changes (409), allow notes only.
+- Use zod schema for validation/normalization (trim strings, email format).
+- Return updated order.
+- (Optional) Write to order_changes audit table if present; otherwise skip.
+
+B) Size table availability
+- Ensure GET/POST /api/orders/:id/size routes are mounted (as previously specified).
+- The "Größen" tab must be visible for ALL orders.
+- Handoff gate (existing POST /api/orders/:id/submit):
+  if order.department === 'TEAMSPORT' and no size table → return 412 with {error:"Größentabelle erforderlich"}.
+  All other departments: do not block.
+
+C) Frontend – Detail page (/orders/:id)
+- Implement Edit mode:
+  • Button "Bearbeiten" → toggles to editable inputs.
+  • Footer actions: "Abbrechen" | "Speichern".
+  • Disabled inputs & tooltip for locked JTL fields: "Aus JTL, nicht änderbar".
+  • On Save: PATCH /api/orders/:id; show success toast; refetch TanStack Query caches.
+- Lieferadresse:
+  • Checkbox "abweichende Lieferadresse" toggles ship* fields visibility.
+- Show server validation messages inline.
+
+D) Frontend – Size table tab
+- Always visible. For JTL and INTERNAL.
+- Keep existing editor integration. After save, refetch and update counts chips.
+- Before "Für Produktion freigeben":
+  • If TEAMSPORT and no size table → block with inline warning pointing to the Größen tab.
+
+E) Orders list refresh
+- After successful PATCH, update the corresponding list row (customerName, dueDate, totalGross).
+
+ACCEPTANCE
+- INTERNAL orders: editing company, addresses, and meta works until workflow != 'in_production'.
+- JTL orders: company/addresses locked; dueDate/location/notes + SIZE TABLE + PRINT ASSETS editable.
+- Size table visible and usable across all orders.
+- TEAMSPORT cannot submit without a size table (412); others can.
+- UI shows proper disabled states and toasts. No page reload required.
+- No unrelated refactors.

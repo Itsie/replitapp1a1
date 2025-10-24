@@ -1,0 +1,65 @@
+ISSUE
+- SizeTable schema exists, but the Order edit UI does not render or persist size tables.
+- The feature must be available for ALL departments. Only production submit for TEAMSPORT requires it.
+
+GOAL
+Wire the SizeTable end-to-end on the Order Detail page (tab “Größen”) for ALL departments:
+- Show existing table (read view with counts + roster)
+- Create/edit via editor (no JSON), CSV import/export
+- Persist via /api/orders/:id/size endpoints
+- Keep submit-gate: required only for TEAMSPORT
+
+SCOPE
+Frontend wiring + minimal server glue if missing routes.
+Do NOT refactor unrelated modules.
+
+CHECK/IMPLEMENT
+
+A) API (verify and create if missing)
+Routes under /api/orders/:id/size:
+- GET  /api/orders/:id/size         → 200 with {scheme, rows, comment, countsBySize} or 204 if none
+- POST /api/orders/:id/size         → upsert {scheme, rows:[{size,number,name?}], comment, allowDuplicates?}
+- POST /api/orders/:id/size/import-csv  → {csv, scheme?, allowDuplicates?}
+- GET  /api/orders/:id/size/export.csv
+
+Helper: countsBySize = reduce rows by size. Validate: rows 1..1000; size 1..10; number 0..999; name ≤30; dupes → 400 unless allowDuplicates=true.
+
+B) Production gate (KEEP AS-IS)
+- In POST /api/orders/:id/submit: require SizeTable only if order.department === "TEAMSPORT".
+- Other departments: NOT required.
+
+C) Order Detail UI (tab “Größen”) — apply to ALL departments
+1) On mount:
+   - GET /api/orders/:id/size
+   - If 200: render Read View
+   - If 204: render Empty View with “Größentabelle anlegen”
+
+2) Read View:
+   - Chips with countsBySize (e.g., S:5 M:4 L:3)
+   - Roster table columns: Größe, Nummer, Name (paginated)
+   - Buttons: [Bearbeiten]  [CSV exportieren]
+
+3) Editor (no JSON):
+   - Two-step or inline, pick the simpler existing component:
+     Step 1: Größen & Mengen (presets: ALPHA, NUMERIC, CUSTOM; qty inputs; total sum)
+     Step 2: Roster: columns (#, Größe select, Nummer required 0..999, Name optional)
+     Tools: Auto-Nummern (Startwert), “Namen aus Zwischenablage”, CSV Import (size,number,name) with preview
+   - Save → POST /api/orders/:id/size (upsert), then refetch and toast “Größentabelle gespeichert”
+
+4) Availability:
+   - Tab “Größen” ALWAYS visible for ALL departments
+   - Submit button tooltip:
+     - TEAMSPORT + no size table: disabled + “Größentabelle erforderlich”
+     - Others: never block submit
+
+D) UX polish
+- Keep shadcn/ui; compact density
+- DE number formatting for any numeric display
+- Error toasts with server message on 400 (duplicate numbers unless allowed)
+
+ACCEPTANCE (must pass)
+- For ANY department, tab “Größen” shows either table or empty state with “anlegen”
+- Create a mixed roster (e.g., 14 items), save, reload page → data persists
+- CSV export/import roundtrip yields identical rows
+- TEAMSPORT: submit without size table → 412; with table → succeeds
+- Non-TEAMSPORT: submit never blocked by size table

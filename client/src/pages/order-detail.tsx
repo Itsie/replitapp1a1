@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Check, AlertTriangle, Copy, Plus, ExternalLink, Pencil, Trash2, Save, X } from "lucide-react";
+import { ArrowLeft, Check, AlertTriangle, Copy, Plus, ExternalLink, Pencil, Trash2, Save, X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -17,8 +17,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import type { OrderWithRelations } from "@shared/schema";
+import type { OrderWithRelations, SizeTableResponse, SizeTableRow } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { SizeTableEditor } from "@/components/size-table-editor";
 
 export default function OrderDetail() {
   const [, params] = useRoute("/orders/:id");
@@ -906,6 +907,7 @@ function PositionRow({
 
 function SizeTableTab({ order, setSizeDialogOpen }: { order: OrderWithRelations; setSizeDialogOpen: (open: boolean) => void }) {
   const sizeTable = order.sizeTable;
+  const { toast } = useToast();
 
   if (!sizeTable) {
     return (
@@ -923,52 +925,112 @@ function SizeTableTab({ order, setSizeDialogOpen }: { order: OrderWithRelations;
     );
   }
 
-  const rows = sizeTable.rowsJson as any[];
+  const rows = sizeTable.rowsJson as SizeTableRow[];
   const scheme = sizeTable.scheme;
+
+  // Calculate countsBySize
+  const countsBySize: Record<string, number> = {};
+  rows.forEach(row => {
+    countsBySize[row.size] = (countsBySize[row.size] || 0) + 1;
+  });
+
+  const handleExportCSV = async () => {
+    try {
+      const res = await fetch(`/api/orders/${order.id}/size/export.csv`);
+      if (!res.ok) throw new Error("Export failed");
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `order-${order.id}-sizetable.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast({
+        title: "CSV exportiert",
+        description: "Die Größentabelle wurde erfolgreich exportiert.",
+      });
+    } catch (error) {
+      toast({
+        title: "Fehler",
+        description: "Export fehlgeschlagen.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="space-y-4">
       <Card className="rounded-2xl border-muted/60">
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
-          <div>
+          <div className="flex-1">
             <CardTitle>Größentabelle</CardTitle>
             <p className="text-sm text-muted-foreground mt-1">Schema: {scheme}</p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {Object.entries(countsBySize)
+                .sort(([a], [b]) => a.localeCompare(b, 'de', { numeric: true }))
+                .map(([size, count]) => (
+                  <Badge key={size} variant="secondary" data-testid={`badge-size-${size}`}>
+                    {size}: {count}
+                  </Badge>
+                ))}
+            </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setSizeDialogOpen(true)}
-            data-testid="button-edit-sizetable"
-          >
-            <Pencil className="h-4 w-4 mr-2" />
-            Bearbeiten
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCSV}
+              data-testid="button-export-csv"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              CSV exportieren
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setSizeDialogOpen(true)}
+              data-testid="button-edit-sizetable"
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Bearbeiten
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="border rounded-md overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="text-left p-2 border-r">Größe</th>
-                  <th className="text-right p-2">Anzahl</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row: any, index: number) => (
-                  <tr key={index} className="border-t" data-testid={`sizetable-row-${index}`}>
-                    <td className="p-2 border-r font-medium">{row.size}</td>
-                    <td className="p-2 text-right">{row.number}</td>
+            <div className="max-h-96 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted sticky top-0">
+                  <tr>
+                    <th className="text-left p-2 border-r w-16">#</th>
+                    <th className="text-left p-2 border-r">Größe</th>
+                    <th className="text-left p-2 border-r">Nummer</th>
+                    <th className="text-left p-2">Name</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot className="border-t bg-muted/50">
-                <tr>
-                  <td className="p-2 font-semibold">Gesamt</td>
-                  <td className="p-2 text-right font-bold" data-testid="text-sizetable-total">
-                    {rows.reduce((sum, row) => sum + (Number(row.number) || 0), 0)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+                </thead>
+                <tbody>
+                  {rows.map((row, index) => (
+                    <tr key={index} className="border-t" data-testid={`sizetable-row-${index}`}>
+                      <td className="p-2 border-r text-muted-foreground">{index + 1}</td>
+                      <td className="p-2 border-r font-medium">{row.size}</td>
+                      <td className="p-2 border-r">{row.number}</td>
+                      <td className="p-2">{row.name || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t bg-muted/50 sticky bottom-0">
+                  <tr>
+                    <td className="p-2 font-semibold" colSpan={2}>Gesamt</td>
+                    <td className="p-2 font-bold" colSpan={2} data-testid="text-sizetable-total">
+                      {rows.length} Einträge
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
           {sizeTable.comment && (
             <div className="mt-4 p-3 bg-muted/50 rounded-md">
@@ -1041,15 +1103,62 @@ function PrintAssetsTab({ order, setAssetDialogOpen }: { order: OrderWithRelatio
 }
 
 function SizeTableDialog({ orderId, open, onOpenChange }: { orderId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { toast } = useToast();
+  const { data: order } = useQuery<OrderWithRelations>({
+    queryKey: [`/api/orders/${orderId}`],
+    enabled: !!orderId,
+  });
+
+  const sizeTableMutation = useMutation({
+    mutationFn: async (data: { scheme: string; rows: SizeTableRow[]; comment: string | null; allowDuplicates: boolean }) => {
+      const res = await apiRequest("POST", `/api/orders/${orderId}/size`, data);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to save size table");
+      }
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}`] });
+      toast({
+        title: "Gespeichert",
+        description: "Größentabelle wurde erfolgreich gespeichert.",
+      });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Fehler",
+        description: error.message || "Speichern fehlgeschlagen.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSave = async (data: { scheme: string; rows: SizeTableRow[]; comment: string | null; allowDuplicates: boolean }) => {
+    await sizeTableMutation.mutateAsync(data);
+  };
+
+  const initialData = order?.sizeTable ? {
+    scheme: order.sizeTable.scheme,
+    rows: order.sizeTable.rowsJson as SizeTableRow[],
+    comment: order.sizeTable.comment,
+  } : undefined;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="dialog-sizetable">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-sizetable">
         <DialogHeader>
-          <DialogTitle>Größentabelle</DialogTitle>
+          <DialogTitle>Größentabelle {order?.sizeTable ? "bearbeiten" : "erstellen"}</DialogTitle>
           <DialogDescription>
-            Funktionalität wird in einer späteren Version implementiert.
+            Erfassen Sie Größen, Nummern und Namen für diesen Auftrag.
           </DialogDescription>
         </DialogHeader>
+        <SizeTableEditor
+          initialData={initialData}
+          onSave={handleSave}
+          onCancel={() => onOpenChange(false)}
+        />
       </DialogContent>
     </Dialog>
   );

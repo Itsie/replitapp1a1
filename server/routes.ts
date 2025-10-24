@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertOrderSchema, insertSizeTableSchema, insertPrintAssetSchema, insertPositionSchema, updatePositionSchema } from "@shared/schema";
+import { insertOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertPositionSchema, updatePositionSchema } from "@shared/schema";
 import { z } from "zod";
 import { Decimal } from "@prisma/client/runtime/library";
 
