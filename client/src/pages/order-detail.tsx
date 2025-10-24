@@ -1,16 +1,19 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import type { OrderWithRelations } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -23,6 +26,7 @@ export default function OrderDetail() {
   
   const [sizeDialogOpen, setSizeDialogOpen] = useState(false);
   const [assetDialogOpen, setAssetDialogOpen] = useState(false);
+  const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
   
   const { data: order, isLoading } = useQuery<OrderWithRelations>({
     queryKey: [`/api/orders/${orderId}`],
@@ -41,6 +45,7 @@ export default function OrderDetail() {
         title: "Auftrag freigegeben",
         description: "Der Auftrag wurde für die Produktion freigegeben.",
       });
+      setConfirmSubmitOpen(false);
     },
     onError: (error: any) => {
       const message = error.message || "Der Auftrag konnte nicht freigegeben werden.";
@@ -54,12 +59,17 @@ export default function OrderDetail() {
   
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="max-w-7xl mx-auto p-6 lg:p-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded w-1/3" />
-            <div className="h-64 bg-muted rounded" />
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-32" />
+        <div className="space-y-4">
+          <div className="flex items-start justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-64" />
+              <Skeleton className="h-4 w-48" />
+            </div>
+            <Skeleton className="h-10 w-48" />
           </div>
+          <Skeleton className="h-96" />
         </div>
       </div>
     );
@@ -67,11 +77,18 @@ export default function OrderDetail() {
   
   if (!order) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="max-w-7xl mx-auto p-6 lg:p-8">
-          <p data-testid="text-not-found">Auftrag nicht gefunden</p>
-        </div>
-      </div>
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold mb-2">Auftrag nicht gefunden</h3>
+          <p className="text-sm text-muted-foreground mb-4" data-testid="text-not-found">
+            Der angeforderte Auftrag existiert nicht oder wurde gelöscht.
+          </p>
+          <Button onClick={() => setLocation("/orders")}>
+            Zurück zur Übersicht
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
   
@@ -87,125 +104,145 @@ export default function OrderDetail() {
   const canSubmit = order.workflow !== "FUER_PROD" && order.workflow !== "IN_PROD" && order.workflow !== "FERTIG";
   
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto p-6 lg:p-8">
-        <div className="mb-6">
-          <Button
-            variant="ghost"
-            onClick={() => setLocation("/orders")}
-            data-testid="button-back"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Zurück
-          </Button>
+    <>
+      <div className="mb-6">
+        <Button
+          variant="ghost"
+          onClick={() => setLocation("/orders")}
+          data-testid="button-back"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Zurück
+        </Button>
+      </div>
+      
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight" data-testid="text-title">{order.title}</h1>
+          <p className="text-muted-foreground mt-1" data-testid="text-customer">{order.customer}</p>
         </div>
-        
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold" data-testid="text-title">{order.title}</h1>
-            <p className="text-muted-foreground mt-1" data-testid="text-customer">{order.customer}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge data-testid="badge-source">{order.source}</Badge>
-            <Badge variant="outline" data-testid="badge-department">{order.department}</Badge>
-            <Badge data-testid="badge-workflow">{order.workflow}</Badge>
-            {canSubmit && (
-              <Button
-                onClick={() => submitMutation.mutate()}
-                disabled={submitMutation.isPending}
-                data-testid="button-submit"
-              >
-                <Check className="h-4 w-4 mr-2" />
-                Für Produktion freigeben
-              </Button>
-            )}
-          </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge data-testid="badge-source">{order.source}</Badge>
+          <Badge variant="outline" data-testid="badge-department">{order.department}</Badge>
+          <Badge data-testid="badge-workflow">{order.workflow}</Badge>
+          {canSubmit && (
+            <Button
+              onClick={() => setConfirmSubmitOpen(true)}
+              disabled={submitMutation.isPending}
+              data-testid="button-submit"
+            >
+              <Check className="h-4 w-4 mr-2" />
+              Für Produktion freigeben
+            </Button>
+          )}
         </div>
+      </div>
+      
+      <Tabs defaultValue="details" className="space-y-6">
+        <TabsList data-testid="tabs-list">
+          <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
+          <TabsTrigger value="sizes" data-testid="tab-sizes">Größen</TabsTrigger>
+          <TabsTrigger value="assets" data-testid="tab-assets">Druckdaten</TabsTrigger>
+          <TabsTrigger value="history" data-testid="tab-history">Historie</TabsTrigger>
+        </TabsList>
         
-        <Tabs defaultValue="details" className="space-y-6">
-          <TabsList data-testid="tabs-list">
-            <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
-            <TabsTrigger value="sizes" data-testid="tab-sizes">Größen</TabsTrigger>
-            <TabsTrigger value="assets" data-testid="tab-assets">Druckdaten</TabsTrigger>
-            <TabsTrigger value="history" data-testid="tab-history">Historie</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="details">
-            <Card>
-              <CardHeader>
-                <CardTitle>Auftragsdetails</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">AUFTRAGSNUMMER</Label>
-                    <p className="font-mono" data-testid="text-id">{order.id}</p>
-                  </div>
-                  {order.extId && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">EXTERNE ID</Label>
-                      <p className="font-mono" data-testid="text-extid">{order.extId}</p>
-                    </div>
-                  )}
-                  <div>
-                    <Label className="text-xs text-muted-foreground">FÄLLIGKEITSDATUM</Label>
-                    <p data-testid="text-duedate">{formatDate(order.dueDate)}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">STANDORT</Label>
-                    <p data-testid="text-location">{order.location || "—"}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">QC-STATUS</Label>
-                    <Badge variant="outline" data-testid="badge-qc">{order.qc}</Badge>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">ERSTELLT</Label>
-                    <p data-testid="text-created">{formatDate(order.createdAt)}</p>
-                  </div>
+        <TabsContent value="details">
+          <Card>
+            <CardHeader>
+              <CardTitle>Auftragsdetails</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">AUFTRAGSNUMMER</Label>
+                  <p className="font-mono" data-testid="text-id">{order.id}</p>
                 </div>
-                {order.notes && (
+                {order.extId && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">NOTIZEN</Label>
-                    <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{order.notes}</p>
+                    <Label className="text-xs text-muted-foreground">EXTERNE ID</Label>
+                    <p className="font-mono" data-testid="text-extid">{order.extId}</p>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="sizes">
-            <SizeTableTab order={order} setSizeDialogOpen={setSizeDialogOpen} />
-          </TabsContent>
-          
-          <TabsContent value="assets">
-            <PrintAssetsTab order={order} setAssetDialogOpen={setAssetDialogOpen} />
-          </TabsContent>
-          
-          <TabsContent value="history">
-            <Card>
-              <CardContent className="p-12 text-center">
-                <p className="text-muted-foreground" data-testid="text-history-placeholder">
-                  Historie-Ansicht wird in einer zukünftigen Version implementiert.
-                </p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                <div>
+                  <Label className="text-xs text-muted-foreground">FÄLLIGKEITSDATUM</Label>
+                  <p data-testid="text-duedate">{formatDate(order.dueDate)}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">STANDORT</Label>
+                  <p data-testid="text-location">{order.location || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">QC-STATUS</Label>
+                  <Badge variant="outline" data-testid="badge-qc">{order.qc}</Badge>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">ERSTELLT</Label>
+                  <p data-testid="text-created">{formatDate(order.createdAt)}</p>
+                </div>
+              </div>
+              {order.notes && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">NOTIZEN</Label>
+                  <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{order.notes}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
         
-        <SizeTableDialog
-          orderId={orderId!}
-          open={sizeDialogOpen}
-          onOpenChange={setSizeDialogOpen}
-        />
+        <TabsContent value="sizes">
+          <SizeTableTab order={order} setSizeDialogOpen={setSizeDialogOpen} />
+        </TabsContent>
         
-        <PrintAssetDialog
-          orderId={orderId!}
-          open={assetDialogOpen}
-          onOpenChange={setAssetDialogOpen}
-        />
-      </div>
-    </div>
+        <TabsContent value="assets">
+          <PrintAssetsTab order={order} setAssetDialogOpen={setAssetDialogOpen} />
+        </TabsContent>
+        
+        <TabsContent value="history">
+          <Card>
+            <CardContent className="p-12 text-center">
+              <p className="text-muted-foreground" data-testid="text-history-placeholder">
+                Historie-Ansicht wird in einer zukünftigen Version implementiert.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+      
+      <SizeTableDialog
+        orderId={orderId!}
+        open={sizeDialogOpen}
+        onOpenChange={setSizeDialogOpen}
+      />
+      
+      <PrintAssetDialog
+        orderId={orderId!}
+        open={assetDialogOpen}
+        onOpenChange={setAssetDialogOpen}
+      />
+      
+      <AlertDialog open={confirmSubmitOpen} onOpenChange={setConfirmSubmitOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Auftrag für Produktion freigeben?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Diese Aktion markiert den Auftrag als produktionsbereit. 
+              Stellen Sie sicher, dass alle erforderlichen Druckdaten vorhanden sind.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-submit">Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => submitMutation.mutate()}
+              disabled={submitMutation.isPending}
+              data-testid="button-confirm-submit"
+            >
+              {submitMutation.isPending ? "Wird freigegeben..." : "Freigeben"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -213,9 +250,13 @@ function SizeTableTab({ order, setSizeDialogOpen }: { order: OrderWithRelations;
   if (!order.sizeTable) {
     return (
       <Card>
-        <CardContent className="p-12 text-center">
-          <p className="text-muted-foreground mb-4" data-testid="text-no-sizetable">
-            Keine Größentabelle vorhanden
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+            <span className="text-2xl">📏</span>
+          </div>
+          <h3 className="text-lg font-semibold mb-2">Keine Größentabelle vorhanden</h3>
+          <p className="text-sm text-muted-foreground mb-4" data-testid="text-no-sizetable">
+            Legen Sie eine Größentabelle an, um Größen und Mengen zu definieren.
           </p>
           <Button onClick={() => setSizeDialogOpen(true)} data-testid="button-create-sizetable">
             Größentabelle anlegen
@@ -227,7 +268,7 @@ function SizeTableTab({ order, setSizeDialogOpen }: { order: OrderWithRelations;
   
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle>Größentabelle</CardTitle>
         <Button onClick={() => setSizeDialogOpen(true)} variant="outline" data-testid="button-edit-sizetable">
           Bearbeiten
@@ -258,7 +299,7 @@ function SizeTableTab({ order, setSizeDialogOpen }: { order: OrderWithRelations;
 function PrintAssetsTab({ order, setAssetDialogOpen }: { order: OrderWithRelations; setAssetDialogOpen: (open: boolean) => void }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle>Druckdaten</CardTitle>
         <Button onClick={() => setAssetDialogOpen(true)} data-testid="button-add-asset">
           Druckdaten hinzufügen
@@ -266,24 +307,30 @@ function PrintAssetsTab({ order, setAssetDialogOpen }: { order: OrderWithRelatio
       </CardHeader>
       <CardContent>
         {order.printAssets.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8" data-testid="text-no-assets">
-            Keine Druckdaten vorhanden
-          </p>
+          <div className="flex flex-col items-center justify-center py-16">
+            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+              <span className="text-2xl">🖼️</span>
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Keine Druckdaten vorhanden</h3>
+            <p className="text-sm text-muted-foreground mb-4" data-testid="text-no-assets">
+              Fügen Sie Druckdaten hinzu, um Logos, Grafiken oder andere Assets zu verwalten.
+            </p>
+          </div>
         ) : (
           <div className="space-y-2">
             {order.printAssets.map((asset) => (
               <div
                 key={asset.id}
                 data-testid={`asset-${asset.id}`}
-                className="flex items-center justify-between p-3 border rounded-md"
+                className="flex items-center justify-between p-3 border rounded-md hover-elevate"
               >
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <p className="font-medium" data-testid={`text-label-${asset.id}`}>{asset.label}</p>
                   <a
                     href={asset.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-muted-foreground hover:underline"
+                    className="text-xs text-muted-foreground hover:underline truncate block"
                     data-testid={`link-url-${asset.id}`}
                   >
                     {asset.url}
@@ -347,6 +394,9 @@ function SizeTableDialog({ orderId, open, onOpenChange }: { orderId: string; ope
       <DialogContent className="max-w-2xl" data-testid="dialog-sizetable">
         <DialogHeader>
           <DialogTitle>Größentabelle anlegen</DialogTitle>
+          <DialogDescription>
+            Definieren Sie Größen und Mengen für diesen Auftrag.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -385,14 +435,14 @@ function SizeTableDialog({ orderId, open, onOpenChange }: { orderId: string; ope
             />
           </div>
           
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-sizetable">
               Abbrechen
             </Button>
             <Button onClick={handleSubmit} disabled={sizeMutation.isPending} data-testid="button-save-sizetable">
               {sizeMutation.isPending ? "Wird gespeichert..." : "Speichern"}
             </Button>
-          </div>
+          </DialogFooter>
         </div>
       </DialogContent>
     </Dialog>
@@ -447,6 +497,9 @@ function PrintAssetDialog({ orderId, open, onOpenChange }: { orderId: string; op
       <DialogContent data-testid="dialog-asset">
         <DialogHeader>
           <DialogTitle>Druckdaten hinzufügen</DialogTitle>
+          <DialogDescription>
+            Fügen Sie Logos, Grafiken oder andere Assets für diesen Auftrag hinzu.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -470,11 +523,10 @@ function PrintAssetDialog({ orderId, open, onOpenChange }: { orderId: string; op
           </div>
           
           <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <Checkbox
               id="required"
               checked={required}
-              onChange={(e) => setRequired(e.target.checked)}
+              onCheckedChange={(checked) => setRequired(checked === true)}
               data-testid="checkbox-required"
             />
             <Label htmlFor="required" className="cursor-pointer">
@@ -482,14 +534,14 @@ function PrintAssetDialog({ orderId, open, onOpenChange }: { orderId: string; op
             </Label>
           </div>
           
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-asset">
               Abbrechen
             </Button>
             <Button onClick={handleSubmit} disabled={assetMutation.isPending} data-testid="button-save-asset">
               {assetMutation.isPending ? "Wird hinzugefügt..." : "Hinzufügen"}
             </Button>
-          </div>
+          </DialogFooter>
         </div>
       </DialogContent>
     </Dialog>

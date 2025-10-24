@@ -1,0 +1,62 @@
+UI UPGRADE (Step 2.1) — integrate shadcn/ui + Radix + Tailwind polish. NO logic changes.
+
+Scope:
+- Rein visuelles Upgrade der bestehenden Orders-Oberfläche.
+- Behalte aktuelle Build-/Server-Setup exakt bei (Client build output: client/dist ODER dist/public – nutze die bestehende Konfiguration; Express-Fallback NICHT ändern, nur weiterverwenden).
+- Keine neuen API-Routen, keine DB-Änderungen.
+
+Tasks:
+
+A) shadcn/ui integrieren
+1) shadcn/ui initialisieren (Tailwind schon vorhanden). Radix Primitives verwenden.
+2) Globaler Theme-Support (Light/Dark) via CSS Vars; persist Theme in localStorage.
+3) Fonts: Systemfont reicht, KEINE externen Fonts laden (Performance).
+4) Global Toaster (sonner o. ä.) für Erfolg/Fehler.
+
+B) App-Shell
+1) Erstelle ein AppLayout mit Header:
+   - Links: App-Titel „1aShirt“
+   - Mitte: globale Suche (nur UI, keine neue Logik)
+   - Rechts: Theme-Toggle, Platzhalter-User-Menü (nur Button/Dropdown)
+2) Container mit max-w-7xl, sauberer spacing rhythm (px-6, py-4).
+3) Responsiv: Header sticky top, Box-Shadow dezent.
+
+C) Komponenten-Politur für /orders
+1) Ersetze Inputs/Selects/Buttons durch shadcn/ui:
+   - Input (Search)
+   - Select (Department/Source/Workflow). „Alle“-Wert bleibt wie implementiert (ALL→leer für Backend).
+   - Button „Neuer Auftrag“
+   - Badge-Chips für source/workflow/department.
+2) Kartenlayout belassen, aber visuell aufräumen:
+   - Card-Komponente aus shadcn/ui
+   - Spacings vereinheitlichen, dezente Ringe/Schlagschatten, abgerundet (rounded-2xl).
+3) Data-Table (zusätzlicher Tab-Schalter Liste/Karten):
+   - Nutze TanStack Table + shadcn Table-Komponenten.
+   - Spalten: Title, Customer, Department, Source, Workflow, DueDate, Assets (#), SizeTable (✓/—).
+   - Sortierbar nach Title, DueDate, Workflow.
+   - Row click → /orders/:id.
+
+D) /orders/:id Detail
+1) Tabs mit shadcn/ui Tabs: Details | Größen | Druckdaten | Historie (Historie bleibt Platzhalter).
+2) „Größentabelle anlegen“ als Dialog (shadcn Dialog) statt Browser-Modal.
+3) „Druckdaten hinzufügen“ als Dialog mit File/URL Umschalter; bestehende POST-Endpunkte verwenden.
+4) „Für Produktion freigeben“ → Button mit Destructive/Confirm Dialog; Toaster Meldungen.
+
+E) UX-Feinschliff
+1) Loading Skeletons (Cards/Table rows) mit animate-pulse.
+2) Empty State (Ordner-Icon, „Keine Aufträge gefunden“).
+3) Fehlerzustände: shadcn Alert.
+
+Constraints:
+- KEINE neuen Endpunkte, KEINE Schema-/DB-Änderungen, KEINE Planung/Slots/JTL/Billing.
+- Behalte bestehende Query-Parameter-Logik und „ALL“-Mapping bei.
+- Behalte den existierenden Build-Output-Pfad und den Express SPA-Fallback bei (nicht umkonfigurieren).
+
+Akzeptanzkriterien:
+- /orders rendert mit shadcn/ui-Komponenten; Suche + Filter funktionieren wie zuvor.
+- Toggle Kartenansicht ↔ Tabellenansicht funktioniert (kein Dataverlust; gleiche Datenquelle).
+- /orders/:id zeigt Tabs, Dialoge öffnen/schließen sauber, Toaster erscheinen.
+- Theme-Toggle blendet Dark/Light ohne Layout-Sprünge.
+- Keine Änderungen an API/DB; alle Requests laufen wie vor dem Upgrade.
+
+Stay strictly in scope. No extra features. Use only the existing codebase and schema.

@@ -63,23 +63,28 @@ export default function OrderNew() {
   };
   
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-3xl mx-auto p-6 lg:p-8">
+    <>
+      <div className="mb-6">
         <Button
           variant="ghost"
           onClick={() => setLocation("/orders")}
-          className="mb-6"
           data-testid="button-back"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Zurück
         </Button>
+      </div>
+      
+      <div className="max-w-3xl">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight">Neuer Auftrag</h1>
+          <p className="text-muted-foreground mt-1">
+            Erstellen Sie einen neuen internen Produktionsauftrag
+          </p>
+        </div>
         
         <Card>
-          <CardHeader>
-            <CardTitle>Neuer Auftrag</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 <FormField
@@ -223,6 +228,6 @@ export default function OrderNew() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </>
   );
 }
