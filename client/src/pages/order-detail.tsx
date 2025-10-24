@@ -1,21 +1,27 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Check, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Check, AlertTriangle, Copy, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import type { OrderWithRelations } from "@shared/schema";
+import type { OrderWithRelations, WorkflowState, OrderSource } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function OrderDetail() {
@@ -27,6 +33,8 @@ export default function OrderDetail() {
   const [sizeDialogOpen, setSizeDialogOpen] = useState(false);
   const [assetDialogOpen, setAssetDialogOpen] = useState(false);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("details");
+  const [submitError, setSubmitError] = useState<string | null>(null);
   
   const { data: order, isLoading } = useQuery<OrderWithRelations>({
     queryKey: [`/api/orders/${orderId}`],
@@ -36,6 +44,10 @@ export default function OrderDetail() {
   const submitMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/orders/${orderId}/submit`);
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Submission failed");
+      }
       return await res.json();
     },
     onSuccess: () => {
@@ -46,16 +58,33 @@ export default function OrderDetail() {
         description: "Der Auftrag wurde für die Produktion freigegeben.",
       });
       setConfirmSubmitOpen(false);
+      setSubmitError(null);
     },
     onError: (error: any) => {
       const message = error.message || "Der Auftrag konnte nicht freigegeben werden.";
-      toast({
-        title: "Fehler",
-        description: message,
-        variant: "destructive",
-      });
+      
+      // Check if it's a 412 error (missing required assets)
+      if (message.includes("Required print asset missing") || message.includes("412")) {
+        setSubmitError("Benötigte Druckdaten fehlen. Bitte fügen Sie mindestens ein erforderliches Druckdatum hinzu.");
+        setConfirmSubmitOpen(false);
+        setActiveTab("assets"); // Switch to assets tab
+      } else {
+        toast({
+          title: "Fehler",
+          description: message,
+          variant: "destructive",
+        });
+      }
     },
   });
+  
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({
+      title: "Kopiert",
+      description: "Auftragsnummer wurde in die Zwischenablage kopiert.",
+    });
+  };
   
   if (isLoading) {
     return (
@@ -95,13 +124,34 @@ export default function OrderDetail() {
   const formatDate = (date: string | Date | null) => {
     if (!date) return "—";
     return new Date(date).toLocaleDateString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
       year: "numeric",
-      month: "long",
-      day: "numeric",
     });
   };
   
+  const getSourceBadgeVariant = (source: OrderSource) => {
+    return source === "JTL" ? "default" : "secondary";
+  };
+  
+  const getWorkflowBadgeVariant = (workflow: WorkflowState) => {
+    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+      ENTWURF: "outline",
+      NEU: "default",
+      PRUEFUNG: "secondary",
+      FUER_PROD: "default",
+      IN_PROD: "default",
+      WARTET_FEHLTEILE: "destructive",
+      FERTIG: "secondary",
+      ZUR_ABRECHNUNG: "outline",
+      ABGERECHNET: "outline",
+    };
+    return variants[workflow] || "outline";
+  };
+  
   const canSubmit = order.workflow !== "FUER_PROD" && order.workflow !== "IN_PROD" && order.workflow !== "FERTIG";
+  const hasRequiredAssets = order.printAssets.some(asset => asset.required);
+  const hasShippingAddress = order.shipStreet || order.shipZip || order.shipCity || order.shipCountry;
   
   return (
     <>
@@ -117,28 +167,64 @@ export default function OrderDetail() {
       </div>
       
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-3xl font-bold tracking-tight" data-testid="text-title">{order.title}</h1>
-          <p className="text-muted-foreground mt-1" data-testid="text-customer">{order.customer}</p>
+          <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground flex-wrap">
+            {order.displayOrderNumber && (
+              <>
+                <span className="font-mono" data-testid="text-display-order-number">
+                  {order.displayOrderNumber}
+                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5"
+                      onClick={() => copyToClipboard(order.displayOrderNumber!)}
+                      data-testid="button-copy-order-number"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Auftragsnummer kopieren</p>
+                  </TooltipContent>
+                </Tooltip>
+                <span>•</span>
+              </>
+            )}
+            <span>{order.department}</span>
+            <span>•</span>
+            <span>{order.workflow}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge data-testid="badge-source">{order.source}</Badge>
-          <Badge variant="outline" data-testid="badge-department">{order.department}</Badge>
-          <Badge data-testid="badge-workflow">{order.workflow}</Badge>
+        <div className="flex items-center gap-2">
           {canSubmit && (
-            <Button
-              onClick={() => setConfirmSubmitOpen(true)}
-              disabled={submitMutation.isPending}
-              data-testid="button-submit"
-            >
-              <Check className="h-4 w-4 mr-2" />
-              Für Produktion freigeben
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <Button
+                    onClick={() => setConfirmSubmitOpen(true)}
+                    disabled={!hasRequiredAssets || submitMutation.isPending}
+                    data-testid="button-submit"
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    Für Produktion freigeben
+                  </Button>
+                </div>
+              </TooltipTrigger>
+              {!hasRequiredAssets && (
+                <TooltipContent>
+                  <p>Benötigte Druckdaten fehlen</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
           )}
         </div>
       </div>
       
-      <Tabs defaultValue="details" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList data-testid="tabs-list">
           <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
           <TabsTrigger value="sizes" data-testid="tab-sizes">Größen</TabsTrigger>
@@ -147,47 +233,185 @@ export default function OrderDetail() {
         </TabsList>
         
         <TabsContent value="details">
-          <Card>
-            <CardHeader>
-              <CardTitle>Auftragsdetails</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground">AUFTRAGSNUMMER</Label>
-                  <p className="font-mono" data-testid="text-id">{order.id}</p>
-                </div>
-                {order.extId && (
+          {submitError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          )}
+          
+          <div className="grid lg:grid-cols-2 gap-4">
+            {/* Left Column */}
+            <div className="space-y-4">
+              {/* Customer Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Kunde</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
                   <div>
-                    <Label className="text-xs text-muted-foreground">EXTERNE ID</Label>
-                    <p className="font-mono" data-testid="text-extid">{order.extId}</p>
+                    <Label className="text-xs text-muted-foreground">FIRMA</Label>
+                    <p data-testid="text-company">{order.company || "—"}</p>
                   </div>
-                )}
-                <div>
-                  <Label className="text-xs text-muted-foreground">FÄLLIGKEITSDATUM</Label>
-                  <p data-testid="text-duedate">{formatDate(order.dueDate)}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">STANDORT</Label>
-                  <p data-testid="text-location">{order.location || "—"}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">QC-STATUS</Label>
-                  <Badge variant="outline" data-testid="badge-qc">{order.qc}</Badge>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">ERSTELLT</Label>
-                  <p data-testid="text-created">{formatDate(order.createdAt)}</p>
-                </div>
-              </div>
-              {order.notes && (
-                <div>
-                  <Label className="text-xs text-muted-foreground">NOTIZEN</Label>
-                  <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{order.notes}</p>
-                </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">ANSPRECHPARTNER</Label>
+                    <p data-testid="text-contact">
+                      {order.contactFirstName && order.contactLastName
+                        ? `${order.contactFirstName} ${order.contactLastName}`
+                        : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">E-MAIL</Label>
+                    {order.customerEmail ? (
+                      <a
+                        href={`mailto:${order.customerEmail}`}
+                        className="text-primary hover:underline"
+                        data-testid="link-email"
+                      >
+                        {order.customerEmail}
+                      </a>
+                    ) : (
+                      <p>—</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">TELEFON</Label>
+                    {order.customerPhone ? (
+                      <a
+                        href={`tel:${order.customerPhone}`}
+                        className="text-primary hover:underline"
+                        data-testid="link-phone"
+                      >
+                        {order.customerPhone}
+                      </a>
+                    ) : (
+                      <p>—</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              
+              {/* Billing Address Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Rechnungsadresse</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1">
+                  <p data-testid="text-bill-street">{order.billStreet || "—"}</p>
+                  <p data-testid="text-bill-city">
+                    {order.billZip && order.billCity ? `${order.billZip} ${order.billCity}` : "—"}
+                  </p>
+                  <p data-testid="text-bill-country">{order.billCountry || "—"}</p>
+                </CardContent>
+              </Card>
+              
+              {/* Shipping Address Card (if different) */}
+              {hasShippingAddress && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Lieferadresse</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1">
+                    <p data-testid="text-ship-street">{order.shipStreet || "—"}</p>
+                    <p data-testid="text-ship-city">
+                      {order.shipZip && order.shipCity ? `${order.shipZip} ${order.shipCity}` : "—"}
+                    </p>
+                    <p data-testid="text-ship-country">{order.shipCountry || "—"}</p>
+                  </CardContent>
+                </Card>
               )}
-            </CardContent>
-          </Card>
+            </div>
+            
+            {/* Right Column */}
+            <div className="space-y-4">
+              {/* Order Details Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Auftrag</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">ABTEILUNG</Label>
+                    <div>
+                      <Badge variant="outline" data-testid="badge-department">{order.department}</Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">QUELLE</Label>
+                    <div>
+                      <Badge variant={getSourceBadgeVariant(order.source)} data-testid="badge-source">
+                        {order.source}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">WORKFLOW</Label>
+                    <div>
+                      <Badge variant={getWorkflowBadgeVariant(order.workflow)} data-testid="badge-workflow">
+                        {order.workflow}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">FÄLLIGKEITSDATUM</Label>
+                    <p data-testid="text-duedate">{formatDate(order.dueDate)}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">STANDORT</Label>
+                    <p data-testid="text-location">{order.location || "—"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">ERSTELLT AM</Label>
+                    <p data-testid="text-created">{formatDate(order.createdAt)}</p>
+                  </div>
+                  {order.notes && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">NOTIZEN</Label>
+                      <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{order.notes}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              
+              {/* Attachments Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Anhänge</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">DRUCKDATEN</Label>
+                    <p data-testid="text-assets-summary">
+                      {order.printAssets.length === 0 ? (
+                        "Keine Druckdaten vorhanden"
+                      ) : (
+                        <>
+                          {order.printAssets.filter(a => a.required).length} erforderlich / {" "}
+                          {order.printAssets.filter(a => !a.required).length} optional
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">GRÖẞENTABELLE</Label>
+                    <p data-testid="text-sizetable-summary">
+                      {order.sizeTable ? "Vorhanden" : "Nicht vorhanden"}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setActiveTab("assets")}
+                    className="w-full"
+                    data-testid="button-open-assets"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Druckdaten öffnen
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </TabsContent>
         
         <TabsContent value="sizes">
@@ -195,6 +419,12 @@ export default function OrderDetail() {
         </TabsContent>
         
         <TabsContent value="assets">
+          {submitError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          )}
           <PrintAssetsTab order={order} setAssetDialogOpen={setAssetDialogOpen} />
         </TabsContent>
         
