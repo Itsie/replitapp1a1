@@ -402,16 +402,53 @@ export default function OrdersList() {
     {
       id: "procurement",
       header: "Beschaffung",
-      cell: () => (
-        <Tooltip>
-          <TooltipTrigger>
-            <span className="text-muted-foreground">—</span>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Feature noch nicht verfügbar</p>
-          </TooltipContent>
-        </Tooltip>
-      ),
+      cell: ({ row }) => {
+        const positions = row.original.positions || [];
+        if (positions.length === 0) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        
+        const procurementCounts = positions.reduce((acc, pos: any) => {
+          acc[pos.procurement] = (acc[pos.procurement] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+        const ordered = procurementCounts["ORDERED"] || 0;
+        const inStock = procurementCounts["IN_STOCK"] || 0;
+        const none = procurementCounts["NONE"] || 0;
+
+        if (ordered > 0) {
+          return (
+            <Tooltip>
+              <TooltipTrigger>
+                <Badge variant="outline" className="text-orange-600 border-orange-600">
+                  Bestellt ({ordered})
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{ordered} Position(en) bestellt{inStock > 0 && `, ${inStock} auf Lager`}{none > 0 && `, ${none} keine`}</p>
+              </TooltipContent>
+            </Tooltip>
+          );
+        }
+        
+        if (inStock > 0) {
+          return (
+            <Tooltip>
+              <TooltipTrigger>
+                <Badge variant="outline" className="text-green-600 border-green-600">
+                  Lager ({inStock})
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{inStock} Position(en) auf Lager{none > 0 && `, ${none} keine`}</p>
+              </TooltipContent>
+            </Tooltip>
+          );
+        }
+
+        return <span className="text-muted-foreground">—</span>;
+      },
     },
     {
       accessorKey: "totalGross",
@@ -527,7 +564,7 @@ export default function OrdersList() {
   };
   
   return (
-    <>
+    <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Aufträge</h1>
@@ -1033,6 +1070,6 @@ export default function OrdersList() {
           )}
         </>
       )}
-    </>
+    </div>
   );
 }
