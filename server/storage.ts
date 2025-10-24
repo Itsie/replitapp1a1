@@ -27,6 +27,25 @@ export interface IStorage {
 }
 
 export class PrismaStorage implements IStorage {
+  private async generateDisplayOrderNumber(): Promise<string> {
+    const year = new Date().getFullYear();
+    
+    // Use Prisma transaction to atomically increment the sequence
+    const result = await prisma.$transaction(async (tx) => {
+      // Upsert the sequence for the current year
+      const sequence = await tx.orderSequence.upsert({
+        where: { year },
+        create: { year, current: 999 }, // First will be 1000
+        update: { current: { increment: 1 } },
+      });
+      
+      // Return the next sequence number
+      return sequence.current + 1;
+    });
+    
+    return `INT-${year}-${result}`;
+  }
+  
   async getOrders(filters: OrderFilters): Promise<OrderWithRelations[]> {
     const where: any = {};
     
@@ -37,6 +56,7 @@ export class PrismaStorage implements IStorage {
         { title: { contains: searchQuery, mode: 'insensitive' } },
         { customer: { contains: searchQuery, mode: 'insensitive' } },
         { extId: { contains: searchQuery, mode: 'insensitive' } },
+        { displayOrderNumber: { contains: searchQuery, mode: 'insensitive' } },
         { notes: { contains: searchQuery, mode: 'insensitive' } },
         { location: { contains: searchQuery, mode: 'insensitive' } },
         { billCity: { contains: searchQuery, mode: 'insensitive' } },
@@ -90,11 +110,15 @@ export class PrismaStorage implements IStorage {
   }
   
   async createOrder(orderData: InsertOrder): Promise<OrderWithRelations> {
+    // Generate display order number for INTERNAL orders
+    const displayOrderNumber = await this.generateDisplayOrderNumber();
+    
     const order = await prisma.order.create({
       data: {
         ...orderData,
         source: 'INTERNAL',
         workflow: 'NEU',
+        displayOrderNumber,
         dueDate: orderData.dueDate ? new Date(orderData.dueDate) : null,
       },
       include: {
