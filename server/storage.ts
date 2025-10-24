@@ -30,11 +30,19 @@ export class PrismaStorage implements IStorage {
   async getOrders(filters: OrderFilters): Promise<OrderWithRelations[]> {
     const where: any = {};
     
-    if (filters.q && filters.q.trim()) {
+    // Search query - trim and check minimum length
+    const searchQuery = filters.q?.trim();
+    if (searchQuery && searchQuery.length >= 2) {
       where.OR = [
-        { title: { contains: filters.q } },
-        { customer: { contains: filters.q } },
-        { extId: { contains: filters.q } },
+        { title: { contains: searchQuery, mode: 'insensitive' } },
+        { customer: { contains: searchQuery, mode: 'insensitive' } },
+        { extId: { contains: searchQuery, mode: 'insensitive' } },
+        { notes: { contains: searchQuery, mode: 'insensitive' } },
+        { location: { contains: searchQuery, mode: 'insensitive' } },
+        { billCity: { contains: searchQuery, mode: 'insensitive' } },
+        { billZip: { contains: searchQuery, mode: 'insensitive' } },
+        { customerEmail: { contains: searchQuery, mode: 'insensitive' } },
+        { customerPhone: { contains: searchQuery, mode: 'insensitive' } },
       ];
     }
     
@@ -50,6 +58,14 @@ export class PrismaStorage implements IStorage {
       where.workflow = filters.workflow;
     }
     
+    // Limit results to 200 if no filters are applied (performance safeguard)
+    const hasFilters = 
+      filters.department || 
+      filters.source || 
+      filters.workflow || 
+      (searchQuery && searchQuery.length >= 2);
+    const limit = hasFilters ? undefined : 200;
+    
     return await prisma.order.findMany({
       where,
       include: {
@@ -59,6 +75,7 @@ export class PrismaStorage implements IStorage {
       orderBy: {
         createdAt: 'desc',
       },
+      take: limit,
     });
   }
   
