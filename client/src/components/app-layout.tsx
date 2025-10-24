@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Search, User, Menu } from "lucide-react";
+import { Search, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,9 +55,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col flex-1 overflow-hidden">
           <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="flex h-14 items-center px-4 gap-4">
-              <SidebarTrigger data-testid="button-sidebar-toggle">
-                <Menu className="h-5 w-5" />
-              </SidebarTrigger>
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
               
               <div className="flex items-center gap-2 mr-4">
                 <span className="font-bold text-lg" data-testid="text-app-title">1aShirt</span>

@@ -1,0 +1,95 @@
+✅ Prompt: Step 2.3 — Navigation Redesign (Sidebar + Topbar Polish)
+Step 2.3 – Redesign the navigation shell. Improve left sidebar visuals (grouped, icons, accent active state) and move global search to the top bar. Keep all existing routes and logic unchanged.
+
+Goals:
+- Sidebar with branding, grouped nav sections, icons, clear active state, subtle separators.
+- Collapsible sidebar (icon-only mode) with tooltip labels.
+- Top bar with global search (binds to existing "q" on /orders), theme toggle, user menu.
+- Consistent spacing and container system across pages.
+
+Constraints:
+- NO new routes or backend changes.
+- Reuse existing shadcn/ui + Tailwind + lucide-react.
+- Keep dark/light mode working.
+
+Tasks:
+
+A) Sidebar structure & branding
+1) Place app branding INSIDE the sidebar header:
+   - Left column: sticky, full-height container: 
+     className="flex h-screen w-64 shrink-0 flex-col border-r bg-muted/40"
+     Collapsed width: w-16
+   - Branding row (top):
+     <div className="flex h-14 items-center gap-2 px-4 border-b">
+       <div className="text-lg font-semibold tracking-tight">1aShirt</div>
+       <span className="text-xs text-muted-foreground">Produktion</span>
+     </div>
+2) Group navigation with section labels:
+   Sections:
+   - Verwaltung: Aufträge
+   - Produktion: Planung, Produktion heute
+   - Abwicklung: Abrechnung, Lager
+   - System: Einstellungen
+   Section label: className="px-4 pt-4 pb-2 text-[11px] uppercase tracking-wide text-muted-foreground"
+
+B) Nav items (visual polish)
+1) Use lucide-react icons:
+   - Aufträge: FileText
+   - Planung: CalendarClock
+   - Produktion heute: Factory / Workflow (fallback: Activity)
+   - Abrechnung: Receipt
+   - Lager: Boxes
+   - Einstellungen: Settings
+2) Item style:
+   <a className="mx-2 flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
+     <Icon className="h-4 w-4" />
+     <span className="truncate">Titel</span>
+   </a>
+3) Active state (exact route match) with accent left bar:
+   - Wrapper: relative
+   - Add left accent: <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-[3px] rounded bg-primary" />
+   - Active item className="bg-muted/70 text-foreground font-medium"
+4) Dividers between groups: <div className="my-2 border-t" />
+
+C) Collapsible mode
+1) Add a collapse toggle (bottom-left of sidebar): 
+   Button toggles boolean "collapsed" (persist in localStorage "nav_collapsed").
+2) Collapsed styles:
+   - Sidebar width: w-16
+   - Hide labels via conditional: {collapsed ? null : <span>…</span>}
+   - Tooltip for icons (shadcn Tooltip) with item title.
+3) Content spacer:
+   - Main layout grid: 
+     <div className="flex min-h-screen">
+       <Sidebar />
+       <div className="flex-1">
+         <Topbar />
+         <main className="mx-auto w-full px-6 py-4 max-w-[1600px] 2xl:max-w-[1920px]">{children}</main>
+       </div>
+     </div>
+
+D) Top bar
+1) Sticky top bar:
+   className="sticky top-0 z-40 h-14 border-b bg-background/80 backdrop-blur"
+2) Left: breadcrumb/title area (use current page title), Center: GLOBAL SEARCH, Right: theme toggle + user menu.
+3) Global search:
+   - Use shadcn Input with icon; when user submits, navigate to /orders?q=… (debounced), do not change API.
+   - If not on /orders, route to /orders with q param.
+   - Input className="w-full md:w-[520px]" centered using a flex container in the bar.
+
+E) Accessibility & states
+- All icon buttons have aria-labels and Tooltip on hover.
+- Active route detection via current pathname (React Router useLocation).
+
+F) Clean up
+- Remove the old header search (if present) to avoid duplicates.
+- Ensure main content doesn’t shift when toggling collapse (use fixed widths and transitions on the sidebar).
+
+Acceptance Criteria:
+- Sidebar shows grouped nav with icons, accent active indicator.
+- Branding ("1aShirt") appears in the sidebar header, not floating above.
+- Collapsible mode works, persists, and shows tooltips for icons.
+- Top bar has global search in the middle; typing searches /orders via q param.
+- No route or backend changes; dark/light mode preserved; content container max width = 1600px (1920px on 2xl).
+
+Stay strictly in scope. No extra features. Use only existing codebase and schema.

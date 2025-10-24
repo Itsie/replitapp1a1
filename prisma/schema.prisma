@@ -76,6 +76,19 @@ model Order {
   workflow         WorkflowState      @default(NEU)
   qc               QCState            @default(UNGEPRUEFT)
   location         String?
+  company          String?
+  contactFirstName String?
+  contactLastName  String?
+  customerEmail    String?
+  customerPhone    String?
+  billStreet       String?
+  billZip          String?
+  billCity         String?
+  billCountry      String?            @default("DE")
+  shipStreet       String?
+  shipZip          String?
+  shipCity         String?
+  shipCountry      String?
   sizeTableId      String?
   sizeTable        SizeTable?         @relation(fields: [sizeTableId], references: [id])
   printAssets      PrintAsset[]

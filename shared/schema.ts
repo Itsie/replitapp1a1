@@ -18,7 +18,42 @@ export const insertOrderSchema = z.object({
   dueDate: z.string().datetime().optional().nullable().transform(val => val || null),
   notes: z.string().optional().nullable().transform(val => val || null),
   location: z.string().optional().nullable().transform(val => val || null),
-});
+  company: z.string().optional().nullable().transform(val => val || null),
+  contactFirstName: z.string().optional().nullable().transform(val => val || null),
+  contactLastName: z.string().optional().nullable().transform(val => val || null),
+  customerEmail: z.string().email("Must be a valid email address"),
+  customerPhone: z.string().min(5, "Phone number must be at least 5 characters"),
+  billStreet: z.string().min(1, "Billing street is required"),
+  billZip: z.string().min(1, "Billing ZIP code is required"),
+  billCity: z.string().min(1, "Billing city is required"),
+  billCountry: z.string().default("DE"),
+  shipStreet: z.string().optional().nullable().transform(val => val || null),
+  shipZip: z.string().optional().nullable().transform(val => val || null),
+  shipCity: z.string().optional().nullable().transform(val => val || null),
+  shipCountry: z.string().optional().nullable().transform(val => val || null),
+}).refine(
+  (data) => {
+    // Either company OR (firstName + lastName) is required
+    return data.company || (data.contactFirstName && data.contactLastName);
+  },
+  {
+    message: "Either company name or both first and last name are required",
+    path: ["company"],
+  }
+).refine(
+  (data) => {
+    // If any shipping field is provided, all shipping fields must be present
+    const hasAnyShipping = data.shipStreet || data.shipZip || data.shipCity || data.shipCountry;
+    if (hasAnyShipping) {
+      return data.shipStreet && data.shipZip && data.shipCity && data.shipCountry;
+    }
+    return true;
+  },
+  {
+    message: "If using alternate shipping address, all shipping fields (street, ZIP, city, country) are required",
+    path: ["shipStreet"],
+  }
+);
 
 // Schema for size table row entries
 const sizeTableRowSchema = z.object({
