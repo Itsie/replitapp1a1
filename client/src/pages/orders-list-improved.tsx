@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Search, Plus, Eye, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
@@ -27,12 +27,26 @@ import type { OrderWithRelations, OrderSource, WorkflowState } from "@shared/sch
 import { useDebounce } from "@/hooks/use-debounce";
 
 export default function OrdersList() {
-  const [, setLocation] = useLocation();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [location, setLocation] = useLocation();
+  
+  // Read initial search query from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialQuery = urlParams.get("q") || "";
+  
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [department, setDepartment] = useState<string>("");
   const [source, setSource] = useState<string>("");
   const [workflow, setWorkflow] = useState<string>("");
   const [sorting, setSorting] = useState<SortingState>([]);
+  
+  // Update search query when URL changes
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("q") || "";
+    if (q !== searchQuery) {
+      setSearchQuery(q);
+    }
+  }, [location]);
   
   const debouncedSearch = useDebounce(searchQuery, 300);
   

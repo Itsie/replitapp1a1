@@ -1,0 +1,102 @@
+✅ Prompt 2.1d — Table & Card View Toggle (mit modernisiertem Kartenmodus)
+Step 2.1d – Add a view mode toggle (Table/Card) to the Orders overview. Default = Table. Both use same data, filters, and search logic. Implement modern Card design for optional grid view.
+
+Goals:
+- User can switch between Table view and Card view using a toggle button group.
+- Table = default view.
+- Selection persists in localStorage ("orders_viewMode").
+- Cards use a modern, consistent shadcn/ui design, not the old layout.
+
+Tasks:
+
+1) Add View Mode Toggle in Orders toolbar:
+   - Place next to “Neuer Auftrag” button.
+   - Use shadcn/ui ToggleGroup or SegmentedControl.
+   - Options:
+     • Table view (icon: Lucide Table or LayoutGrid)
+     • Card view (icon: Lucide Rows or AppWindow)
+   - Tooltip: “Tabellenansicht” / “Kartenansicht”
+   - Store user choice in localStorage:
+     ```ts
+     const [viewMode, setViewMode] = useState<'table' | 'cards'>(
+       (localStorage.getItem('orders_viewMode') as 'table' | 'cards') ?? 'table'
+     );
+     useEffect(() => localStorage.setItem('orders_viewMode', viewMode), [viewMode]);
+     ```
+   - Default = 'table'
+
+2) Conditional rendering:
+   ```tsx
+   {viewMode === 'table' && <OrdersTable data={orders} />}
+   {viewMode === 'cards' && <OrdersCards data={orders} />}
+
+
+Both use the same data and filtering from TanStack Query.
+
+OrdersTable:
+
+Keep the improved wide layout from previous step (max-w-[1600px], sticky header, horizontal scroll).
+
+Responsive down to mobile (overflow-x-auto).
+
+Compact cells (px-3 py-2).
+
+OrdersCards (modernized grid):
+
+Use responsive grid:
+
+<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+
+
+Each card:
+
+<Card className="p-4 flex flex-col justify-between border-muted/60 hover:shadow-md transition">
+  <div>
+    <h3 className="font-medium text-base truncate">{order.title}</h3>
+    <p className="text-sm text-muted-foreground">{order.customerName}</p>
+  </div>
+  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+    <Badge variant="secondary">{order.department}</Badge>
+    <Badge variant="outline">{order.source}</Badge>
+    <Badge variant={order.status === 'FUER_PROD' ? 'blue' : 'default'}>
+      {order.status}
+    </Badge>
+  </div>
+  <div className="mt-3 text-xs text-muted-foreground">
+    {order.dueDate ? (
+      <>Fällig: {format(new Date(order.dueDate), "dd.MM.yyyy")}</>
+    ) : (
+      <>Kein Lieferdatum</>
+    )}
+  </div>
+</Card>
+
+
+Optional right-click / hover actions (später nutzbar, jetzt weglassen).
+
+Ensure dark mode contrast is good (use bg-card and text-foreground).
+
+Toolbar structure:
+
+Left side: Search + Filters (Abteilung, Quelle, Status)
+
+Right side: View Mode Toggle + “Neuer Auftrag” button
+
+Responsive layout with flex-wrap gap-2 justify-between items-center
+
+Persist user choice:
+
+When switching view, preference saved in localStorage.
+
+On reload, previously selected mode loads automatically.
+
+Acceptance Criteria:
+✅ Table = Default
+✅ Card View optional & toggleable
+✅ Both use same dataset, filters, and search
+✅ Choice persists
+✅ Modern Card styling with clean grid layout
+✅ Responsive down to mobile
+✅ No new routes, APIs, or DB changes
+
+Stay strictly in scope. No extra features. Use only existing codebase and schema.

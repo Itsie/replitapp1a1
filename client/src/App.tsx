@@ -9,6 +9,11 @@ import NotFound from "@/pages/not-found";
 import OrdersList from "@/pages/orders-list-improved";
 import OrderNew from "@/pages/order-new";
 import OrderDetail from "@/pages/order-detail";
+import Planning from "@/pages/planning";
+import ProductionToday from "@/pages/production-today";
+import Billing from "@/pages/billing";
+import Warehouse from "@/pages/warehouse";
+import Settings from "@/pages/settings";
 
 function Router() {
   return (
@@ -17,6 +22,11 @@ function Router() {
       <Route path="/orders" component={OrdersList} />
       <Route path="/orders/new" component={OrderNew} />
       <Route path="/orders/:id" component={OrderDetail} />
+      <Route path="/planning" component={Planning} />
+      <Route path="/production/today" component={ProductionToday} />
+      <Route path="/billing" component={Billing} />
+      <Route path="/warehouse" component={Warehouse} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );
