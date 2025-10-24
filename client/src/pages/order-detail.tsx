@@ -367,56 +367,94 @@ export default function OrderDetail() {
                 </Alert>
               )}
               
-              <div className="grid lg:grid-cols-12 gap-4">
-                {/* Left Column - Customer & Addresses */}
-                <div className="lg:col-span-8 space-y-4">
-                  {/* Combined Customer & Addresses Card */}
-                  <Card className="rounded-2xl border-muted/60 h-full">
-                    <CardHeader>
-                      <CardTitle>Kunde & Adressen</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {/* Customer Contact Info */}
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div>
-                          <Label className="text-xs text-muted-foreground">E-MAIL</Label>
-                          {order.customerEmail ? (
-                            <p className="text-primary hover:underline" data-testid="link-email">
-                              <a href={`mailto:${order.customerEmail}`}>
-                                {order.customerEmail}
-                              </a>
+              <div className="space-y-4">
+                {/* Action Buttons Row */}
+                <div className="flex gap-3">
+                  {order.customerEmail && (
+                    <Button
+                      variant="outline"
+                      asChild
+                      className="flex-1"
+                      data-testid="button-email"
+                    >
+                      <a href={`mailto:${order.customerEmail}`}>
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        E-Mail senden
+                      </a>
+                    </Button>
+                  )}
+                  {order.customerPhone && (
+                    <Button
+                      variant="outline"
+                      asChild
+                      className="flex-1"
+                      data-testid="button-phone"
+                    >
+                      <a href={`tel:${order.customerPhone}`}>
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Anrufen
+                      </a>
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => setActiveTab("assets")}
+                    className="flex-1"
+                    data-testid="button-open-assets"
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Druckdaten öffnen
+                  </Button>
+                </div>
+                
+                {/* Combined Card with 3 Gradients */}
+                <Card className="rounded-2xl border-muted/60">
+                  <CardHeader>
+                    <CardTitle>Auftrag & Adressen</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 gap-4">
+                      {/* Billing Address with Blue/Primary Gradient */}
+                      <div className="rounded-xl p-4 bg-gradient-to-br from-primary/5 via-primary/3 to-transparent border border-primary/10">
+                        <Label className="text-xs text-muted-foreground mb-2 block">RECHNUNGSADRESSE</Label>
+                        <div className="space-y-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">FIRMA</Label>
+                            <p className="font-medium" data-testid="text-company">{order.company || "—"}</p>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">ANSPRECHPARTNER</Label>
+                            <p data-testid="text-contact">
+                              {order.contactFirstName && order.contactLastName
+                                ? `${order.contactFirstName} ${order.contactLastName}`
+                                : "—"}
                             </p>
-                          ) : (
-                            <p>—</p>
-                          )}
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">TELEFON</Label>
-                          {order.customerPhone ? (
-                            <p className="text-primary hover:underline" data-testid="link-phone">
-                              <a href={`tel:${order.customerPhone}`}>
-                                {order.customerPhone}
-                              </a>
-                            </p>
-                          ) : (
-                            <p>—</p>
-                          )}
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">ADRESSE</Label>
+                            <div className="space-y-1">
+                              <p data-testid="text-bill-street">{order.billStreet || "—"}</p>
+                              <p data-testid="text-bill-city">
+                                {order.billZip && order.billCity ? `${order.billZip} ${order.billCity}` : "—"}
+                              </p>
+                              <p data-testid="text-bill-country">{order.billCountry || "—"}</p>
+                            </div>
+                          </div>
                         </div>
                       </div>
                       
-                      {/* Addresses Grid */}
-                      <div className="grid grid-cols-2 gap-4">
-                        {/* Billing Address with Blue/Primary Gradient */}
-                        <div className="rounded-xl p-4 bg-gradient-to-br from-primary/5 via-primary/3 to-transparent border border-primary/10">
-                          <Label className="text-xs text-muted-foreground mb-2 block">RECHNUNGSADRESSE</Label>
+                      {/* Shipping Address with Green/Emerald Gradient or Same-as-billing */}
+                      {hasShippingAddress ? (
+                        <div className="rounded-xl p-4 bg-gradient-to-br from-green-500/5 via-emerald-500/3 to-transparent border border-green-500/10">
+                          <Label className="text-xs text-muted-foreground mb-2 block">LIEFERADRESSE</Label>
                           <div className="space-y-3">
                             <div>
                               <Label className="text-xs text-muted-foreground">FIRMA</Label>
-                              <p className="font-medium" data-testid="text-company">{order.company || "—"}</p>
+                              <p className="font-medium">{order.company || "—"}</p>
                             </div>
                             <div>
                               <Label className="text-xs text-muted-foreground">ANSPRECHPARTNER</Label>
-                              <p data-testid="text-contact">
+                              <p>
                                 {order.contactFirstName && order.contactLastName
                                   ? `${order.contactFirstName} ${order.contactLastName}`
                                   : "—"}
@@ -425,128 +463,73 @@ export default function OrderDetail() {
                             <div>
                               <Label className="text-xs text-muted-foreground">ADRESSE</Label>
                               <div className="space-y-1">
-                                <p data-testid="text-bill-street">{order.billStreet || "—"}</p>
-                                <p data-testid="text-bill-city">
-                                  {order.billZip && order.billCity ? `${order.billZip} ${order.billCity}` : "—"}
+                                <p data-testid="text-ship-street">{order.shipStreet || "—"}</p>
+                                <p data-testid="text-ship-city">
+                                  {order.shipZip && order.shipCity ? `${order.shipZip} ${order.shipCity}` : "—"}
                                 </p>
-                                <p data-testid="text-bill-country">{order.billCountry || "—"}</p>
+                                <p data-testid="text-ship-country">{order.shipCountry || "—"}</p>
                               </div>
                             </div>
                           </div>
                         </div>
-                        
-                        {/* Shipping Address with Green/Accent Gradient or Same-as-billing */}
-                        {hasShippingAddress ? (
-                          <div className="rounded-xl p-4 bg-gradient-to-br from-green-500/5 via-emerald-500/3 to-transparent border border-green-500/10">
-                            <Label className="text-xs text-muted-foreground mb-2 block">LIEFERADRESSE</Label>
-                            <div className="space-y-3">
-                              <div>
-                                <Label className="text-xs text-muted-foreground">FIRMA</Label>
-                                <p className="font-medium">{order.company || "—"}</p>
-                              </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground">ANSPRECHPARTNER</Label>
-                                <p>
-                                  {order.contactFirstName && order.contactLastName
-                                    ? `${order.contactFirstName} ${order.contactLastName}`
-                                    : "—"}
-                                </p>
-                              </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground">ADRESSE</Label>
-                                <div className="space-y-1">
-                                  <p data-testid="text-ship-street">{order.shipStreet || "—"}</p>
-                                  <p data-testid="text-ship-city">
-                                    {order.shipZip && order.shipCity ? `${order.shipZip} ${order.shipCity}` : "—"}
-                                  </p>
-                                  <p data-testid="text-ship-country">{order.shipCountry || "—"}</p>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="rounded-xl p-4 bg-gradient-to-br from-muted/30 to-transparent border border-muted/20 flex items-center justify-center">
-                            <p className="text-sm text-muted-foreground italic">Gleiche wie Rechnungsadresse</p>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-                
-                {/* Right Column - Order Data */}
-                <div className="lg:col-span-4">
-                  {/* Order Details Card */}
-                  <Card className="rounded-2xl border-muted/60 h-full flex flex-col">
-                    <CardHeader>
-                      <CardTitle>Auftrag</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4 flex-1 flex flex-col">
-                      {/* Two-column grid for compact layout */}
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                        <div>
-                          <Label className="text-xs text-muted-foreground">ABTEILUNG</Label>
-                          <div>
-                            <Badge variant="outline" data-testid="badge-department">{order.department}</Badge>
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">QUELLE</Label>
-                          <div>
-                            <Badge variant={getSourceBadgeVariant(order.source)} data-testid="badge-source-detail">
-                              {order.source}
-                            </Badge>
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">WORKFLOW</Label>
-                          <div>
-                            <Badge variant={getWorkflowBadgeVariant(order.workflow)} data-testid="badge-workflow-detail">
-                              {order.workflow}
-                            </Badge>
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">FÄLLIGKEITSDATUM</Label>
-                          <p data-testid="text-duedate">{formatDate(order.dueDate)}</p>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">STANDORT</Label>
-                          <p data-testid="text-location">{order.location || "—"}</p>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">ERSTELLT AM</Label>
-                          <p data-testid="text-created">{formatDate(order.createdAt)}</p>
-                        </div>
-                      </div>
-                      
-                      {order.notes && (
-                        <div>
-                          <Label className="text-xs text-muted-foreground">NOTIZEN</Label>
-                          <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{order.notes}</p>
+                      ) : (
+                        <div className="rounded-xl p-4 bg-gradient-to-br from-muted/30 to-transparent border border-muted/20 flex items-center justify-center">
+                          <p className="text-sm text-muted-foreground italic">Gleiche wie Rechnungsadresse</p>
                         </div>
                       )}
                       
-                      {/* Druckdaten Button - pushed to bottom */}
-                      <div className="mt-auto pt-4">
-                        <Button
-                          variant="outline"
-                          onClick={() => setActiveTab("assets")}
-                          className="w-full"
-                          data-testid="button-open-assets"
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          Druckdaten öffnen
-                        </Button>
+                      {/* Order Details with Purple/Amber Gradient */}
+                      <div className="rounded-xl p-4 bg-gradient-to-br from-amber-500/5 via-orange-500/3 to-transparent border border-amber-500/10">
+                        <Label className="text-xs text-muted-foreground mb-2 block">AUFTRAG</Label>
+                        <div className="space-y-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">AUFTRAGSNUMMER</Label>
+                            <p className="font-medium font-mono" data-testid="text-order-number">{order.displayOrderNumber}</p>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">ABTEILUNG</Label>
+                            <div>
+                              <Badge variant="outline" data-testid="badge-department">{order.department}</Badge>
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">QUELLE</Label>
+                            <div>
+                              <Badge variant={getSourceBadgeVariant(order.source)} data-testid="badge-source-detail">
+                                {order.source}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">WORKFLOW</Label>
+                            <div>
+                              <Badge variant={getWorkflowBadgeVariant(order.workflow)} data-testid="badge-workflow-detail">
+                                {order.workflow}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">FÄLLIGKEITSDATUM</Label>
+                            <p data-testid="text-duedate">{formatDate(order.dueDate)}</p>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">STANDORT</Label>
+                            <p data-testid="text-location">{order.location || "—"}</p>
+                          </div>
+                          {order.notes && (
+                            <div>
+                              <Label className="text-xs text-muted-foreground">NOTIZEN</Label>
+                              <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{order.notes}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                {/* Full Width - Positions */}
-                <div className="lg:col-span-12">
-                  <PositionsSection orderId={orderId!} order={order} />
-                </div>
+                {/* Positions */}
+                <PositionsSection orderId={orderId!} order={order} />
               </div>
             </TabsContent>
             
@@ -905,8 +888,8 @@ function PositionRow({
 
   if (isEditing) {
     const displayPrice = priceMode === "brutto" 
-      ? editedPos.unitPriceNet * (1 + editedPos.vatRate / 100)
-      : editedPos.unitPriceNet;
+      ? Number(editedPos.unitPriceNet) * (1 + Number(editedPos.vatRate) / 100)
+      : Number(editedPos.unitPriceNet);
       
     return (
       <div className="border rounded-md p-3 space-y-3" data-testid={`position-row-edit-${position.id}`}>
