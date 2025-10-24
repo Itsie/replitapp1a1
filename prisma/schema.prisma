@@ -93,8 +93,7 @@ model Order {
   totalNet            Decimal?
   totalVat            Decimal?
   totalGross          Decimal?
-  sizeTableId         String?
-  sizeTable           SizeTable?         @relation(fields: [sizeTableId], references: [id])
+  sizeTable           SizeTable?
   printAssets         PrintAsset[]
   positions           OrderPosition[]
   timeSlots           TimeSlot[]
@@ -124,11 +123,13 @@ model OrderPosition {
 
 model SizeTable {
   id        String   @id @default(cuid())
+  orderId   String   @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   scheme    String
-  rows      Json
+  rowsJson  Json
   comment   String?
   createdAt DateTime @default(now())
-  Order     Order[]
+  updatedAt DateTime @updatedAt
 }
 
 model PrintAsset {
