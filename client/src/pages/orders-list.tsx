@@ -84,12 +84,12 @@ export default function OrdersList() {
             />
           </div>
           
-          <Select value={department} onValueChange={setDepartment}>
+          <Select value={department || "ALL"} onValueChange={(val) => setDepartment(val === "ALL" ? "" : val)}>
             <SelectTrigger data-testid="select-department" className="w-full sm:w-48">
               <SelectValue placeholder="Abteilung" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Alle Abteilungen</SelectItem>
+              <SelectItem value="ALL">Alle Abteilungen</SelectItem>
               <SelectItem value="TEAMSPORT">Teamsport</SelectItem>
               <SelectItem value="TEXTILVEREDELUNG">Textilveredelung</SelectItem>
               <SelectItem value="STICKEREI">Stickerei</SelectItem>
@@ -98,23 +98,23 @@ export default function OrdersList() {
             </SelectContent>
           </Select>
           
-          <Select value={source} onValueChange={setSource}>
+          <Select value={source || "ALL"} onValueChange={(val) => setSource(val === "ALL" ? "" : val)}>
             <SelectTrigger data-testid="select-source" className="w-full sm:w-40">
               <SelectValue placeholder="Quelle" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Alle Quellen</SelectItem>
+              <SelectItem value="ALL">Alle Quellen</SelectItem>
               <SelectItem value="JTL">JTL</SelectItem>
               <SelectItem value="INTERNAL">Intern</SelectItem>
             </SelectContent>
           </Select>
           
-          <Select value={workflow} onValueChange={setWorkflow}>
+          <Select value={workflow || "ALL"} onValueChange={(val) => setWorkflow(val === "ALL" ? "" : val)}>
             <SelectTrigger data-testid="select-workflow" className="w-full sm:w-48">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Alle Status</SelectItem>
+              <SelectItem value="ALL">Alle Status</SelectItem>
               <SelectItem value="ENTWURF">Entwurf</SelectItem>
               <SelectItem value="NEU">Neu</SelectItem>
               <SelectItem value="PRUEFUNG">Prüfung</SelectItem>
