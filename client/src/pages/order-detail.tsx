@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Check, AlertTriangle, Copy, Plus, ExternalLink, Pencil, Trash2, Save, X, Download } from "lucide-react";
+import { ArrowLeft, Check, AlertTriangle, Copy, Plus, ExternalLink, Pencil, Trash2, Save, X, Download, Upload, FileIcon, Link as LinkIcon, Calendar, Trash, Eye, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -17,9 +17,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import type { OrderWithRelations, SizeTableResponse, SizeTableRow } from "@shared/schema";
+import type { OrderWithRelations, SizeTableResponse, SizeTableRow, OrderAsset } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SizeTableEditor } from "@/components/size-table-editor";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AttachmentsTab } from "@/components/attachments-tab";
 
 export default function OrderDetail() {
   const [, params] = useRoute("/orders/:id");
@@ -338,7 +340,7 @@ export default function OrderDetail() {
             <TabsList data-testid="tabs-list">
               <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
               <TabsTrigger value="sizes" data-testid="tab-sizes">Größen</TabsTrigger>
-              <TabsTrigger value="assets" data-testid="tab-assets">Druckdaten</TabsTrigger>
+              <TabsTrigger value="assets" data-testid="tab-assets">Druckdaten / Anhänge</TabsTrigger>
               <TabsTrigger value="history" data-testid="tab-history">Historie</TabsTrigger>
             </TabsList>
             
@@ -484,38 +486,16 @@ export default function OrderDetail() {
                     </CardContent>
                   </Card>
                   
-                  {/* Attachments Card */}
+                  {/* Quick Link to Assets Tab */}
                   <Card className="rounded-2xl border-muted/60">
-                    <CardHeader>
-                      <CardTitle>Anhänge</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">DRUCKDATEN</Label>
-                        <p data-testid="text-assets-summary">
-                          {order.printAssets.length === 0 ? (
-                            "Keine Druckdaten vorhanden"
-                          ) : (
-                            <>
-                              {order.printAssets.filter(a => a.required).length} erforderlich / {" "}
-                              {order.printAssets.filter(a => !a.required).length} optional
-                            </>
-                          )}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">GRÖẞENTABELLE</Label>
-                        <p data-testid="text-sizetable-summary">
-                          {order.sizeTable ? "Vorhanden" : "Nicht vorhanden"}
-                        </p>
-                      </div>
+                    <CardContent className="p-4">
                       <Button
                         variant="outline"
                         onClick={() => setActiveTab("assets")}
                         className="w-full"
                         data-testid="button-open-assets"
                       >
-                        <ExternalLink className="h-4 w-4 mr-2" />
+                        <FileText className="h-4 w-4 mr-2" />
                         Druckdaten öffnen
                       </Button>
                     </CardContent>
@@ -540,7 +520,7 @@ export default function OrderDetail() {
                   <AlertDescription>{submitError}</AlertDescription>
                 </Alert>
               )}
-              <PrintAssetsTab order={order} setAssetDialogOpen={setAssetDialogOpen} />
+              <AttachmentsTab orderId={orderId!} />
             </TabsContent>
             
             <TabsContent value="history">
