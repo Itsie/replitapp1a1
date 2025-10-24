@@ -1,0 +1,69 @@
+Step 2.6 – Implement proper SizeTable persistence and API for orders.
+
+Goals:
+- Persist a roster-style size table per order.
+- JSON-basierte Items: je Trikot ein Eintrag { size, number, name? }.
+- CSV Import/Export.
+- „Zur Produktion freigeben“ validiert die Existenz der Tabelle (für relevante Bereiche).
+
+A) Prisma schema (add model; keep everything else)
+model SizeTable {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  scheme    String   // "ALPHA" | "NUMERIC" | "CUSTOM"
+  rowsJson  Json     // array of items: [{size:"M", number:10, name:"Müller"}, ...]
+  comment   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+Notes:
+- Use rowsJson as the single source of truth (per-item representation).
+- Do not delete/modify any JTL tables.
+
+B) Migrations
+- Run prisma migrate dev
+- Backfill: none required.
+
+C) REST API (idempotent, consistent names)
+- GET  /api/orders/:id/size
+  → 200 with { scheme, rows: [...], comment, countsBySize } or 204 if none
+
+- POST /api/orders/:id/size
+  body: { scheme: "ALPHA"|"NUMERIC"|"CUSTOM", rows: Array<{size:string, number:number, name?:string}>, comment?: string }
+  behavior:
+   • Upsert semantic: create if none, else replace all fields
+   • Validate:
+     - rows array length 1..1000
+     - each row has size (string, 1..10), number (int 0..999), name optional (0..30)
+     - duplicate numbers → 400 unless allowDuplicates=true in body
+   • Return 200 with saved payload and countsBySize
+
+- POST /api/orders/:id/size/import-csv
+  body: { csv: string, scheme?: string, allowDuplicates?: boolean }
+  parse headers: size, number, name (case-insensitive)
+  same validation & upsert as POST /size
+
+- GET  /api/orders/:id/size/export.csv
+  → CSV mit header: size,number,name
+
+D) Production gate
+- In POST /api/orders/:id/submit extend validation:
+  If order.department in ["TEAMSPORT","STICKEREI","DRUCK"] then:
+    - require SizeTable existence ONLY for departments where it’s relevant:
+      * TEAMSPORT: required
+      * STICKEREI/DRUCK: optional (do not block)
+- If missing and required → 412 with message "Größentabelle erforderlich".
+
+E) Counts helper
+- countsBySize serverseitig berechnen (Map size → count)
+- Include counts in GET/POST responses to ease UI pills.
+
+Acceptance:
+- prisma migrate succeeds; SizeTable rowsJson persists per-item roster.
+- Endpoints work; CSV import/export round-trips.
+- submit blocks for TEAMSPORT when size table absent (412).
+- No changes to unrelated modules.

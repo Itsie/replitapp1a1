@@ -116,6 +116,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const positions = await storage.getPositions(req.params.id);
       res.json(positions);
     } catch (error) {
+      if (error instanceof Error && error.message === "Order not found") {
+        return res.status(404).json({ error: "Order not found" });
+      }
       console.error("Error fetching positions:", error);
       res.status(500).json({ error: "Failed to fetch positions" });
     }

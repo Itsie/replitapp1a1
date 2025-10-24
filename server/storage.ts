@@ -260,6 +260,15 @@ export class PrismaStorage implements IStorage {
   }
 
   async getPositions(orderId: string): Promise<OrderPosition[]> {
+    // Verify order exists
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
     return await prisma.orderPosition.findMany({
       where: { orderId },
       orderBy: { createdAt: 'asc' },
