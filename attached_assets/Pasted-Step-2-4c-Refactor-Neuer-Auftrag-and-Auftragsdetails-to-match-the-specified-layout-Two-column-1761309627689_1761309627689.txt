@@ -1,0 +1,83 @@
+Step 2.4c – Refactor "Neuer Auftrag" and "Auftragsdetails" to match the specified layout:
+Two-column layout (left: Kunde/Adressen, right: Auftragsdaten), positions panel full-width below, totals box, proper primary/secondary actions. 
+NO new backend routes. Use existing POST /api/orders and /api/orders/:id/positions endpoints.
+
+Goals
+- New Order page: two-column form + full-width Positions panel (editable grid) below.
+- Detail page: same two-column info layout; positions sichtbar (Panel oder Tab) + totals.
+- Primary CTA placement fixed ("Auftrag erstellen" unten rechts, sticky actions).
+- Respect required fields and disable submit until valid.
+- After create: redirect to /orders/:id (detail), show success toast.
+
+Layout (both pages)
+- Container: max-w-[1600px] (2xl 1920px), grid gap-4.
+- Header: Breadcrumb "Zurück", Title h1, small meta under title (displayOrderNumber • department • workflow).
+- Grid: lg:grid-cols-12, gap-4.
+  Left (lg:col-span-8) cards:
+    1) "Kunde": company, contactFirstName, contactLastName, email, phone.
+    2) "Rechnungsadresse": billStreet, billZip, billCity, billCountry.
+    3) If alt shipping: "Lieferadresse": shipStreet, shipZip, shipCity, shipCountry.
+    4) (Detail-Only) "Notizen" textarea.
+  Right (lg:col-span-4) cards:
+    1) "Auftrag": title, customerName (Anzeigename), department (select), dueDate, location.
+    2) "Anhänge": Druckdaten-Kurzinfo + Button "Druckdaten öffnen" → bestehender Dialog/Tab.
+    3) "Größenverwaltung": Status + Button "Größentabelle anlegen/bearbeiten" → bestehender Editor.
+- Full width below (lg:col-span-12):
+    Card "Positionen" mit editierbarer Tabelle und Summen-Box rechts unten.
+
+Positions-Panel (create + detail)
+- Toolbar: "+ Position hinzufügen" | "Mehr" (CSV import/export).
+- Table columns:
+  • Art.-Nr. (optional)
+  • Artikelname (required)
+  • Menge (numeric, step 1/0.01)
+  • Einheit (default "Stk")
+  • Einzelpreis Netto (€)
+  • MwSt (%) select 0/7/19
+  • Netto (readonly)
+  • MwSt (readonly)
+  • Brutto (readonly)
+  • Beschaffung (Badge/Select: NONE | ORDER_NEEDED | ORDERED | RECEIVED)
+  • Notiz (optional)
+  • Aktionen (Löschen)
+- Totals box (right, sticky inside card footer): Netto, MwSt, Brutto (DE-Format).
+- Validation inline (red ring + helper text). Disable submit if positions.length === 0.
+
+Create flow (one-click, no new endpoints)
+- Button unten rechts "Auftrag erstellen" (primary), links "Abbrechen".
+- On click:
+  1) Validate form + positions client-side.
+  2) POST /api/orders (source=INTERNAL + all customer/address/meta fields).
+  3) If ok → bulk POST /api/orders/:id/positions (array payload).
+  4) If ok → toast success, navigate /orders/:id.
+  5) If positions POST fails → show error toast, roll back by DELETE the created order (best effort), or show retry (keep draft in state).
+- While saving: show spinner, disable buttons.
+
+Detail page polish
+- Oben rechts Actions:
+  • "Für Produktion freigeben" (primary), confirm dialog.
+    - disabled if positions.length === 0 OR no required PrintAsset
+    - tooltip for why disabled.
+- Cards füllen mit realen Werten; keine leeren Flächen: wenn Feld fehlt → "—" (muted).
+- Positions-Panel: gleiches Grid wie beim Erstellen (editierbar), oder eigener "Positionen"-Tab (wahlweise – geringster Implementationsaufwand nehmen).
+- Totals-Box immer sichtbar.
+
+Columns & mapping
+- "Kunde (Anzeigename)" bindet auf order.customerName (für Listenanzeige).
+- Lesbare Auftragsnummer (displayOrderNumber) unter Title anzeigen (falls vorhanden), sonst "—".
+- In Liste eine "Gesamt (Brutto)"-Spalte einblenden (order.totalGross falls vorhanden, sonst clientseitig aus Positionen summieren).
+
+Sticky actions
+- Am Seitenende ein sticky Footer mit:
+  Create page: "Abbrechen" | "Auftrag erstellen"
+  Detail page: "Änderungen verwerfen" | "Speichern"  (nur wenn es Editmodus gibt; ansonsten nur oben die Freigabe-Action)
+
+Acceptance
+- New Order: zwei Spalten + Positionspanel unten; Submit disabled bis Pflichtfelder ok und ≥1 Position.
+- Create führt zwei Requests aus (order, dann positions), UI bleibt One-Click; nach Erfolg Redirect + Toast.
+- Detail: zwei Spalten wie oben, Anhänge/Größen Buttons funktionieren (vorhandene Endpunkte).
+- Totals korrekt, DE-Format; Spalten und Summen stimmen mit Grid-Angaben.
+- Keine neuen Backend-Routen, nur Nutzung vorhandener: POST /api/orders, POST /api/orders/:id/positions (+ vorhandene Assets/Size).
+- Dark/Light bleibt sauber, keine Layout-Sprünge.
+
+Stay strictly in scope. No extra features. Use only the existing codebase and schema.
