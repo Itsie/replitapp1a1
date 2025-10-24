@@ -17,7 +17,8 @@ export interface IStorage {
   createOrder(order: InsertOrder): Promise<OrderWithRelations>;
   
   // Size Table
-  createOrUpdateSizeTable(orderId: string, sizeTable: InsertSizeTable): Promise<OrderWithRelations>;
+  getSizeTable(orderId: string): Promise<{ scheme: string; rows: any[]; comment: string | null } | null>;
+  createOrUpdateSizeTable(orderId: string, sizeTable: InsertSizeTable): Promise<{ scheme: string; rows: any[]; comment: string | null }>;
   
   // Print Assets
   addPrintAsset(orderId: string, asset: InsertPrintAsset): Promise<OrderWithRelations>;
@@ -139,7 +140,7 @@ export class PrismaStorage implements IStorage {
     return order;
   }
   
-  async createOrUpdateSizeTable(orderId: string, sizeTableData: InsertSizeTable): Promise<OrderWithRelations> {
+  async getSizeTable(orderId: string): Promise<{ scheme: string; rows: any[]; comment: string | null } | null> {
     // First check if order exists
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -150,24 +151,51 @@ export class PrismaStorage implements IStorage {
       throw new Error('Order not found');
     }
     
-    // If sizeTable exists, update it; otherwise create new
-    if (order.sizeTableId) {
-      await prisma.sizeTable.update({
-        where: { id: order.sizeTableId },
-        data: sizeTableData,
-      });
-    } else {
-      const sizeTable = await prisma.sizeTable.create({
-        data: sizeTableData,
-      });
-      
-      await prisma.order.update({
-        where: { id: orderId },
-        data: { sizeTableId: sizeTable.id },
-      });
+    if (!order.sizeTable) {
+      return null;
     }
     
-    return await this.getOrderById(orderId) as OrderWithRelations;
+    return {
+      scheme: order.sizeTable.scheme,
+      rows: order.sizeTable.rowsJson as any[],
+      comment: order.sizeTable.comment,
+    };
+  }
+
+  async createOrUpdateSizeTable(orderId: string, sizeTableData: InsertSizeTable): Promise<{ scheme: string; rows: any[]; comment: string | null }> {
+    // First check if order exists
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { sizeTable: true },
+    });
+    
+    if (!order) {
+      throw new Error('Order not found');
+    }
+    
+    const { allowDuplicates, ...data } = sizeTableData;
+    
+    // Upsert sizeTable (create or update)
+    const sizeTable = await prisma.sizeTable.upsert({
+      where: { orderId },
+      create: {
+        orderId,
+        scheme: data.scheme,
+        rowsJson: data.rows,
+        comment: data.comment,
+      },
+      update: {
+        scheme: data.scheme,
+        rowsJson: data.rows,
+        comment: data.comment,
+      },
+    });
+    
+    return {
+      scheme: sizeTable.scheme,
+      rows: sizeTable.rowsJson as any[],
+      comment: sizeTable.comment,
+    };
   }
   
   async addPrintAsset(orderId: string, assetData: InsertPrintAsset): Promise<OrderWithRelations> {
@@ -193,7 +221,10 @@ export class PrismaStorage implements IStorage {
   async submitOrder(orderId: string): Promise<OrderWithRelations> {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      include: { printAssets: true },
+      include: {
+        printAssets: true,
+        sizeTable: true,
+      },
     });
     
     if (!order) {
@@ -205,6 +236,11 @@ export class PrismaStorage implements IStorage {
     
     if (!hasRequiredAsset) {
       throw new Error('Required print asset missing');
+    }
+    
+    // Check if size table is required and exists for TEAMSPORT department
+    if (order.department === 'TEAMSPORT' && !order.sizeTable) {
+      throw new Error('Size table required for TEAMSPORT department');
     }
     
     const updated = await prisma.order.update({

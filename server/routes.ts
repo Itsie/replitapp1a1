@@ -55,12 +55,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // POST /api/orders/:id/size - Create/update size table
+  // GET /api/orders/:id/size - Get size table with countsBySize
+  app.get("/api/orders/:id/size", async (req, res) => {
+    try {
+      const sizeTable = await storage.getSizeTable(req.params.id);
+      
+      if (!sizeTable) {
+        return res.status(204).send(); // No content
+      }
+      
+      // Calculate countsBySize
+      const countsBySize: Record<string, number> = {};
+      for (const row of sizeTable.rows) {
+        countsBySize[row.size] = (countsBySize[row.size] || 0) + 1;
+      }
+      
+      res.json({
+        scheme: sizeTable.scheme,
+        rows: sizeTable.rows,
+        comment: sizeTable.comment,
+        countsBySize,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "Order not found") {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      console.error("Error fetching size table:", error);
+      res.status(500).json({ error: "Failed to fetch size table" });
+    }
+  });
+
+  // POST /api/orders/:id/size - Create/update size table (upsert)
   app.post("/api/orders/:id/size", async (req, res) => {
     try {
       const validated = insertSizeTableSchema.parse(req.body);
-      const order = await storage.createOrUpdateSizeTable(req.params.id, validated);
-      res.json(order);
+      const sizeTable = await storage.createOrUpdateSizeTable(req.params.id, validated);
+      
+      // Calculate countsBySize
+      const countsBySize: Record<string, number> = {};
+      for (const row of sizeTable.rows) {
+        countsBySize[row.size] = (countsBySize[row.size] || 0) + 1;
+      }
+      
+      res.json({
+        scheme: sizeTable.scheme,
+        rows: sizeTable.rows,
+        comment: sizeTable.comment,
+        countsBySize,
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Validation failed", details: error.errors });
@@ -70,6 +112,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error creating/updating size table:", error);
       res.status(500).json({ error: "Failed to create/update size table" });
+    }
+  });
+
+  // POST /api/orders/:id/size/import-csv - Import CSV and create/update size table
+  app.post("/api/orders/:id/size/import-csv", async (req, res) => {
+    try {
+      const { csv, scheme, allowDuplicates } = csvImportSchema.parse(req.body);
+      
+      // Parse CSV
+      const lines = csv.trim().split('\n');
+      if (lines.length < 2) {
+        return res.status(400).json({ error: "CSV must have at least header and one data row" });
+      }
+      
+      // Parse header (case-insensitive)
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const sizeIdx = header.indexOf('size');
+      const numberIdx = header.indexOf('number');
+      const nameIdx = header.indexOf('name');
+      
+      if (sizeIdx === -1 || numberIdx === -1) {
+        return res.status(400).json({ error: "CSV must have 'size' and 'number' columns" });
+      }
+      
+      // Parse rows
+      const rows = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.trim());
+        if (cols.length > sizeIdx && cols.length > numberIdx) {
+          rows.push({
+            size: cols[sizeIdx],
+            number: parseInt(cols[numberIdx], 10),
+            name: nameIdx !== -1 && cols.length > nameIdx ? (cols[nameIdx] || null) : null,
+          });
+        }
+      }
+      
+      const data = {
+        scheme: scheme || "CUSTOM",
+        rows,
+        comment: null,
+        allowDuplicates: allowDuplicates || false,
+      };
+      
+      const validated = insertSizeTableSchema.parse(data);
+      const sizeTable = await storage.createOrUpdateSizeTable(req.params.id, validated);
+      
+      // Calculate countsBySize
+      const countsBySize: Record<string, number> = {};
+      for (const row of sizeTable.rows) {
+        countsBySize[row.size] = (countsBySize[row.size] || 0) + 1;
+      }
+      
+      res.json({
+        scheme: sizeTable.scheme,
+        rows: sizeTable.rows,
+        comment: sizeTable.comment,
+        countsBySize,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error && error.message === "Order not found") {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      console.error("Error importing CSV:", error);
+      res.status(500).json({ error: "Failed to import CSV" });
+    }
+  });
+
+  // GET /api/orders/:id/size/export.csv - Export size table as CSV
+  app.get("/api/orders/:id/size/export.csv", async (req, res) => {
+    try {
+      const sizeTable = await storage.getSizeTable(req.params.id);
+      
+      if (!sizeTable) {
+        return res.status(404).json({ error: "Size table not found" });
+      }
+      
+      // Generate CSV
+      const csvLines = ['size,number,name'];
+      for (const row of sizeTable.rows) {
+        csvLines.push(`${row.size},${row.number},${row.name || ''}`);
+      }
+      
+      const csvContent = csvLines.join('\n');
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="order-${req.params.id}-sizetable.csv"`);
+      res.send(csvContent);
+    } catch (error) {
+      if (error instanceof Error && error.message === "Order not found") {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      console.error("Error exporting CSV:", error);
+      res.status(500).json({ error: "Failed to export CSV" });
     }
   });
   
@@ -103,6 +242,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         if (error.message === "Required print asset missing") {
           return res.status(412).json({ error: "Required print asset missing" });
+        }
+        if (error.message === "Size table required for TEAMSPORT department") {
+          return res.status(412).json({ error: "Größentabelle erforderlich" });
         }
       }
       console.error("Error submitting order:", error);

@@ -55,18 +55,35 @@ export const insertOrderSchema = z.object({
   }
 );
 
-// Schema for size table row entries
-const sizeTableRowSchema = z.object({
-  size: z.string(),
-  qty: z.number().int().nonnegative(),
-  name: z.string().optional(),
-  number: z.string().optional(),
+// Schema for size table row entries (roster-style: one item per jersey/shirt)
+export const sizeTableRowSchema = z.object({
+  size: z.string().min(1).max(10, "Size must be 1-10 characters"),
+  number: z.number().int().min(0).max(999, "Number must be 0-999"),
+  name: z.string().max(30, "Name must be max 30 characters").optional().nullable(),
 });
 
 export const insertSizeTableSchema = z.object({
-  scheme: z.string().min(1, "Scheme is required"),
-  rows: z.array(sizeTableRowSchema).min(1, "At least one row is required"),
+  scheme: z.enum(["ALPHA", "NUMERIC", "CUSTOM"]),
+  rows: z.array(sizeTableRowSchema).min(1).max(1000, "Max 1000 items allowed"),
   comment: z.string().optional().nullable(),
+  allowDuplicates: z.boolean().optional().default(false),
+}).refine(
+  (data) => {
+    if (data.allowDuplicates) return true;
+    const numbers = data.rows.map(r => r.number);
+    const uniqueNumbers = new Set(numbers);
+    return numbers.length === uniqueNumbers.size;
+  },
+  {
+    message: "Duplicate numbers found. Enable 'allowDuplicates' or ensure all numbers are unique.",
+    path: ["rows"],
+  }
+);
+
+export const csvImportSchema = z.object({
+  csv: z.string().min(1, "CSV data is required"),
+  scheme: z.enum(["ALPHA", "NUMERIC", "CUSTOM"]).optional(),
+  allowDuplicates: z.boolean().optional().default(false),
 });
 
 export const insertPrintAssetSchema = z.object({
@@ -97,9 +114,19 @@ export const updatePositionSchema = insertPositionSchema.partial();
 // Infer types
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type InsertSizeTable = z.infer<typeof insertSizeTableSchema>;
+export type CSVImport = z.infer<typeof csvImportSchema>;
+export type SizeTableRow = z.infer<typeof sizeTableRowSchema>;
 export type InsertPrintAsset = z.infer<typeof insertPrintAssetSchema>;
 export type InsertPosition = z.infer<typeof insertPositionSchema>;
 export type UpdatePosition = z.infer<typeof updatePositionSchema>;
+
+// API response types
+export type SizeTableResponse = {
+  scheme: string;
+  rows: SizeTableRow[];
+  comment: string | null;
+  countsBySize: Record<string, number>;
+};
 
 // Order with relations for API responses
 export type OrderWithRelations = Order & {
