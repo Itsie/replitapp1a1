@@ -1,5 +1,5 @@
-import { PrismaClient, type OrderSource, type Department, type WorkflowState } from "@prisma/client";
-import type { InsertOrder, InsertSizeTable, InsertPrintAsset, OrderWithRelations } from "@shared/schema";
+import { PrismaClient, type OrderSource, type Department, type WorkflowState, type OrderPosition, Prisma } from "@prisma/client";
+import type { InsertOrder, InsertSizeTable, InsertPrintAsset, InsertPosition, UpdatePosition, OrderWithRelations } from "@shared/schema";
 
 const prisma = new PrismaClient();
 
@@ -21,6 +21,12 @@ export interface IStorage {
   
   // Print Assets
   addPrintAsset(orderId: string, asset: InsertPrintAsset): Promise<OrderWithRelations>;
+  
+  // Positions
+  getPositions(orderId: string): Promise<OrderPosition[]>;
+  createPositions(orderId: string, positions: InsertPosition[]): Promise<OrderPosition[]>;
+  updatePosition(orderId: string, posId: string, data: UpdatePosition): Promise<OrderPosition>;
+  deletePosition(orderId: string, posId: string): Promise<void>;
   
   // Submit order
   submitOrder(orderId: string): Promise<OrderWithRelations>;
@@ -91,6 +97,7 @@ export class PrismaStorage implements IStorage {
       include: {
         sizeTable: true,
         printAssets: true,
+        positions: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -105,6 +112,7 @@ export class PrismaStorage implements IStorage {
       include: {
         sizeTable: true,
         printAssets: true,
+        positions: true,
       },
     });
   }
@@ -124,6 +132,7 @@ export class PrismaStorage implements IStorage {
       include: {
         sizeTable: true,
         printAssets: true,
+        positions: true,
       },
     });
     
@@ -204,10 +213,182 @@ export class PrismaStorage implements IStorage {
       include: {
         sizeTable: true,
         printAssets: true,
+        positions: true,
       },
     });
     
     return updated;
+  }
+
+  // Helper to calculate line totals
+  private calculateLineTotals(qty: number, unitPriceNet: number, vatRate: number) {
+    const lineNet = new Prisma.Decimal(qty).mul(new Prisma.Decimal(unitPriceNet));
+    const lineVat = lineNet.mul(new Prisma.Decimal(vatRate)).div(100);
+    const lineGross = lineNet.add(lineVat);
+    
+    return {
+      lineNet,
+      lineVat,
+      lineGross,
+    };
+  }
+
+  // Helper to recalculate and update order totals
+  private async recalculateOrderTotals(orderId: string): Promise<void> {
+    const positions = await prisma.orderPosition.findMany({
+      where: { orderId },
+    });
+
+    let totalNet = new Prisma.Decimal(0);
+    let totalVat = new Prisma.Decimal(0);
+    let totalGross = new Prisma.Decimal(0);
+
+    for (const pos of positions) {
+      totalNet = totalNet.add(pos.lineNet);
+      totalVat = totalVat.add(pos.lineVat);
+      totalGross = totalGross.add(pos.lineGross);
+    }
+
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        totalNet,
+        totalVat,
+        totalGross,
+      },
+    });
+  }
+
+  async getPositions(orderId: string): Promise<OrderPosition[]> {
+    return await prisma.orderPosition.findMany({
+      where: { orderId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createPositions(orderId: string, positions: InsertPosition[]): Promise<OrderPosition[]> {
+    // Verify order exists
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    const created: OrderPosition[] = [];
+
+    // Use transaction to create all positions and update totals atomically
+    await prisma.$transaction(async (tx) => {
+      for (const posData of positions) {
+        const { lineNet, lineVat, lineGross } = this.calculateLineTotals(
+          posData.qty,
+          posData.unitPriceNet,
+          posData.vatRate
+        );
+
+        const position = await tx.orderPosition.create({
+          data: {
+            orderId,
+            articleName: posData.articleName,
+            articleNumber: posData.articleNumber || null,
+            qty: new Prisma.Decimal(posData.qty),
+            unit: posData.unit,
+            unitPriceNet: new Prisma.Decimal(posData.unitPriceNet),
+            vatRate: posData.vatRate,
+            lineNet,
+            lineVat,
+            lineGross,
+            procurement: posData.procurement,
+            supplierNote: posData.supplierNote || null,
+          },
+        });
+
+        created.push(position);
+      }
+    });
+
+    // Recalculate order totals after transaction
+    await this.recalculateOrderTotals(orderId);
+
+    return created;
+  }
+
+  async updatePosition(orderId: string, posId: string, data: UpdatePosition): Promise<OrderPosition> {
+    // Verify order exists
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    // Verify position exists and belongs to the order
+    const existingPos = await prisma.orderPosition.findUnique({
+      where: { id: posId },
+    });
+
+    if (!existingPos || existingPos.orderId !== orderId) {
+      throw new Error('Position not found');
+    }
+
+    // Merge existing data with updates
+    const updateData: any = { ...data };
+
+    // If qty, unitPriceNet, or vatRate changed, recalculate line totals
+    const needsRecalc = data.qty !== undefined || data.unitPriceNet !== undefined || data.vatRate !== undefined;
+
+    if (needsRecalc) {
+      const qty = data.qty !== undefined ? data.qty : Number(existingPos.qty);
+      const unitPriceNet = data.unitPriceNet !== undefined ? data.unitPriceNet : Number(existingPos.unitPriceNet);
+      const vatRate = data.vatRate !== undefined ? data.vatRate : existingPos.vatRate;
+
+      const { lineNet, lineVat, lineGross } = this.calculateLineTotals(qty, unitPriceNet, vatRate);
+      
+      updateData.qty = new Prisma.Decimal(qty);
+      updateData.unitPriceNet = new Prisma.Decimal(unitPriceNet);
+      updateData.lineNet = lineNet;
+      updateData.lineVat = lineVat;
+      updateData.lineGross = lineGross;
+    }
+
+    const updated = await prisma.orderPosition.update({
+      where: { id: posId },
+      data: updateData,
+    });
+
+    // Recalculate order totals
+    await this.recalculateOrderTotals(orderId);
+
+    return updated;
+  }
+
+  async deletePosition(orderId: string, posId: string): Promise<void> {
+    // Verify order exists
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    // Verify position exists and belongs to the order
+    const existingPos = await prisma.orderPosition.findUnique({
+      where: { id: posId },
+    });
+
+    if (!existingPos || existingPos.orderId !== orderId) {
+      throw new Error('Position not found');
+    }
+
+    await prisma.orderPosition.delete({
+      where: { id: posId },
+    });
+
+    // Recalculate order totals
+    await this.recalculateOrderTotals(orderId);
   }
 }
 

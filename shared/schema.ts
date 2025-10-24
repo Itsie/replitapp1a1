@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { Order, SizeTable, PrintAsset, OrderSource, Department, WorkflowState, QCState } from "@prisma/client";
+import type { Order, SizeTable, PrintAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState } from "@prisma/client";
 
 // Re-export Prisma types
-export type { Order, SizeTable, PrintAsset, OrderSource, Department, WorkflowState, QCState };
+export type { Order, SizeTable, PrintAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState };
 
 // Enum schemas
 export const orderSourceSchema = z.enum(["JTL", "INTERNAL"]);
@@ -75,13 +75,35 @@ export const insertPrintAssetSchema = z.object({
   required: z.boolean().default(true),
 });
 
+// Position procurement status enum
+export const procurementStatusSchema = z.enum(["NONE", "ORDER_NEEDED", "ORDERED", "RECEIVED"]);
+
+// Schema for creating/updating order positions
+export const insertPositionSchema = z.object({
+  articleName: z.string().min(1, "Article name is required"),
+  articleNumber: z.string().optional().nullable(),
+  qty: z.number().positive("Quantity must be positive"),
+  unit: z.string().default("Stk"),
+  unitPriceNet: z.number().nonnegative("Price must be non-negative"),
+  vatRate: z.number().int().refine(val => [0, 7, 19].includes(val), {
+    message: "VAT rate must be 0, 7, or 19",
+  }).default(19),
+  procurement: procurementStatusSchema.default("NONE"),
+  supplierNote: z.string().optional().nullable(),
+});
+
+export const updatePositionSchema = insertPositionSchema.partial();
+
 // Infer types
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type InsertSizeTable = z.infer<typeof insertSizeTableSchema>;
 export type InsertPrintAsset = z.infer<typeof insertPrintAssetSchema>;
+export type InsertPosition = z.infer<typeof insertPositionSchema>;
+export type UpdatePosition = z.infer<typeof updatePositionSchema>;
 
 // Order with relations for API responses
 export type OrderWithRelations = Order & {
   sizeTable: SizeTable | null;
   printAssets: PrintAsset[];
+  positions: OrderPosition[];
 };
