@@ -1,0 +1,619 @@
+# 1aShirt – Produktions- & Auftragsmanagement (Vollversion, Replit-optimiert)
+
+> **Hinweis:** Diese README ist vollständig und eigenständig. **Keine Prompts** enthalten. Direkt als `README.md` nutzbar.
+
+## Zweck
+
+Ein Replit‑fähiges Monorepo (Node/Express + React/Vite) für:
+
+* Auftragsverwaltung aus **JTL (Teamsport)** und **internen Bereichen** (Textilveredelung, Stickerei, Druck, Sonstiges)
+* **Slot‑basierte Produktionsplanung** (Mo–Fr, 07:00–18:00, 15‑Minuten‑Raster) mit WorkCenters
+* **Größentabellen** und **Druckdaten** als Voraussetzung für Produktionsfreigabe
+* **Abrechnung** (Sevdesk via CSV) und **Lagerübersicht** für nicht‑JTL‑Aufträge
+* **JTL‑CSV‑Import** inkl. Varianten, Rabatte, Steuern, Versand, Idempotenz
+
+## Architektur
+
+* **/server**: Node 20, TypeScript, Express, Prisma ORM, SQLite (MVP)
+* **/client**: React + Vite + TypeScript, Tailwind, shadcn/ui, TanStack Query, dnd‑kit
+* **Auth**: JWT HttpOnly Cookies (einfach), Rollenprüfung im Backend
+* **Dateien**: Upload lokal (MVP), später S3
+
+## Rollen & Bereiche
+
+* **Rollen**: ADMIN, DISPO, PRODUKTION, LAGER, ABRECHNUNG
+* **Bereiche**: TEAMSPORT (JTL), TEXTILVEREDELUNG, STICKEREI, DRUCK
+* **WorkCenters**: Kapazitäten pro Bereich, Planung und Blocker pro Center
+
+---
+
+## Prisma‑Schema (Datei: `prisma/schema.prisma`)
+
+```prisma
+datasource db { provider = "sqlite"; url = "file:./dev.db" }
+generator client { provider = "prisma-client-js" }
+
+enum OrderSource { JTL INTERNAL }
+enum Department { TEAMSPORT TEXTILVEREDELUNG STICKEREI DRUCK SONSTIGES }
+enum WorkflowState { ENTWURF NEU PRUEFUNG FUER_PROD IN_PROD WARTET_FEHLTEILE FERTIG ZUR_ABRECHNUNG ABGERECHNET }
+enum QCState { IO NIO UNGEPRUEFT }
+enum JTLRowType { NORMAL BUNDLE_PARENT BUNDLE_CHILD SHIPPING CREDIT }
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      String
+  password  String
+  createdAt DateTime @default(now())
+}
+
+model WorkCenter {
+  id          String      @id @default(cuid())
+  name        String
+  department  Department
+  capacityMin Int         @default(660) // 11h (07:00–18:00)
+  active      Boolean     @default(true)
+}
+
+model Order {
+  id          String        @id @default(cuid())
+  extId       String?       @unique          // JTL‑Auftragsnummer
+  source      OrderSource
+  department  Department
+  title       String
+  customer    String
+  dueDate     DateTime?
+  notes       String?
+  workflow    WorkflowState @default(NEU)
+  qc          QCState       @default(UNGEPRUEFT)
+  location    String?
+  sizeTableId String?
+  sizeTable   SizeTable?    @relation(fields: [sizeTableId], references: [id])
+  printAssets PrintAsset[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model SizeTable {
+  id        String   @id @default(cuid())
+  scheme    String                  // "ALPHA" | "NUMERIC" | "CUSTOM"
+  rows      Json                    // [{size:"M", qty:12, name:"Müller", number:"10"}]
+  comment   String?
+  createdAt DateTime @default(now())
+}
+
+model PrintAsset {
+  id        String   @id @default(cuid())
+  orderId   String
+  label     String
+  url       String
+  required  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model TimeSlot {
+  id           String   @id @default(cuid())
+  date         DateTime
+  startMin     Int                      // Minuten seit 07:00 (0..645)
+  lengthMin    Int                      // Vielfaches von 15
+  workCenterId String
+  orderId      String?
+  blocked      Boolean  @default(false)
+  note         String?
+}
+
+model JTLOrderPosition {
+  id              String     @id @default(cuid())
+  jtlOrderNumber  String
+  articleNumber   String?
+  description     String
+  quantity        Float      @default(0)
+  unitPriceGross  Float      @default(0)
+  unitPriceNet    Float?
+  taxRate         Float?
+  discountAbs     Float?
+  discountPct     Float?
+  rowType         JTLRowType @default(NORMAL)
+  parentKey       String?
+  variation       String?
+  isShipping      Boolean    @default(false)
+  isCredit        Boolean    @default(false)
+  raw             Json
+}
+
+model InvoiceQueueItem {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  status    String                  // "offen" | "rueckfrage" | "erledigt"
+  comment   String?
+  createdAt DateTime @default(now())
+}
+```
+
+---
+
+## Server (Dateien unter `/server/src`)
+
+### `index.ts`
+
+```ts
+import express from "express";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import { PrismaClient, OrderSource, WorkflowState, Department } from "@prisma/client";
+import multer from "multer";
+import { importJTL } from "./jtlImportFinal";
+
+const app = express();
+const prisma = new PrismaClient();
+const upload = multer({ dest: "uploads/" });
+
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: "10mb" }));
+app.use(cookieParser());
+
+app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+app.get("/api/orders", async (req, res) => {
+  const { department, source, workflow, q } = req.query;
+  const where: any = {};
+  if (department) where.department = department;
+  if (source) where.source = source;
+  if (workflow) where.workflow = workflow;
+  if (q) where.OR = [
+    { title: { contains: String(q) } },
+    { customer: { contains: String(q) } }
+  ];
+  const orders = await prisma.order.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    include: { sizeTable: true, printAssets: true }
+  });
+  res.json(orders);
+});
+
+app.post("/api/orders", async (req, res) => {
+  const { title, customer, department, dueDate, notes, location } = req.body;
+  const order = await prisma.order.create({
+    data: {
+      title,
+      customer,
+      department,
+      source: OrderSource.INTERNAL,
+      dueDate: dueDate ? new Date(dueDate) : null,
+      notes,
+      location,
+      workflow: WorkflowState.NEU
+    }
+  });
+  res.status(201).json(order);
+});
+
+app.get("/api/orders/:id", async (req, res) => {
+  const order = await prisma.order.findUnique({
+    where: { id: req.params.id },
+    include: { sizeTable: true, printAssets: true }
+  });
+  if (!order) return res.status(404).json({ error: "Not found" });
+  res.json(order);
+});
+
+app.post("/api/orders/:id/size", async (req, res) => {
+  const { scheme, rows, comment } = req.body;
+  const size = await prisma.sizeTable.create({ data: { scheme, rows, comment } });
+  const order = await prisma.order.update({ where: { id: req.params.id }, data: { sizeTableId: size.id } });
+  res.status(201).json({ sizeTable: size, orderId: order.id });
+});
+
+app.post("/api/orders/:id/assets", upload.single("file"), async (req, res) => {
+  const { label, url } = req.body;
+  const assetUrl = url || (req.file ? `/uploads/${req.file.filename}` : null);
+  if (!assetUrl) return res.status(400).json({ error: "No asset provided" });
+  const created = await prisma.printAsset.create({
+    data: { orderId: req.params.id, label: label || "Datei", url: assetUrl, required: true }
+  });
+  res.status(201).json(created);
+});
+
+app.post("/api/orders/:id/submit", async (req, res) => {
+  const id = req.params.id;
+  const assets = await prisma.printAsset.findMany({ where: { orderId: id, required: true } });
+  if (assets.length === 0) return res.status(412).json({ error: "Required print asset missing" });
+  const updated = await prisma.order.update({ where: { id }, data: { workflow: WorkflowState.FUER_PROD } });
+  res.json(updated);
+});
+
+app.get("/api/slots", async (req, res) => {
+  const { from, to, workCenterId } = req.query;
+  const where: any = {};
+  if (workCenterId) where.workCenterId = workCenterId;
+  if (from || to) where.date = {
+    gte: from ? new Date(String(from)) : undefined,
+    lte: to ? new Date(String(to)) : undefined
+  };
+  const slots = await prisma.timeSlot.findMany({ where, orderBy: [{ date: "asc" }, { startMin: "asc" }] });
+  res.json(slots);
+});
+
+app.post("/api/slots", async (req, res) => {
+  const { date, startMin, lengthMin, workCenterId, orderId, blocked, note } = req.body;
+  if (startMin % 15 !== 0 || lengthMin % 15 !== 0) return res.status(400).json({ error: "15-minute grid required" });
+  if (startMin < 0 || startMin + lengthMin > 660) return res.status(400).json({ error: "Outside 07:00–18:00" });
+  const created = await prisma.timeSlot.create({ data: { date: new Date(date), startMin, lengthMin, workCenterId, orderId, blocked: !!blocked, note } });
+  res.status(201).json(created);
+});
+
+app.patch("/api/slots/:id", async (req, res) => {
+  const { startMin, lengthMin, workCenterId, date, note } = req.body;
+  if (startMin !== undefined && startMin % 15 !== 0) return res.status(400).json({ error: "15-minute grid required" });
+  if (lengthMin !== undefined && lengthMin % 15 !== 0) return res.status(400).json({ error: "15-minute grid required" });
+  const found = await prisma.timeSlot.findUnique({ where: { id: req.params.id } });
+  if (!found) return res.status(404).json({ error: "Not found" });
+  const next = await prisma.timeSlot.update({
+    where: { id: req.params.id },
+    data: {
+      startMin: startMin ?? found.startMin,
+      lengthMin: lengthMin ?? found.lengthMin,
+      workCenterId: workCenterId ?? found.workCenterId,
+      date: date ? new Date(date) : found.date,
+      note: note ?? found.note
+    }
+  });
+  res.json(next);
+});
+
+app.delete("/api/slots/:id", async (req, res) => {
+  await prisma.timeSlot.delete({ where: { id: req.params.id } });
+  res.json({ ok: true });
+});
+
+app.post("/api/jtl/import-service", async (req, res) => {
+  const { csvData, filename } = req.body || {};
+  if (!csvData) return res.status(400).json({ error: "csvData required" });
+  const result = await importJTL(csvData, filename || "jtl.csv");
+  res.json(result);
+});
+
+app.get("/api/billing", async (_req, res) => {
+  const items = await prisma.invoiceQueueItem.findMany({ orderBy: { createdAt: "desc" } });
+  res.json(items);
+});
+
+app.post("/api/billing/:id/status", async (req, res) => {
+  const { status, comment } = req.body;
+  const updated = await prisma.invoiceQueueItem.update({ where: { id: req.params.id }, data: { status, comment } });
+  res.json(updated);
+});
+
+const port = Number(process.env.PORT || 3000);
+app.listen(port, () => console.log(`API listening on :${port}`));
+```
+
+### `jtlImportFinal.ts`
+
+```ts
+import { PrismaClient, Department, OrderSource, JTLRowType } from "@prisma/client";
+const prisma = new PrismaClient();
+
+function parseGermanDate(s?: string | null): Date | null {
+  if (!s) return null;
+  const str = String(s).trim();
+  const parts = str.split(".");
+  if (parts.length === 3) {
+    const d = parseInt(parts[0], 10), m = parseInt(parts[1], 10) - 1, y = parseInt(parts[2], 10);
+    if (d > 0 && d <= 31 && m >= 0 && m <= 11 && y > 1900) return new Date(y, m, d);
+  }
+  const fallback = new Date(str);
+  return isNaN(fallback.getTime()) ? null : fallback;
+}
+
+function numDE(n?: string): number {
+  if (!n) return 0;
+  return Number(n.replace(/\./g, "").replace(",", ".").trim()) || 0;
+}
+
+function getCustomerName(row: any) {
+  if (row["K_Firma"]) return row["K_Firma"].trim();
+  const fn = (row["K_Vorname"] || "").trim(), ln = (row["K_Nachname"] || "").trim();
+  if (fn || ln) return `${fn} ${ln}`.trim();
+  if (row["L_Firma"]) return row["L_Firma"].trim();
+  const dfn = (row["L_Vorname"] || "").trim(), dln = (row["L_Nachname"] || "").trim();
+  if (dfn || dln) return `${dfn} ${dln}`.trim();
+  return "Unbekannter Kunde";
+}
+
+export async function importJTL(csvData: string, filename: string) {
+  const lines = csvData.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim().split("\n");
+  if (lines.length < 2) return { success: false, importedOrders: 0, errors: ["Empty CSV"], message: "No data" };
+
+  const headers = lines[0].split(";").map(h => h.replace(/"/g, "").trim());
+  const groups = new Map<string, any[]>();
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(";").map(v => v.replace(/"/g, "").trim());
+    const row: any = {};
+    headers.forEach((h, j) => row[h] = values[j] ?? "");
+    const orderNo = (row["Auftragsnummer"] || "").trim();
+    if (!orderNo) continue;
+    if (!groups.has(orderNo)) groups.set(orderNo, []);
+    groups.get(orderNo)!.push(row);
+  }
+
+  const errors: string[] = [];
+  let imported = 0;
+
+  for (const [orderNo, rows] of groups) {
+    try {
+      const head = rows[0];
+      const customer = getCustomerName(head);
+      const deliveryDate = parseGermanDate(head["Voraus. Lieferdatum"]);
+
+      const positions = rows.map((r) => {
+        const q = numDE(r["Menge"]);
+        const brutto = numDE(r["Brutto-VK"]);
+        const type: JTLRowType = (() => {
+          const desc = (r["Bezeichnung (Position)"] || "").toLowerCase();
+          if (desc.includes("versand")) return JTLRowType.SHIPPING;
+          return JTLRowType.NORMAL;
+        })();
+        return {
+          jtlOrderNumber: orderNo,
+          articleNumber: (r["Artikelnummer"] || "") || null,
+          description: r["Bezeichnung (Position)"] || "Position",
+          quantity: q,
+          unitPriceGross: brutto,
+          unitPriceNet: null,
+          taxRate: r["Steuersatz"] ? numDE(r["Steuersatz"]) : null,
+          discountAbs: r["Positionsrabatt (EUR)"] ? numDE(r["Positionsrabatt (EUR)"]) : null,
+          discountPct: r["Positionsrabatt (%)"] ? numDE(r["Positionsrabatt (%)"]) : null,
+          rowType: type,
+          parentKey: r["Positionsnummer"] || null,
+          variation: r["Variationswerte"] || null,
+          isShipping: type === JTLRowType.SHIPPING,
+          isCredit: false,
+          raw: r
+        };
+      });
+
+      const orderData = {
+        extId: orderNo,
+        source: OrderSource.JTL,
+        department: Department.TEAMSPORT,
+        title: (head["Bezeichnung (Position)"] || `JTL Auftrag ${orderNo}`).slice(0, 140),
+        customer: customer,
+        dueDate: deliveryDate,
+        notes: [head["Anmerkung"], head["Kundenkommentar"]].filter(Boolean).join(" | ") || null,
+        workflow: head["Ist Angebot"] === "Ja" ? "ENTWURF" : "NEU",
+        qc: "UNGEPRUEFT",
+        location: null
+      } as any;
+
+      await prisma.$transaction(async (tx) => {
+        const upserted = await tx.order.upsert({
+          where: { extId: orderNo },
+          create: orderData,
+          update: orderData
+        });
+
+        await tx.jTLOrderPosition.deleteMany({ where: { jtlOrderNumber: orderNo } });
+        await tx.jTLOrderPosition.createMany({ data: positions });
+      });
+
+      imported++;
+    } catch (e: any) {
+      errors.push(`${orderNo}: ${e?.message || String(e)}`);
+    }
+  }
+
+  return {
+    success: errors.length === 0,
+    filename,
+    importedOrders: imported,
+    errors: errors.length ? errors : null,
+    message: `${imported} Aufträge importiert${errors.length ? `, ${errors.length} Fehler` : ""}`
+  };
+}
+```
+
+---
+
+## Client (Dateien unter `/client/src`)
+
+### `main.tsx`
+
+```tsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { RouterProvider, createBrowserRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Orders from "./pages/Orders";
+import Planning from "./pages/Planning";
+import ProductionToday from "./pages/ProductionToday";
+import Billing from "./pages/Billing";
+import "./index.css";
+
+const router = createBrowserRouter([
+  { path: "/", element: <Orders /> },
+  { path: "/orders", element: <Orders /> },
+  { path: "/planning", element: <Planning /> },
+  { path: "/production/today", element: <ProductionToday /> },
+  { path: "/billing", element: <Billing /> }
+]);
+
+const qc = new QueryClient();
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <QueryClientProvider client={qc}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  </React.StrictMode>
+);
+```
+
+### `pages/Orders.tsx`
+
+```tsx
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+
+export default function Orders() {
+  const [q, setQ] = useState("");
+  const { data } = useQuery({
+    queryKey: ["orders", q],
+    queryFn: async () => {
+      const url = q ? `/api/orders?q=${encodeURIComponent(q)}` : "/api/orders";
+      const res = await fetch(url);
+      return res.json();
+    }
+  });
+  return (
+    <div className="p-6 space-y-4">
+      <h1 className="text-xl font-semibold">Aufträge</h1>
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Suche Titel/Kunde"
+        className="border px-3 py-2 rounded w-full max-w-md"
+      />
+      <div className="grid gap-3">
+        {(data || []).map((o: any) => (
+          <div key={o.id} className="border rounded p-3">
+            <div className="text-sm opacity-70">{o.source} · {o.department}</div>
+            <div className="font-medium">{o.title}</div>
+            <div className="text-sm">{o.customer}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+### `pages/Planning.tsx`
+
+```tsx
+export default function Planning(){
+  return (
+    <div className="p-6">
+      <h1 className="text-xl font-semibold">Planung (Slots)</h1>
+      <p className="opacity-70">Tabs je Bereich, Spalten je WorkCenter, 15‑Minuten‑Raster. (Implementierung folgt in Code‑Tasks)</p>
+    </div>
+  );
+}
+```
+
+### `pages/ProductionToday.tsx`
+
+```tsx
+export default function ProductionToday(){
+  return (
+    <div className="p-6">
+      <h1 className="text-xl font-semibold">Produktion – Heute</h1>
+      <p className="opacity-70">Start/Stop, QC, Fehlteile. (Implementierung folgt in Code‑Tasks)</p>
+    </div>
+  );
+}
+```
+
+### `pages/Billing.tsx`
+
+```tsx
+export default function Billing(){
+  return (
+    <div className="p-6">
+      <h1 className="text-xl font-semibold">Abrechnung</h1>
+      <p className="opacity-70">Queue, Stati, CSV‑Export. (Implementierung folgt in Code‑Tasks)</p>
+    </div>
+  );
+}
+```
+
+### `index.css`
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+```
+
+---
+
+## API‑Überblick
+
+* `GET /api/orders` · Liste
+* `POST /api/orders` · Internal anlegen
+* `GET /api/orders/:id` · Details
+* `POST /api/orders/:id/assets` · Druckdaten
+* `POST /api/orders/:id/size` · Größentabelle
+* `POST /api/orders/:id/submit` · für Produktion freigeben (mind. 1 required Asset)
+* `GET /api/slots` `POST /api/slots` `PATCH /api/slots/:id` `DELETE /api/slots/:id`
+* `POST /api/jtl/import-service` · JTL CSV Import
+* `GET /api/billing` `POST /api/billing/:id/status`
+
+## Setup‑Befehle (Root, Replit Shell)
+
+```bash
+npm init -y
+npm i -D concurrently
+
+# Server
+npm i express zod jsonwebtoken bcryptjs cookie-parser cors multer @prisma/client
+npm i -D typescript ts-node nodemon prisma @types/node
+npx prisma init --datasource-provider sqlite
+# -> schema.prisma einfügen
+npx prisma migrate dev --name init
+
+# Client
+cd client || (mkdir -p client && cd client && npm init -y)
+npm i @tanstack/react-query axios react-router-dom
+npm i -D vite typescript tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+```
+
+## Replit‑Start
+
+**Procfile (Root, `Procfile`)**
+
+```
+web: npm run dev
+```
+
+**Root‑`package.json`**
+
+```json
+{
+  "name": "1ashirt-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "node server/dev.js",
+    "dev:client": "cd client && npx vite --port 5173"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
+```
+
+**Server‑Runner (`/server/dev.js`)**
+
+```js
+import { spawn } from "node:child_process";
+const p = spawn("npx", ["ts-node", "--transpile-only", "server/src/index.ts"], { stdio: "inherit", shell: true });
+p.on("close", (code) => process.exit(code ?? 0));
+```
+
+## Hinweise
+
+* Öffnungszeiten: Mo–Fr 07:00–18:00 → 660 Minuten/Tag
+* Slots: 15‑Minuten‑Raster, keine Überbuchung zulassen
+* JTL: `department=TEAMSPORT`, Order‑Inhalt read‑only (außer Assets/Größen/Lagerplatz)
+* Abrechnung: `InvoiceQueueItem` wird bei Fertigstellung gepflegt
+
+---
+
+**Ende der README (ohne Prompts).**
