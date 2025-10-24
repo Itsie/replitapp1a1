@@ -39,6 +39,7 @@ export default function OrderNew() {
   
   const form = useForm<InsertOrder>({
     resolver: zodResolver(insertOrderSchema),
+    mode: "onChange",
     defaultValues: {
       title: "",
       customer: "",
