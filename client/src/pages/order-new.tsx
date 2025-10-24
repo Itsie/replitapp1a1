@@ -166,7 +166,7 @@ export default function OrderNew() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto pb-24">
+      <div className="flex-1 overflow-auto pb-40">
         <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
