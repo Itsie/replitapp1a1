@@ -148,16 +148,16 @@ export default function OrderNew() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pb-24">
         <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)}>
               {/* Two-column grid */}
               <div className="grid lg:grid-cols-12 gap-4">
                 {/* Left Column - Customer Info */}
                 <div className="lg:col-span-8 space-y-4">
                   {/* Kunde Card */}
-                  <Card className="rounded-2xl border-muted/60 hover:shadow-sm">
+                  <Card className="rounded-2xl">
                     <CardHeader>
                       <CardTitle>Kunde</CardTitle>
                     </CardHeader>
@@ -191,6 +191,7 @@ export default function OrderNew() {
                               <FormControl>
                                 <Input
                                   data-testid="input-contactFirstName"
+                                  placeholder="Vorname"
                                   {...field}
                                   value={field.value || ""}
                                 />
@@ -209,6 +210,7 @@ export default function OrderNew() {
                               <FormControl>
                                 <Input
                                   data-testid="input-contactLastName"
+                                  placeholder="Nachname"
                                   {...field}
                                   value={field.value || ""}
                                 />
@@ -228,8 +230,8 @@ export default function OrderNew() {
                                 <Input
                                   data-testid="input-customerEmail"
                                   type="email"
+                                  placeholder="kunde@example.com"
                                   {...field}
-                                  value={field.value || ""}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -247,8 +249,8 @@ export default function OrderNew() {
                                 <Input
                                   data-testid="input-customerPhone"
                                   type="tel"
+                                  placeholder="+49 123 456789"
                                   {...field}
-                                  value={field.value || ""}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -260,7 +262,7 @@ export default function OrderNew() {
                   </Card>
 
                   {/* Rechnungsadresse Card */}
-                  <Card className="rounded-2xl border-muted/60 hover:shadow-sm">
+                  <Card className="rounded-2xl">
                     <CardHeader>
                       <CardTitle>Rechnungsadresse</CardTitle>
                     </CardHeader>
@@ -270,13 +272,12 @@ export default function OrderNew() {
                         name="billStreet"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Straße & Hausnummer</FormLabel>
+                            <FormLabel>Straße & Hausnummer *</FormLabel>
                             <FormControl>
                               <Input
                                 data-testid="input-billStreet"
-                                placeholder="Musterstraße 123"
+                                placeholder="Musterstraße 1"
                                 {...field}
-                                value={field.value || ""}
                               />
                             </FormControl>
                             <FormMessage />
@@ -290,13 +291,12 @@ export default function OrderNew() {
                           name="billZip"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>PLZ</FormLabel>
+                              <FormLabel>PLZ *</FormLabel>
                               <FormControl>
                                 <Input
                                   data-testid="input-billZip"
                                   placeholder="12345"
                                   {...field}
-                                  value={field.value || ""}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -309,13 +309,12 @@ export default function OrderNew() {
                           name="billCity"
                           render={({ field }) => (
                             <FormItem className="col-span-2">
-                              <FormLabel>Stadt</FormLabel>
+                              <FormLabel>Stadt *</FormLabel>
                               <FormControl>
                                 <Input
                                   data-testid="input-billCity"
                                   placeholder="Musterstadt"
                                   {...field}
-                                  value={field.value || ""}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -350,7 +349,7 @@ export default function OrderNew() {
                   </Card>
 
                   {/* Lieferadresse Card (optional) */}
-                  <Card className="rounded-2xl border-muted/60 hover:shadow-sm">
+                  <Card className="rounded-2xl">
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <CardTitle>Lieferadresse</CardTitle>
@@ -460,7 +459,7 @@ export default function OrderNew() {
 
                 {/* Right Column - Order Data */}
                 <div className="lg:col-span-4 space-y-4">
-                  <Card className="rounded-2xl border-muted/60 hover:shadow-sm">
+                  <Card className="rounded-2xl">
                     <CardHeader>
                       <CardTitle>Auftragsdaten</CardTitle>
                     </CardHeader>
@@ -470,11 +469,11 @@ export default function OrderNew() {
                         name="title"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Titel*</FormLabel>
+                            <FormLabel>Titel *</FormLabel>
                             <FormControl>
                               <Input
                                 data-testid="input-title"
-                                placeholder="z.B. Trikots FC Musterstadt"
+                                placeholder="z.B. FC Bayern München Trikots 2024"
                                 {...field}
                               />
                             </FormControl>
@@ -488,11 +487,11 @@ export default function OrderNew() {
                         name="customer"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Kundenname*</FormLabel>
+                            <FormLabel>Kunde (Anzeigename) *</FormLabel>
                             <FormControl>
                               <Input
                                 data-testid="input-customer"
-                                placeholder="FC Musterstadt"
+                                placeholder="Name für Auftragsübersicht"
                                 {...field}
                               />
                             </FormControl>
@@ -506,7 +505,7 @@ export default function OrderNew() {
                         name="department"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Abteilung*</FormLabel>
+                            <FormLabel>Abteilung *</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger data-testid="select-department">
@@ -555,7 +554,7 @@ export default function OrderNew() {
                             <FormControl>
                               <Input
                                 data-testid="input-location"
-                                placeholder="z.B. Lager A"
+                                placeholder="z.B. Regal A3"
                                 {...field}
                                 value={field.value || ""}
                               />

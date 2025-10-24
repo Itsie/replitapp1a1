@@ -1,0 +1,64 @@
+ISSUE
+- The "New Order" page is still single-column and the Positions section is not visible.
+- Backend already has /api/orders and /api/orders/:id/positions. Do NOT change backend or Prisma now.
+
+GOAL
+Refactor the frontend to:
+1) Render a two-column layout on /orders/new and /orders/:id (details).
+2) Add a full-width Positions panel below the two columns (create/edit/delete).
+3) Persist positions via existing /api/orders/:id/positions routes.
+
+SCOPE (Frontend only)
+- Use existing endpoints. No new DB schema, no new server routes.
+- Files likely under client/src/routes/orders or client/src/pages/orders and components under client/src/components/orders/*
+
+REQUIREMENTS
+
+A) Two-column layout
+- Container: max-w-[1600px] (2xl ok), mx-auto, px-6, py-4
+- Grid: lg:grid-cols-12, gap-4
+  Left  (lg:col-span-8): Cards "Kunde", "Rechnungsadresse", optional "Lieferadresse"
+  Right (lg:col-span-4): Card "Auftragsdaten" (title, customerName, department, dueDate, location, notes)
+- Keep validation and existing form logic intact.
+- Add sticky footer actions:
+  - /orders/new: [Abbrechen] | [Auftrag erstellen] (primary)
+  - /orders/:id : [Speichern] (if edit mode) or only the existing "Für Produktion freigeben" button on the header
+
+B) Positions panel (full width)
+- Place as a card below both columns (lg:col-span-12).
+- Show toolbar with:
+  [ + Position hinzufügen ] and [ Mehr ▾ ] (optional CSV actions can be disabled for now).
+- Editable table with columns:
+  Art.-Nr. (optional) | Artikelname* | Menge | Einheit | Einzelpreis Netto | MwSt % (0/7/19) | Netto (readonly) | MwSt (readonly) | Brutto (readonly) | Beschaffung (NONE/ORDER_NEEDED/ORDERED/RECEIVED) | Notiz | Aktionen (Löschen)
+- Client computes line totals for display; server persists and recalculates on save.
+- /orders/new flow:
+  1) POST /api/orders
+  2) POST /api/orders/:id/positions with the array from the grid
+  3) Redirect to /orders/:id with success toast
+- /orders/:id (detail):
+  - Fetch positions via GET /api/orders/:id/positions
+  - Inline CRUD:
+    * Add → POST /api/orders/:id/positions
+    * Edit cell → PATCH /api/orders/:id/positions/:posId
+    * Delete → DELETE /api/orders/:id/positions/:posId
+  - After any change, refresh totals in the UI
+
+C) Disable "Für Produktion freigeben" if:
+- no positions exist OR required print assets missing
+- Show tooltip explaining why
+
+D) Visual polish (keep shadcn/ui)
+- Cards: rounded-2xl, subtle border, compact density in tables
+- Sticky table header, horizontal scroll on small screens
+- DE number format for totals (e.g. 1.234,56 €)
+
+ACCEPTANCE
+- /orders/new shows two columns + positions panel; "Auftrag erstellen" enabled only when required form fields valid and at least one position exists.
+- After creating, the app redirects to /orders/:id and shows the same positions in the detail page.
+- /orders/:id allows inline CRUD on positions and updates totals without page reload.
+- No backend or Prisma changes were made; only frontend wiring to existing endpoints.
+
+TEST STEPS (must pass)
+- Create a new order with 2 positions; verify they appear in /orders/:id and survive reload.
+- Edit quantity and VAT in a row; verify line totals and order totals update after save.
+- Delete a row; totals decrease accordingly.
