@@ -891,9 +891,11 @@ function PositionRow({
   };
 
   if (isEditing) {
+    const unitPriceNet = Number(editedPos.unitPriceNet) || 0;
+    const vatRate = Number(editedPos.vatRate) || 0;
     const displayPrice = priceMode === "brutto" 
-      ? Number(editedPos.unitPriceNet) * (1 + Number(editedPos.vatRate) / 100)
-      : Number(editedPos.unitPriceNet);
+      ? unitPriceNet * (1 + vatRate / 100)
+      : unitPriceNet;
       
     return (
       <div className="border rounded-md p-3 space-y-3" data-testid={`position-row-edit-${position.id}`}>
