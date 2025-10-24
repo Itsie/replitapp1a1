@@ -1,0 +1,113 @@
+Step 2.4 – Add order positions (line items) and refactor the "Neuer Auftrag" / detail layout.
+No slots, no planning, no JTL changes. Keep existing code; extend schema and API minimally.
+
+Goals:
+- Orders have editable positions (like an invoice program): articleName, articleNumber?, qty, unit, unitPriceNet, vatRate, line totals.
+- Procurement flag per position (ORDER_NEEDED | ORDERED | RECEIVED | NONE) + optional supplier note.
+- Two-column layout for the "Neuer Auftrag" form (left: Kunde/Adressen, right: Auftragsdaten) with positions as a full-width panel below.
+- Totals box: net, tax, gross; auto-recalc on edits.
+- CSV import/export for positions.
+
+A) Prisma Schema (new model; DO NOT touch jtl_order_positions)
+Add a separate table for internal positions:
+model OrderPosition {
+  id            String   @id @default(cuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  articleName   String
+  articleNumber String?   // optional
+  qty           Decimal   @db.Decimal(10,2)
+  unit          String    // e.g. "Stk", "Set", "m²"
+  unitPriceNet  Decimal   @db.Decimal(10,2)
+  vatRate       Int       // 0 | 7 | 19
+  lineNet       Decimal   @db.Decimal(12,2)
+  lineVat       Decimal   @db.Decimal(12,2)
+  lineGross     Decimal   @db.Decimal(12,2)
+
+  procurement   String    // 'NONE' | 'ORDER_NEEDED' | 'ORDERED' | 'RECEIVED'
+  supplierNote  String?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+Extend Order with cached totals (optional but useful):
+- totalNet   Decimal? @db.Decimal(12,2)
+- totalVat   Decimal? @db.Decimal(12,2)
+- totalGross Decimal? @db.Decimal(12,2)
+
+Run migration.
+
+B) API Endpoints (REST, keep structure)
+- GET   /api/orders/:id/positions              → list positions for an order
+- POST  /api/orders/:id/positions              → create position(s)
+  Body (single or array):
+   { articleName, articleNumber?, qty, unit, unitPriceNet, vatRate, procurement?, supplierNote? }
+- PATCH /api/orders/:id/positions/:posId       → update fields
+- DELETE /api/orders/:id/positions/:posId      → remove position
+- POST  /api/orders/:id/positions/import-csv   → accept CSV text or file; map headers (articleName, articleNumber, qty, unit, unitPriceNet, vatRate)
+Server rules:
+- Calculate lineNet = qty * unitPriceNet (rounded 2); lineVat = lineNet * (vatRate/100); lineGross = lineNet + lineVat.
+- After any create/update/delete/import: recalc Order.totalNet/totalVat/totalGross.
+- Validate: qty > 0, unitPriceNet ≥ 0, vatRate in [0,7,19], articleName required.
+- Default unit="Stk", vatRate=19, procurement="NONE".
+
+C) UI – "Neuer Auftrag" (create) and Order Detail (edit)
+Layout:
+- Two-column grid for form header:
+  left column: Kunde, Rechnungsadresse, ggf. Lieferadresse
+  right column: Auftragsdaten (Titel, Bereich, Fälligkeitsdatum, Standort, Notizen)
+- Positions Panel (full width under both columns):
+  Title: "Positionen"
+  Toolbar:
+    - Button "Position hinzufügen"
+    - Dropdown "Mehr": "Aus CSV importieren", "Als CSV exportieren"
+  Editable Table (shadcn + TanStack Table):
+    Columns:
+      • Art.-Nr. (optional)
+      • Artikelname (required; editable text)
+      • Menge (qty; numeric, step=1/0.01)
+      • Einheit (unit; select: Stk/Set/m², free text allowed)
+      • Einzelpreis Netto (€)
+      • MwSt (%) select (0/7/19)
+      • Zwischensumme Netto (€) [read-only]
+      • Steuer (€) [read-only]
+      • Brutto (€) [read-only]
+      • Beschaffung (Badge + select): NONE | ORDER_NEEDED | ORDERED | RECEIVED
+      • Notiz (supplierNote; optional)
+      • Aktionen (Löschen)
+  Keyboard UX:
+    - Enter/Tab navigates vorwärts, Shift+Tab rückwärts
+    - Pfeile bewegen sich zwischen Zellen
+  Validation inline: rote Randmarkierung + kleine Fehlermeldung
+
+Totals:
+- Rechts unten Box "Summen":
+  Net: €X,XX
+  MwSt: €Y,YY
+  Brutto: €Z,ZZ
+- Live-Update bei jeder Zelländerung
+- Format DE (1.234,56 €)
+
+CSV:
+- Export: header: articleNumber,articleName,qty,unit,unitPriceNet,vatRate,procurement,supplierNote
+- Import: map columns dialog, validate, preview table, "Übernehmen" merges into grid
+
+D) Orders List integration
+- Add column "Gesamt brutto" showing order.totalGross (fallback compute on client if null).
+- Optional badge in list if any position has procurement != 'NONE' (e.g. "Beschaffung offen")
+
+E) Detailseite (bestehende Tabs bleiben)
+- Tab "Details": zeigt neue Summen (Netto/MwSt/Brutto)
+- Neuer Tab "Positionen" ODER Panel in "Details" unten (wählt die einfachere Variante je nach Codebasis) – dort dieselbe Tabelle editierbar.
+- "Für Produktion freigeben" NICHT zulassen, wenn positions.length === 0 → Tooltip: "Keine Positionen vorhanden" (zusätzlich zur Asset-Validierung)
+
+Acceptance:
+- Create/edit/delete positions works; totals update.
+- CSV import/export works; invalid rows werden benannt.
+- Two-column layout for header reduces vertical scroll; positions full-width darunter.
+- Orders list shows gross total; procurement indicator sichtbar wenn nötig.
+- Submit button disabled ohne Positionen ODER ohne required assets; 412 vom Server weiterhin korrekt.
+
+Stay strictly in scope. No extra features. Use only the existing codebase and schema.

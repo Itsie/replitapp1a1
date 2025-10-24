@@ -65,37 +65,38 @@ model WorkCenter {
 }
 
 model Order {
-  id               String             @id @default(cuid())
-  extId            String?            @unique
-  source           OrderSource
-  department       Department
-  title            String
-  customer         String
-  dueDate          DateTime?
-  notes            String?
-  workflow         WorkflowState      @default(NEU)
-  qc               QCState            @default(UNGEPRUEFT)
-  location         String?
-  company          String?
-  contactFirstName String?
-  contactLastName  String?
-  customerEmail    String?
-  customerPhone    String?
-  billStreet       String?
-  billZip          String?
-  billCity         String?
-  billCountry      String?            @default("DE")
-  shipStreet       String?
-  shipZip          String?
-  shipCity         String?
-  shipCountry      String?
-  sizeTableId      String?
-  sizeTable        SizeTable?         @relation(fields: [sizeTableId], references: [id])
-  printAssets      PrintAsset[]
-  timeSlots        TimeSlot[]
-  invoiceQueueItem InvoiceQueueItem?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id                  String             @id @default(cuid())
+  extId               String?            @unique
+  displayOrderNumber  String?            @unique
+  source              OrderSource
+  department          Department
+  title               String
+  customer            String
+  dueDate             DateTime?
+  notes               String?
+  workflow            WorkflowState      @default(NEU)
+  qc                  QCState            @default(UNGEPRUEFT)
+  location            String?
+  company             String?
+  contactFirstName    String?
+  contactLastName     String?
+  customerEmail       String?
+  customerPhone       String?
+  billStreet          String?
+  billZip             String?
+  billCity            String?
+  billCountry         String?            @default("DE")
+  shipStreet          String?
+  shipZip             String?
+  shipCity            String?
+  shipCountry         String?
+  sizeTableId         String?
+  sizeTable           SizeTable?         @relation(fields: [sizeTableId], references: [id])
+  printAssets         PrintAsset[]
+  timeSlots           TimeSlot[]
+  invoiceQueueItem    InvoiceQueueItem?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 }
 
 model SizeTable {
@@ -156,4 +157,10 @@ model InvoiceQueueItem {
   status    String
   comment   String?
   createdAt DateTime @default(now())
+}
+
+model OrderSequence {
+  id      Int @id @default(autoincrement())
+  year    Int @unique
+  current Int @default(999)
 }
