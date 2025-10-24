@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertPositionSchema, updatePositionSchema } from "@shared/schema";
+import { insertOrderSchema, updateOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertPositionSchema, updatePositionSchema } from "@shared/schema";
 import { z } from "zod";
 import { Decimal } from "@prisma/client/runtime/library";
 
@@ -52,6 +52,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error creating order:", error);
       res.status(500).json({ error: "Failed to create order" });
+    }
+  });
+  
+  // PATCH /api/orders/:id - Update order fields
+  app.patch("/api/orders/:id", async (req, res) => {
+    try {
+      const validated = updateOrderSchema.parse(req.body);
+      const order = await storage.updateOrder(req.params.id, validated);
+      res.json(order);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error) {
+        if (error.message === "Order not found") {
+          return res.status(404).json({ error: "Order not found" });
+        }
+        if (error.message === "Cannot modify customer or address fields for JTL orders") {
+          return res.status(409).json({ error: "Cannot modify customer or address fields for JTL orders" });
+        }
+        if (error.message === "Cannot modify order fields in production, only notes allowed") {
+          return res.status(409).json({ error: "Cannot modify order fields in production, only notes allowed" });
+        }
+      }
+      console.error("Error updating order:", error);
+      res.status(500).json({ error: "Failed to update order" });
     }
   });
   

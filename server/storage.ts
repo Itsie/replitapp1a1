@@ -15,6 +15,7 @@ export interface IStorage {
   getOrders(filters: OrderFilters): Promise<OrderWithRelations[]>;
   getOrderById(id: string): Promise<OrderWithRelations | null>;
   createOrder(order: InsertOrder): Promise<OrderWithRelations>;
+  updateOrder(id: string, data: Partial<InsertOrder>): Promise<OrderWithRelations>;
   
   // Size Table
   getSizeTable(orderId: string): Promise<{ scheme: string; rows: any[]; comment: string | null } | null>;
@@ -138,6 +139,80 @@ export class PrismaStorage implements IStorage {
     });
     
     return order;
+  }
+  
+  async updateOrder(id: string, updateData: Partial<InsertOrder>): Promise<OrderWithRelations> {
+    // Get existing order to check source and workflow
+    const existingOrder = await prisma.order.findUnique({
+      where: { id },
+    });
+    
+    if (!existingOrder) {
+      throw new Error('Order not found');
+    }
+    
+    // Prepare update data
+    const data: any = {};
+    
+    // Rules for JTL orders: only allow dueDate, location, notes
+    if (existingOrder.source === 'JTL') {
+      // Check if trying to update restricted fields
+      const restrictedFields = ['company', 'contactFirstName', 'contactLastName', 'customerEmail', 'customerPhone',
+        'billStreet', 'billZip', 'billCity', 'billCountry', 'shipStreet', 'shipZip', 'shipCity', 'shipCountry',
+        'title', 'customer', 'department'];
+      
+      const attemptingRestrictedUpdate = restrictedFields.some(field => field in updateData);
+      
+      if (attemptingRestrictedUpdate) {
+        throw new Error('Cannot modify customer or address fields for JTL orders');
+      }
+      
+      // Only allow these fields for JTL orders
+      if (updateData.dueDate !== undefined) data.dueDate = updateData.dueDate ? new Date(updateData.dueDate) : null;
+      if (updateData.location !== undefined) data.location = updateData.location;
+      if (updateData.notes !== undefined) data.notes = updateData.notes;
+    } 
+    // Rules for IN_PROD orders: only allow notes
+    else if (existingOrder.workflow === 'IN_PROD') {
+      if (Object.keys(updateData).some(key => key !== 'notes')) {
+        throw new Error('Cannot modify order fields in production, only notes allowed');
+      }
+      if (updateData.notes !== undefined) data.notes = updateData.notes;
+    }
+    // INTERNAL orders not in production: allow all fields
+    else {
+      if (updateData.company !== undefined) data.company = updateData.company;
+      if (updateData.contactFirstName !== undefined) data.contactFirstName = updateData.contactFirstName;
+      if (updateData.contactLastName !== undefined) data.contactLastName = updateData.contactLastName;
+      if (updateData.customerEmail !== undefined) data.customerEmail = updateData.customerEmail;
+      if (updateData.customerPhone !== undefined) data.customerPhone = updateData.customerPhone;
+      if (updateData.billStreet !== undefined) data.billStreet = updateData.billStreet;
+      if (updateData.billZip !== undefined) data.billZip = updateData.billZip;
+      if (updateData.billCity !== undefined) data.billCity = updateData.billCity;
+      if (updateData.billCountry !== undefined) data.billCountry = updateData.billCountry;
+      if (updateData.shipStreet !== undefined) data.shipStreet = updateData.shipStreet;
+      if (updateData.shipZip !== undefined) data.shipZip = updateData.shipZip;
+      if (updateData.shipCity !== undefined) data.shipCity = updateData.shipCity;
+      if (updateData.shipCountry !== undefined) data.shipCountry = updateData.shipCountry;
+      if (updateData.title !== undefined) data.title = updateData.title;
+      if (updateData.customer !== undefined) data.customer = updateData.customer;
+      if (updateData.department !== undefined) data.department = updateData.department;
+      if (updateData.dueDate !== undefined) data.dueDate = updateData.dueDate ? new Date(updateData.dueDate) : null;
+      if (updateData.location !== undefined) data.location = updateData.location;
+      if (updateData.notes !== undefined) data.notes = updateData.notes;
+    }
+    
+    const updated = await prisma.order.update({
+      where: { id },
+      data,
+      include: {
+        sizeTable: true,
+        printAssets: true,
+        positions: true,
+      },
+    });
+    
+    return updated;
   }
   
   async getSizeTable(orderId: string): Promise<{ scheme: string; rows: any[]; comment: string | null } | null> {

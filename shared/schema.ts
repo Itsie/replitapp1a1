@@ -111,8 +111,39 @@ export const insertPositionSchema = z.object({
 
 export const updatePositionSchema = insertPositionSchema.partial();
 
+// Schema for updating order fields
+export const updateOrderSchema = z.object({
+  // Customer fields
+  company: z.string().trim().optional().nullable(),
+  contactFirstName: z.string().trim().optional().nullable(),
+  contactLastName: z.string().trim().optional().nullable(),
+  customerEmail: z.string().email("Must be a valid email address").optional(),
+  customerPhone: z.string().min(5, "Phone number must be at least 5 characters").optional(),
+  
+  // Billing address
+  billStreet: z.string().trim().min(1, "Billing street is required").optional(),
+  billZip: z.string().trim().min(1, "Billing ZIP code is required").optional(),
+  billCity: z.string().trim().min(1, "Billing city is required").optional(),
+  billCountry: z.string().optional(),
+  
+  // Shipping address (optional)
+  shipStreet: z.string().trim().optional().nullable(),
+  shipZip: z.string().trim().optional().nullable(),
+  shipCity: z.string().trim().optional().nullable(),
+  shipCountry: z.string().optional().nullable(),
+  
+  // Meta fields
+  title: z.string().trim().min(1, "Title is required").optional(),
+  customer: z.string().trim().min(1, "Customer is required").optional(),
+  department: departmentSchema.optional(),
+  dueDate: z.string().datetime().optional().nullable().transform(val => val || null),
+  location: z.string().trim().optional().nullable(),
+  notes: z.string().trim().optional().nullable(),
+});
+
 // Infer types
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type UpdateOrder = z.infer<typeof updateOrderSchema>;
 export type InsertSizeTable = z.infer<typeof insertSizeTableSchema>;
 export type CSVImport = z.infer<typeof csvImportSchema>;
 export type SizeTableRow = z.infer<typeof sizeTableRowSchema>;

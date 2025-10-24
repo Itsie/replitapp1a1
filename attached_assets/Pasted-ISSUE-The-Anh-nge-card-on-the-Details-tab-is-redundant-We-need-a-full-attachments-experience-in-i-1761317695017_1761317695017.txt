@@ -1,0 +1,120 @@
+ISSUE
+The "Anhänge" card on the Details tab is redundant. We need a full attachments experience in its own tab and remove the mini-card from Details. The tab should handle both print assets and generic files, support server path (UNC) and direct upload (drag&drop).
+
+GOAL
+- Rename tab "Druckdaten" to "Druckdaten / Anhänge".
+- Implement full attachments manager in that tab:
+  • Two asset types: PRINT (druckrelevant) and FILE (sonstiges)
+  • Add via "server path" (UNC-style) OR file upload (drag & drop, multi)
+  • List with preview/open, required flag for PRINT, delete
+- Remove the "Anhänge" card from Details tab. Keep only a small button "Druckdaten öffnen" that navigates to the attachments tab.
+- Keep existing production gate: submit is blocked if required PRINT assets are missing.
+
+SCOPE
+You ARE allowed to:
+- Extend Prisma model for assets
+- Add a single upload endpoint (multipart)
+- Update client UI for the new tab
+Do not refactor unrelated modules.
+
+A) PRISMA (extend or create asset model)
+Update prisma/schema.prisma:
+
+model OrderAsset {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  kind        String   // "PRINT" | "FILE"
+  label       String
+  // one of the following will be set
+  path        String?  // internal UNC path like //server/share/folder/file.pdf
+  url         String?  // hosted file url (uploaded to /uploads)
+  ext         String?
+  size        Int?     // bytes
+  required    Boolean  @default(false)  // only relevant for PRINT
+  notes       String?
+
+  createdAt   DateTime @default(now())
+  uploadedBy  String?  // optional user id/name
+}
+
+Run:
+npx prisma migrate dev -n "extend_order_assets_for_uploads"
+npx prisma generate
+
+B) SERVER (Express)
+1) Implement upload directory: /uploads/orders/:orderId
+   - Ensure directory exists; reject files > 50MB
+   - Sanitize filenames; store as original name with cuid prefix to avoid clashes
+
+2) Endpoints under /api/orders/:id/assets
+- GET    /api/orders/:id/assets
+- POST   /api/orders/:id/assets
+  body (JSON): { kind: "PRINT"|"FILE", label: string, path?: string, url?: string, required?: boolean, notes?: string }
+  Rules:
+   • Either path OR url is required. (url will be provided by upload endpoint)
+   • If path is provided, validate UNC-like: startsWith("//") || "\\\\", normalize to double-slash in storage.
+- POST   /api/orders/:id/assets/upload  (multipart/form-data, field: file, fields: kind, label, required?, notes?)
+  Behavior:
+   • Save file to /uploads/orders/:id/<generatedFilename>
+   • Build public URL: /uploads/orders/:id/<generatedFilename> (served statically)
+   • Create OrderAsset with url + ext + size + kind + label (+ required if PRINT)
+   • Return 201 with saved asset
+- DELETE /api/orders/:id/assets/:assetId
+  • If asset has url under /uploads, delete the file on disk
+
+3) Static serve
+- Serve /uploads as static files
+
+4) Production gate (already exists on submit): make sure it checks
+   • At least one PRINT asset with (path OR url) present when department === "TEAMSPORT"
+   • Otherwise do not block
+
+C) CLIENT – Tab "Druckdaten / Anhänge"
+- Rename the tab and move all attachments UI there. Remove the "Anhänge" card from the Details tab (keep only a small button that routes to the attachments tab).
+
+Layout of the tab:
+- Header actions:
+  [ + Datei hochladen ]  [ + Server-Pfad hinzufügen ]  (segmented)
+- Upload (shadcn + dropzone):
+  • Drag & drop area + file picker
+  • On drop: upload to POST /api/orders/:id/assets/upload (multipart)
+  • Required toggle only shown when kind=PRINT
+- Server-Pfad dialog:
+  • Inputs:
+     - Art: Select (PRINT, FILE)
+     - Label: Text
+     - Serverpfad (UNC): Text input with validation -> must start with // or \\ , value stored normalized as //server/...
+     - Required (visible only if PRINT)
+     - Notes (optional)
+  • Save -> POST /api/orders/:id/assets (with kind, label, path, required?, notes)
+
+List:
+- Table columns:
+  • Typ (Badge PRINT/FILE) 
+  • Label
+  • Quelle (Pfad oder Datei) – show icon: link for UNC path, file icon for uploads
+  • Größe (falls vorhanden)
+  • Erforderlich (✓/—)  only for PRINT
+  • Erstellt am
+  • Aktionen: Öffnen/Anzeigen, Kopieren des Pfads/URL, Löschen (mit confirm)
+- Clicking Öffnen:
+  • For url: open in new tab
+  • For path: copy to clipboard and show tooltip "Interner Pfad kopiert"
+
+Empty state:
+- "Noch keine Anhänge. Laden Sie Dateien hoch oder fügen Sie einen Serverpfad hinzu."
+
+D) DETAILS TAB
+- Remove the current "Anhänge" card.
+- In the right column (“Auftrag”) keep a small button: [Druckdaten öffnen] → routes to the “Druckdaten / Anhänge” tab.
+
+E) ACCEPTANCE
+- Uploading files creates OrderAsset with url under /uploads and is accessible.
+- Adding a UNC path creates OrderAsset with path saved and normalized ("//server/share/...").
+- TeamSport submit is blocked if there is no PRINT asset (path or url) → 412 as before.
+- The list supports delete with actual file removal for uploaded files.
+- The Details tab no longer contains attachments; the dedicated tab works for both PRINT and FILE assets.
+
+Keep changes minimal and focused on this feature.

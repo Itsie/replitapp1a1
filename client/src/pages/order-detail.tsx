@@ -32,10 +32,40 @@ export default function OrderDetail() {
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<any>({});
   
   const { data: order, isLoading } = useQuery<OrderWithRelations>({
     queryKey: [`/api/orders/${orderId}`],
     enabled: !!orderId,
+  });
+  
+  const updateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("PATCH", `/api/orders/${orderId}`, data);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Update failed");
+      }
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      toast({
+        title: "Gespeichert",
+        description: "Der Auftrag wurde erfolgreich aktualisiert.",
+      });
+      setIsEditing(false);
+      setEditForm({});
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Fehler",
+        description: error.message || "Aktualisierung fehlgeschlagen.",
+        variant: "destructive",
+      });
+    },
   });
   
   const submitMutation = useMutation({
@@ -75,6 +105,78 @@ export default function OrderDetail() {
       }
     },
   });
+  
+  const handleEdit = () => {
+    if (!order) return;
+    setEditForm({
+      company: order.company || "",
+      contactFirstName: order.contactFirstName || "",
+      contactLastName: order.contactLastName || "",
+      customerEmail: order.customerEmail || "",
+      customerPhone: order.customerPhone || "",
+      billStreet: order.billStreet || "",
+      billZip: order.billZip || "",
+      billCity: order.billCity || "",
+      billCountry: order.billCountry || "DE",
+      shipStreet: order.shipStreet || "",
+      shipZip: order.shipZip || "",
+      shipCity: order.shipCity || "",
+      shipCountry: order.shipCountry || "",
+      title: order.title,
+      customer: order.customer,
+      department: order.department,
+      dueDate: order.dueDate ? new Date(order.dueDate).toISOString().split('T')[0] : "",
+      location: order.location || "",
+      notes: order.notes || "",
+    });
+    setIsEditing(true);
+  };
+  
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditForm({});
+  };
+  
+  const handleSaveEdit = () => {
+    const updateData: any = {};
+    
+    // Helper to compare dates
+    const getCurrentDueDateStr = order?.dueDate ? new Date(order.dueDate).toISOString().split('T')[0] : "";
+    
+    // Only include changed fields
+    if (editForm.company !== undefined && editForm.company !== order?.company) updateData.company = editForm.company || null;
+    if (editForm.contactFirstName !== undefined && editForm.contactFirstName !== order?.contactFirstName) updateData.contactFirstName = editForm.contactFirstName || null;
+    if (editForm.contactLastName !== undefined && editForm.contactLastName !== order?.contactLastName) updateData.contactLastName = editForm.contactLastName || null;
+    if (editForm.customerEmail !== order?.customerEmail) updateData.customerEmail = editForm.customerEmail;
+    if (editForm.customerPhone !== order?.customerPhone) updateData.customerPhone = editForm.customerPhone;
+    if (editForm.billStreet !== order?.billStreet) updateData.billStreet = editForm.billStreet;
+    if (editForm.billZip !== order?.billZip) updateData.billZip = editForm.billZip;
+    if (editForm.billCity !== order?.billCity) updateData.billCity = editForm.billCity;
+    if (editForm.billCountry !== order?.billCountry) updateData.billCountry = editForm.billCountry;
+    if (editForm.shipStreet !== undefined && editForm.shipStreet !== order?.shipStreet) updateData.shipStreet = editForm.shipStreet || null;
+    if (editForm.shipZip !== undefined && editForm.shipZip !== order?.shipZip) updateData.shipZip = editForm.shipZip || null;
+    if (editForm.shipCity !== undefined && editForm.shipCity !== order?.shipCity) updateData.shipCity = editForm.shipCity || null;
+    if (editForm.shipCountry !== undefined && editForm.shipCountry !== order?.shipCountry) updateData.shipCountry = editForm.shipCountry || null;
+    if (editForm.title !== order?.title) updateData.title = editForm.title;
+    if (editForm.customer !== order?.customer) updateData.customer = editForm.customer;
+    if (editForm.department !== order?.department) updateData.department = editForm.department;
+    
+    // Handle dueDate properly: convert YYYY-MM-DD to ISO datetime string
+    if (editForm.dueDate !== getCurrentDueDateStr) {
+      if (editForm.dueDate) {
+        // Create date at noon UTC to avoid timezone issues
+        const date = new Date(editForm.dueDate + 'T12:00:00.000Z');
+        updateData.dueDate = date.toISOString();
+      } else {
+        updateData.dueDate = null;
+      }
+    }
+    
+    if (editForm.location !== undefined && editForm.location !== order?.location) updateData.location = editForm.location || null;
+    if (editForm.notes !== undefined && editForm.notes !== order?.notes) updateData.notes = editForm.notes || null;
+    
+    updateMutation.mutate(updateData);
+  };
   
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
