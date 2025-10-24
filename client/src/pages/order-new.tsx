@@ -64,7 +64,6 @@ export default function OrderNew() {
   
   const createMutation = useMutation({
     mutationFn: async (data: InsertOrder) => {
-      // Step 1: Create the order
       const orderRes = await apiRequest("POST", "/api/orders", data);
       if (!orderRes.ok) {
         const errorText = await orderRes.text();
@@ -72,7 +71,6 @@ export default function OrderNew() {
       }
       const order = await orderRes.json();
 
-      // Step 2: Create positions if any
       if (positions.length > 0) {
         const positionsToCreate = positions.map(p => ({
           articleName: p.articleName,
@@ -132,7 +130,6 @@ export default function OrderNew() {
   
   return (
     <div className="min-h-screen flex flex-col w-full">
-      {/* Header */}
       <div className="border-b">
         <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4">
           <Button
@@ -144,19 +141,16 @@ export default function OrderNew() {
             Zurück
           </Button>
           <h1 className="text-3xl font-bold tracking-tight mt-4">Neuer Auftrag</h1>
+          <p className="text-muted-foreground mt-1">Erstellen Sie einen neuen internen Produktionsauftrag</p>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 overflow-auto pb-24">
-        <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4">
+        <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
-              {/* Two-column grid */}
-              <div className="grid lg:grid-cols-12 gap-4">
-                {/* Left Column - Customer Info */}
-                <div className="lg:col-span-8 space-y-4">
-                  {/* Kunde Card */}
+              <div className="grid lg:grid-cols-12 gap-6">
+                <div className="lg:col-span-8 space-y-6">
                   <Card className="rounded-2xl">
                     <CardHeader>
                       <CardTitle>Kunde</CardTitle>
@@ -225,7 +219,7 @@ export default function OrderNew() {
                           name="customerEmail"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>E-Mail</FormLabel>
+                              <FormLabel>E-Mail *</FormLabel>
                               <FormControl>
                                 <Input
                                   data-testid="input-customerEmail"
@@ -244,7 +238,7 @@ export default function OrderNew() {
                           name="customerPhone"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Telefon</FormLabel>
+                              <FormLabel>Telefon *</FormLabel>
                               <FormControl>
                                 <Input
                                   data-testid="input-customerPhone"
@@ -261,7 +255,6 @@ export default function OrderNew() {
                     </CardContent>
                   </Card>
 
-                  {/* Rechnungsadresse Card */}
                   <Card className="rounded-2xl">
                     <CardHeader>
                       <CardTitle>Rechnungsadresse</CardTitle>
@@ -276,7 +269,7 @@ export default function OrderNew() {
                             <FormControl>
                               <Input
                                 data-testid="input-billStreet"
-                                placeholder="Musterstraße 1"
+                                placeholder="Musterstraße 123"
                                 {...field}
                               />
                             </FormControl>
@@ -295,7 +288,7 @@ export default function OrderNew() {
                               <FormControl>
                                 <Input
                                   data-testid="input-billZip"
-                                  placeholder="12345"
+                                  placeholder="10115"
                                   {...field}
                                 />
                               </FormControl>
@@ -313,7 +306,7 @@ export default function OrderNew() {
                               <FormControl>
                                 <Input
                                   data-testid="input-billCity"
-                                  placeholder="Musterstadt"
+                                  placeholder="Berlin"
                                   {...field}
                                 />
                               </FormControl>
@@ -348,7 +341,6 @@ export default function OrderNew() {
                     </CardContent>
                   </Card>
 
-                  {/* Lieferadresse Card (optional) */}
                   <Card className="rounded-2xl">
                     <CardHeader>
                       <div className="flex items-center justify-between">
@@ -457,8 +449,7 @@ export default function OrderNew() {
                   </Card>
                 </div>
 
-                {/* Right Column - Order Data */}
-                <div className="lg:col-span-4 space-y-4">
+                <div className="lg:col-span-4 space-y-6">
                   <Card className="rounded-2xl">
                     <CardHeader>
                       <CardTitle>Auftragsdaten</CardTitle>
@@ -587,7 +578,6 @@ export default function OrderNew() {
                   </Card>
                 </div>
 
-                {/* Full Width - Positions */}
                 <div className="lg:col-span-12">
                   <PositionsEditor
                     positions={positions}
@@ -600,7 +590,6 @@ export default function OrderNew() {
         </div>
       </div>
 
-      {/* Sticky Footer */}
       <div className="fixed bottom-0 left-0 right-0 border-t bg-background z-10">
         <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4 flex justify-end gap-2">
           <Button
