@@ -368,49 +368,47 @@ export default function OrderDetail() {
               )}
               
               <div className="space-y-4">
-                {/* Action Buttons Row */}
-                <div className="flex gap-3">
-                  {order.customerEmail && (
-                    <Button
-                      variant="outline"
-                      asChild
-                      className="flex-1"
-                      data-testid="button-email"
-                    >
-                      <a href={`mailto:${order.customerEmail}`}>
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        E-Mail senden
-                      </a>
-                    </Button>
-                  )}
-                  {order.customerPhone && (
-                    <Button
-                      variant="outline"
-                      asChild
-                      className="flex-1"
-                      data-testid="button-phone"
-                    >
-                      <a href={`tel:${order.customerPhone}`}>
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        Anrufen
-                      </a>
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    onClick={() => setActiveTab("assets")}
-                    className="flex-1"
-                    data-testid="button-open-assets"
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Druckdaten öffnen
-                  </Button>
-                </div>
-                
                 {/* Combined Card with 3 Gradients */}
                 <Card className="rounded-2xl border-muted/60">
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0">
                     <CardTitle>Auftrag & Adressen</CardTitle>
+                    <div className="flex gap-2">
+                      {order.customerEmail && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          data-testid="button-email"
+                        >
+                          <a href={`mailto:${order.customerEmail}`}>
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            E-Mail
+                          </a>
+                        </Button>
+                      )}
+                      {order.customerPhone && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          data-testid="button-phone"
+                        >
+                          <a href={`tel:${order.customerPhone}`}>
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            Anrufen
+                          </a>
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setActiveTab("assets")}
+                        data-testid="button-open-assets"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Druckdaten
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-3 gap-4">
@@ -478,46 +476,52 @@ export default function OrderDetail() {
                         </div>
                       )}
                       
-                      {/* Order Details with Purple/Amber Gradient */}
+                      {/* Order Details with Amber/Orange Gradient */}
                       <div className="rounded-xl p-4 bg-gradient-to-br from-amber-500/5 via-orange-500/3 to-transparent border border-amber-500/10">
                         <Label className="text-xs text-muted-foreground mb-2 block">AUFTRAG</Label>
                         <div className="space-y-3">
-                          <div>
+                          <div className="col-span-2">
                             <Label className="text-xs text-muted-foreground">AUFTRAGSNUMMER</Label>
                             <p className="font-medium font-mono" data-testid="text-order-number">{order.displayOrderNumber}</p>
                           </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground">ABTEILUNG</Label>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                             <div>
-                              <Badge variant="outline" data-testid="badge-department">{order.department}</Badge>
+                              <Label className="text-xs text-muted-foreground">ABTEILUNG</Label>
+                              <div>
+                                <Badge variant="outline" data-testid="badge-department">{order.department}</Badge>
+                              </div>
                             </div>
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground">QUELLE</Label>
                             <div>
-                              <Badge variant={getSourceBadgeVariant(order.source)} data-testid="badge-source-detail">
-                                {order.source}
-                              </Badge>
+                              <Label className="text-xs text-muted-foreground">QUELLE</Label>
+                              <div>
+                                <Badge variant={getSourceBadgeVariant(order.source)} data-testid="badge-source-detail">
+                                  {order.source}
+                                </Badge>
+                              </div>
                             </div>
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground">WORKFLOW</Label>
                             <div>
-                              <Badge variant={getWorkflowBadgeVariant(order.workflow)} data-testid="badge-workflow-detail">
-                                {order.workflow}
-                              </Badge>
+                              <Label className="text-xs text-muted-foreground">WORKFLOW</Label>
+                              <div>
+                                <Badge variant={getWorkflowBadgeVariant(order.workflow)} data-testid="badge-workflow-detail">
+                                  {order.workflow}
+                                </Badge>
+                              </div>
                             </div>
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground">FÄLLIGKEITSDATUM</Label>
-                            <p data-testid="text-duedate">{formatDate(order.dueDate)}</p>
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground">STANDORT</Label>
-                            <p data-testid="text-location">{order.location || "—"}</p>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">FÄLLIG AM</Label>
+                              <p data-testid="text-duedate">{formatDate(order.dueDate)}</p>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">STANDORT</Label>
+                              <p data-testid="text-location">{order.location || "—"}</p>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">ERSTELLT</Label>
+                              <p data-testid="text-created">{formatDate(order.createdAt)}</p>
+                            </div>
                           </div>
                           {order.notes && (
-                            <div>
+                            <div className="pt-1">
                               <Label className="text-xs text-muted-foreground">NOTIZEN</Label>
                               <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{order.notes}</p>
                             </div>
