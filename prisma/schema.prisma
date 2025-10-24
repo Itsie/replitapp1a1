@@ -90,13 +90,36 @@ model Order {
   shipZip             String?
   shipCity            String?
   shipCountry         String?
+  totalNet            Decimal?
+  totalVat            Decimal?
+  totalGross          Decimal?
   sizeTableId         String?
   sizeTable           SizeTable?         @relation(fields: [sizeTableId], references: [id])
   printAssets         PrintAsset[]
+  positions           OrderPosition[]
   timeSlots           TimeSlot[]
   invoiceQueueItem    InvoiceQueueItem?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
+}
+
+model OrderPosition {
+  id            String   @id @default(cuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  articleName   String
+  articleNumber String?
+  qty           Decimal
+  unit          String   @default("Stk")
+  unitPriceNet  Decimal
+  vatRate       Int      @default(19)
+  lineNet       Decimal
+  lineVat       Decimal
+  lineGross     Decimal
+  procurement   String   @default("NONE")
+  supplierNote  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model SizeTable {
