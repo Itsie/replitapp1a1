@@ -61,13 +61,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sizeTable = await storage.getSizeTable(req.params.id);
       
       if (!sizeTable) {
-        return res.status(204).send(); // No content
+        return res.json(null);
       }
       
       // Calculate countsBySize
       const countsBySize: Record<string, number> = {};
       for (const row of sizeTable.rows) {
-        countsBySize[row.size] = (countsBySize[row.size] || 0) + 1;
+        const number = typeof row.number === 'string' ? parseInt(row.number, 10) : row.number;
+        countsBySize[row.size] = (countsBySize[row.size] || 0) + number;
       }
       
       res.json({
