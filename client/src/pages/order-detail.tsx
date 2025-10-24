@@ -368,68 +368,72 @@ export default function OrderDetail() {
               )}
               
               <div className="grid lg:grid-cols-12 gap-4">
-                {/* Left Column - Customer Info */}
+                {/* Left Column - Customer & Billing Info */}
                 <div className="lg:col-span-8 space-y-4">
-                  {/* Customer Card */}
+                  {/* Combined Customer & Billing Address Card */}
                   <Card className="rounded-2xl border-muted/60">
                     <CardHeader>
-                      <CardTitle>Kunde</CardTitle>
+                      <CardTitle>Kunde & Rechnungsadresse</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">FIRMA</Label>
-                        <p data-testid="text-company">{order.company || "—"}</p>
+                    <CardContent>
+                      {/* Two-column grid */}
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                        {/* Left: Customer Info */}
+                        <div className="space-y-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">FIRMA</Label>
+                            <p data-testid="text-company">{order.company || "—"}</p>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">ANSPRECHPARTNER</Label>
+                            <p data-testid="text-contact">
+                              {order.contactFirstName && order.contactLastName
+                                ? `${order.contactFirstName} ${order.contactLastName}`
+                                : "—"}
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">E-MAIL</Label>
+                            {order.customerEmail ? (
+                              <a
+                                href={`mailto:${order.customerEmail}`}
+                                className="text-primary hover:underline"
+                                data-testid="link-email"
+                              >
+                                {order.customerEmail}
+                              </a>
+                            ) : (
+                              <p>—</p>
+                            )}
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">TELEFON</Label>
+                            {order.customerPhone ? (
+                              <a
+                                href={`tel:${order.customerPhone}`}
+                                className="text-primary hover:underline"
+                                data-testid="link-phone"
+                              >
+                                {order.customerPhone}
+                              </a>
+                            ) : (
+                              <p>—</p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Right: Billing Address */}
+                        <div>
+                          <Label className="text-xs text-muted-foreground mb-3 block">RECHNUNGSADRESSE</Label>
+                          <div className="space-y-1">
+                            <p data-testid="text-bill-street">{order.billStreet || "—"}</p>
+                            <p data-testid="text-bill-city">
+                              {order.billZip && order.billCity ? `${order.billZip} ${order.billCity}` : "—"}
+                            </p>
+                            <p data-testid="text-bill-country">{order.billCountry || "—"}</p>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">ANSPRECHPARTNER</Label>
-                        <p data-testid="text-contact">
-                          {order.contactFirstName && order.contactLastName
-                            ? `${order.contactFirstName} ${order.contactLastName}`
-                            : "—"}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">E-MAIL</Label>
-                        {order.customerEmail ? (
-                          <a
-                            href={`mailto:${order.customerEmail}`}
-                            className="text-primary hover:underline"
-                            data-testid="link-email"
-                          >
-                            {order.customerEmail}
-                          </a>
-                        ) : (
-                          <p>—</p>
-                        )}
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">TELEFON</Label>
-                        {order.customerPhone ? (
-                          <a
-                            href={`tel:${order.customerPhone}`}
-                            className="text-primary hover:underline"
-                            data-testid="link-phone"
-                          >
-                            {order.customerPhone}
-                          </a>
-                        ) : (
-                          <p>—</p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  {/* Billing Address Card */}
-                  <Card className="rounded-2xl border-muted/60">
-                    <CardHeader>
-                      <CardTitle>Rechnungsadresse</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-1">
-                      <p data-testid="text-bill-street">{order.billStreet || "—"}</p>
-                      <p data-testid="text-bill-city">
-                        {order.billZip && order.billCity ? `${order.billZip} ${order.billCity}` : "—"}
-                      </p>
-                      <p data-testid="text-bill-country">{order.billCountry || "—"}</p>
                     </CardContent>
                   </Card>
                   
@@ -977,23 +981,33 @@ function PositionRow({
           </Badge>
         </div>
         <div className="col-span-1 flex justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onEdit}
-            data-testid="button-edit-position"
-          >
-            <Pencil className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onDelete}
-            disabled={position.isNew}
-            data-testid="button-delete-position"
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onEdit}
+                data-testid="button-edit-position"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Bearbeiten</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onDelete}
+                disabled={position.isNew}
+                data-testid="button-delete-position"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Löschen</TooltipContent>
+          </Tooltip>
         </div>
       </div>
       {position.supplierNote && (
