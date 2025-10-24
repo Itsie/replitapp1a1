@@ -353,7 +353,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If a file path was returned, delete the file from disk
       if (result.filePath) {
+        // SECURITY: Validate path is within uploads directory before deletion
+        const uploadsDir = path.join(process.cwd(), 'uploads');
         const fullPath = path.join(process.cwd(), result.filePath);
+        const resolvedPath = path.resolve(fullPath);
+        const resolvedUploads = path.resolve(uploadsDir);
+        
+        // Ensure resolved path is within uploads directory
+        if (!resolvedPath.startsWith(resolvedUploads)) {
+          return res.status(403).json({ error: "Invalid file path" });
+        }
+        
         if (fs.existsSync(fullPath)) {
           fs.unlinkSync(fullPath);
         }

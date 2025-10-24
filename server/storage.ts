@@ -328,13 +328,26 @@ export class PrismaStorage implements IStorage {
       throw new Error('Order not found');
     }
     
-    // Normalize UNC path if provided
+    // SECURITY: Validate and normalize UNC path if provided
     let normalizedPath = assetData.path;
     if (normalizedPath) {
-      // Convert backslashes to forward slashes and ensure it starts with //
+      // Check for null bytes (security risk)
+      if (normalizedPath.includes('\0')) {
+        throw new Error('Invalid characters in path');
+      }
+      
+      // Convert backslashes to forward slashes
       normalizedPath = normalizedPath.replace(/\\/g, '/');
+      
+      // Ensure it starts with //
       if (!normalizedPath.startsWith('//')) {
         throw new Error('UNC path must start with // or \\\\');
+      }
+      
+      // Validate UNC path format: //server/share/path
+      const uncPattern = /^\/\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+(\/[^\0<>"|?*]*)?$/;
+      if (!uncPattern.test(normalizedPath)) {
+        throw new Error('Invalid UNC path format. Expected: //server/share/path');
       }
     }
     
