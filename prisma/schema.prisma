@@ -61,31 +61,34 @@ model WorkCenter {
   department  Department
   capacityMin Int        @default(660)
   active      Boolean    @default(true)
+  timeSlots   TimeSlot[]
 }
 
 model Order {
-  id          String        @id @default(cuid())
-  extId       String?       @unique
-  source      OrderSource
-  department  Department
-  title       String
-  customer    String
-  dueDate     DateTime?
-  notes       String?
-  workflow    WorkflowState @default(NEU)
-  qc          QCState       @default(UNGEPRUEFT)
-  location    String?
-  sizeTableId String?
-  sizeTable   SizeTable?    @relation(fields: [sizeTableId], references: [id])
-  printAssets PrintAsset[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id               String             @id @default(cuid())
+  extId            String?            @unique
+  source           OrderSource
+  department       Department
+  title            String
+  customer         String
+  dueDate          DateTime?
+  notes            String?
+  workflow         WorkflowState      @default(NEU)
+  qc               QCState            @default(UNGEPRUEFT)
+  location         String?
+  sizeTableId      String?
+  sizeTable        SizeTable?         @relation(fields: [sizeTableId], references: [id])
+  printAssets      PrintAsset[]
+  timeSlots        TimeSlot[]
+  invoiceQueueItem InvoiceQueueItem?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 }
 
 model SizeTable {
   id        String   @id @default(cuid())
   scheme    String
-  rows      String
+  rows      Json
   comment   String?
   createdAt DateTime @default(now())
   Order     Order[]
@@ -102,13 +105,15 @@ model PrintAsset {
 }
 
 model TimeSlot {
-  id           String   @id @default(cuid())
+  id           String      @id @default(cuid())
   date         DateTime
   startMin     Int
   lengthMin    Int
   workCenterId String
+  workCenter   WorkCenter  @relation(fields: [workCenterId], references: [id])
   orderId      String?
-  blocked      Boolean  @default(false)
+  order        Order?      @relation(fields: [orderId], references: [id])
+  blocked      Boolean     @default(false)
   note         String?
 }
 
@@ -128,12 +133,13 @@ model JTLOrderPosition {
   variation       String?
   isShipping      Boolean    @default(false)
   isCredit        Boolean    @default(false)
-  raw             String
+  raw             Json
 }
 
 model InvoiceQueueItem {
   id        String   @id @default(cuid())
   orderId   String   @unique
+  order     Order    @relation(fields: [orderId], references: [id])
   status    String
   comment   String?
   createdAt DateTime @default(now())

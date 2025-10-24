@@ -1,0 +1,64 @@
+Implementiere NUR den Orders-Teil. KEINE Slots, KEIN JTL, KEIN Billing.
+
+Ziel:
+- Orders-API (CRUD light) und einfache Orders-UI mit Liste, Suche/Filter und Detail-Tabs (nur Skeleton).
+- Hält sich an mein bestehendes Prisma-Schema (Order, SizeTable, PrintAsset, InvoiceQueueItem existieren bereits).
+
+Backend (/server):
+1) Endpoints:
+   - GET /api/orders?q=&department=&source=&workflow=  → Liste inkl. sizeTable + printAssets
+   - POST /api/orders                                  → INTERNAL-Auftrag anlegen (title, customer, department, dueDate?, notes?, location?)
+   - GET /api/orders/:id                               → Details inkl. sizeTable + printAssets
+   - POST /api/orders/:id/size                         → SizeTable anlegen/setzen (body: {scheme, rows, comment?})
+   - POST /api/orders/:id/assets                       → Druckdaten anhängen (multipart oder JSON {label,url}); required=true default
+   - POST /api/orders/:id/submit                       → Validierung: mindestens 1 required PrintAsset, dann workflow=FUER_PROD
+
+2) Regeln/Validierung:
+   - POST /api/orders: source immer INTERNAL, workflow=NEU.
+   - /submit: wenn kein required Asset → HTTP 412 {error:"Required print asset missing"}.
+   - JTL-Orders (source=JTL), falls vorhanden, sind read-only (nur size/assets/location dürfen über Endpunkte geändert werden, aber NICHT in diesem Prompt implementieren).
+
+3) Technisch:
+   - Typen strikt aus Prisma @prisma/client.
+   - Saubere Fehlercodes (400/404/412).
+   - CORS + JSON + cookie-parser bleiben wie in Prompt 1.
+   - Kein Zusatzmodell, keine Migration anlegen.
+
+Frontend (/client):
+1) Routen:
+   - /orders  → Liste
+   - /orders/:id → Detail-Skelett mit Tabs: Details | Größen | Druckdaten | Historie (nur Platzhalter außer Details)
+
+2) /orders Liste:
+   - Suchfeld (q) über URL-Param, Debounce 300ms.
+   - Filter-Selects (Department, Source, Workflow) simple; Werte über Query-Params an GET /api/orders.
+   - Kartenansicht pro Order: source-badge, department, title, customer, dueDate?; Badge wenn sizeTable vorhanden; Count printAssets.
+
+3) Detailseite /orders/:id:
+   - Zeigt Kernfelder.
+   - Tab „Größen“: Button „Größentabelle anlegen“, modaler Dialog mit minimalem Builder:
+     * Scheme: ALPHA | NUMERIC | CUSTOM (Dropdown)
+     * Textarea für JSON rows (z. B. [{size:"M",qty:10,name:"…",number:"10"}])
+     * Speichert via POST /api/orders/:id/size
+   - Tab „Druckdaten“: Upload (file oder URL); POST /api/orders/:id/assets.
+   - Button „Für Produktion freigeben“ → POST /api/orders/:id/submit; zeigt Erfolg/Fehler-Toast.
+
+Tech-Vorgaben Frontend:
+- React + Vite + TS (bestehend).
+- State/Data: TanStack Query, Error/Loading-UI.
+- Styling: Tailwind; simple shadcn/ui Komponenten (Button, Input, Select, Dialog, Badge, Toast).
+- Keine Animationen, kein DnD.
+
+Akzeptanzkriterien (bitte automatisiert prüfen, wenn möglich):
+- GET /api/orders liefert 200 und Array; Filter greifen (ein einfacher Test mit q und department).
+- POST /api/orders legt INTERNAL-Order an und antwortet 201.
+- POST /api/orders/:id/size erstellt SizeTable; GET liefert sie zurück.
+- POST /api/orders/:id/assets akzeptiert Datei ODER {label,url}; GET zeigt Asset-Count > 0.
+- POST /api/orders/:id/submit:
+  * ohne Assets → 412
+  * mit ≥1 required Asset → 200 und workflow=FUER_PROD
+- Frontend: /orders zeigt Liste, Suche/Filter funktionieren sichtbar; /orders/:id zeigt Detail + Tabs; Modaldialoge schließen sauber, Toasts erscheinen.
+
+WICHTIG:
+- Bleib ausschließlich bei diesem Scope. KEINE Slot-/Planning-Files, KEIN JTL-Import, KEIN Billing, KEIN Warehouse.
+- Bestehende Ports beibehalten: API :3000, Client :5173.
