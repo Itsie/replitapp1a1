@@ -92,10 +92,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validated = insertSizeTableSchema.parse(req.body);
       const sizeTable = await storage.createOrUpdateSizeTable(req.params.id, validated);
       
-      // Calculate countsBySize
+      // Calculate countsBySize by summing quantities
       const countsBySize: Record<string, number> = {};
       for (const row of sizeTable.rows) {
-        countsBySize[row.size] = (countsBySize[row.size] || 0) + 1;
+        const number = typeof row.number === 'string' ? parseInt(row.number, 10) : row.number;
+        countsBySize[row.size] = (countsBySize[row.size] || 0) + number;
       }
       
       res.json({
@@ -160,10 +161,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validated = insertSizeTableSchema.parse(data);
       const sizeTable = await storage.createOrUpdateSizeTable(req.params.id, validated);
       
-      // Calculate countsBySize
+      // Calculate countsBySize by summing quantities
       const countsBySize: Record<string, number> = {};
       for (const row of sizeTable.rows) {
-        countsBySize[row.size] = (countsBySize[row.size] || 0) + 1;
+        const number = typeof row.number === 'string' ? parseInt(row.number, 10) : row.number;
+        countsBySize[row.size] = (countsBySize[row.size] || 0) + number;
       }
       
       res.json({
