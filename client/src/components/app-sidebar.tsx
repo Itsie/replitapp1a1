@@ -112,19 +112,19 @@ export function AppSidebar() {
       }`}
     >
       {/* Branding */}
-      <div className="flex h-14 items-center gap-2 border-b px-4">
+      <div className="flex h-14 items-center border-b px-2 py-2">
         {!collapsed && (
           <img 
             src={logoImage} 
             alt="1aShirt Logo" 
-            className="h-8 w-auto object-contain brightness-0 dark:brightness-100"
+            className="w-full h-auto max-h-10 object-contain brightness-0 dark:brightness-100"
           />
         )}
         {collapsed && (
           <img 
             src={logoImage} 
             alt="1a" 
-            className="h-6 w-auto object-contain brightness-0 dark:brightness-100"
+            className="w-full h-auto max-h-10 object-contain brightness-0 dark:brightness-100"
           />
         )}
       </div>
