@@ -1,0 +1,74 @@
+Step 2.1e – Improve Orders overview table UX. No API or DB changes.
+
+Goals:
+- Better default columns & signals (number, totals, due status, procurement, assets/size-table).
+- Quick filters, column visibility menu, saved preferences.
+- Multi-select actions (client-only).
+- Keep Table the default view; Card view remains optional via toggle.
+
+Columns (order & behavior):
+1) Auftragsnr. (displayOrderNumber) – sortable
+2) Titel – sortable
+3) Kunde – company or contact
+4) Abteilung – badge
+5) Quelle – badge
+6) Status – workflow badge
+7) Fälligkeit – formatted dd.MM.yyyy + colored chip:
+   - overdue (date < today): red
+   - due today: amber
+   - in future: muted/green
+   - none: "—"
+8) Größe – size table status: ✓ if sizeTable.rows > 0 else "—"
+9) Druckdaten – number of required assets attached
+10) Beschaffung – indicator (client-computed from positions):
+    - "offen" if any position.procurement == 'ORDER_NEEDED' (amber)
+    - "bestellt" if any == 'ORDERED' and none == 'ORDER_NEEDED' (blue)
+    - "eingetroffen" if all == 'RECEIVED' (green)
+    - "—" if all == 'NONE'
+11) Gesamt (Brutto) – order.totalGross (format DE), sortable
+12) Aktionen – eye icon -> /orders/:id
+
+Toolbar (top):
+- Left: Search (q), Department, Source, Workflow (existing)
+- Right: 
+  • View toggle (Table/Cards, persists "orders_viewMode")
+  • Column visibility menu (TanStack Table columnVisibility, persists "orders_columns")
+  • Button CSV Export (selected rows or all filtered)
+
+Quick filters (under toolbar):
+- Chips: Heute fällig, Überfällig, Ohne Druckdaten, Ohne Größentabelle, Beschaffung offen
+- Chips act as client-side predicates on the already-fetched dataset; combine with existing server filters.
+
+Selection:
+- Enable rowSelection, checkbox first column (hidden on mobile).
+- Selection counter in toolbar; actions:
+  • CSV export (selected)
+  • Öffnen (opens first 10 in new tabs or sequential navigation)
+(Do not add server mutations here.)
+
+Persist user preferences:
+- Save columnVisibility, sorting, density (rowHeight), and width mode in localStorage keys:
+  "orders_columns", "orders_sort", "orders_density", "orders_layout".
+- Density toggle: "Komfort" / "Kompakt" (row padding px-3 py-2 vs px-2 py-1).
+
+Empty/Loading:
+- Skeleton rows on loading; nice empty state with icon and button "Neuen Auftrag".
+
+Performance:
+- Keep client-side for now; apply a hard cap of 500 rows to render.
+- If more than 500 results, show small note: "Ansicht aus Performance-Gründen auf 500 Einträge begrenzt."
+
+Styling:
+- Sticky header, overflow-x-auto, rounded-2xl, subtle border.
+- Due-date chips color-coded; badges consistent with shadcn/ui.
+- Responsive: horizontal scroll on small screens.
+
+Acceptance:
+- Default columns & order as above.
+- Colored due-date states work.
+- Quick chips filter the current dataset.
+- Column visibility & view mode persist across reloads.
+- Multi-select + CSV export works without server changes.
+- No API/DB changes, only UI.
+
+Stay strictly in scope. No extra features. Use only the existing codebase and schema.

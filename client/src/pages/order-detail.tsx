@@ -44,10 +44,6 @@ export default function OrderDetail() {
   const submitMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/orders/${orderId}/submit`);
-      if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error || "Submission failed");
-      }
       return await res.json();
     },
     onSuccess: () => {
@@ -64,7 +60,7 @@ export default function OrderDetail() {
       const message = error.message || "Der Auftrag konnte nicht freigegeben werden.";
       
       // Check if it's a 412 error (missing required assets)
-      if (message.includes("Required print asset missing") || message.includes("412")) {
+      if (error.status === 412 || message.includes("Required print asset missing")) {
         setSubmitError("Benötigte Druckdaten fehlen. Bitte fügen Sie mindestens ein erforderliches Druckdatum hinzu.");
         setConfirmSubmitOpen(false);
         setActiveTab("assets"); // Switch to assets tab
