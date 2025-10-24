@@ -300,35 +300,49 @@ export default function OrderDetail() {
               </div>
             </div>
 
-            {order.workflow !== "FUER_PROD" && order.workflow !== "IN_PROD" && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div>
-                    <Button
-                      onClick={() => setConfirmSubmitOpen(true)}
-                      disabled={!canSubmitOrder}
-                      data-testid="button-submit"
-                    >
-                      <Check className="h-4 w-4 mr-2" />
-                      Für Produktion freigeben
-                    </Button>
-                  </div>
-                </TooltipTrigger>
-                {!canSubmitOrder && (
-                  <TooltipContent>
-                    <p>
-                      {!hasPositions && !hasRequiredAssets
-                        ? "Positionen und Druckdaten fehlen"
-                        : !hasPositions
-                        ? "Positionen fehlen"
-                        : !hasRequiredAssets
-                        ? "Benötigte Druckdaten fehlen"
-                        : "Größentabelle erforderlich für TEAMSPORT"}
-                    </p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            )}
+            <div className="flex gap-2">
+              {/* Edit Button - Only for INTERNAL orders or JTL orders with limited editing */}
+              {order.source === "INTERNAL" && order.workflow !== "IN_PROD" && (
+                <Button
+                  variant="outline"
+                  onClick={handleEdit}
+                  data-testid="button-edit-order"
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Auftrag bearbeiten
+                </Button>
+              )}
+              
+              {order.workflow !== "FUER_PROD" && order.workflow !== "IN_PROD" && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      <Button
+                        onClick={() => setConfirmSubmitOpen(true)}
+                        disabled={!canSubmitOrder}
+                        data-testid="button-submit"
+                      >
+                        <Check className="h-4 w-4 mr-2" />
+                        Für Produktion freigeben
+                      </Button>
+                    </div>
+                  </TooltipTrigger>
+                  {!canSubmitOrder && (
+                    <TooltipContent>
+                      <p>
+                        {!hasPositions && !hasRequiredAssets
+                          ? "Positionen und Druckdaten fehlen"
+                          : !hasPositions
+                          ? "Positionen fehlen"
+                          : !hasRequiredAssets
+                          ? "Benötigte Druckdaten fehlen"
+                          : "Größentabelle erforderlich für TEAMSPORT"}
+                      </p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -546,6 +560,15 @@ export default function OrderDetail() {
         orderId={orderId!}
         open={assetDialogOpen}
         onOpenChange={setAssetDialogOpen}
+      />
+      
+      <OrderEditDialog
+        order={order}
+        isOpen={isEditing}
+        onClose={handleCancelEdit}
+        onSave={handleSaveEdit}
+        editForm={editForm}
+        setEditForm={setEditForm}
       />
       
       <AlertDialog open={confirmSubmitOpen} onOpenChange={setConfirmSubmitOpen}>
@@ -1341,6 +1364,293 @@ function PrintAssetDialog({ orderId, open, onOpenChange }: { orderId: string; op
             </Button>
           </DialogFooter>
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function OrderEditDialog({ order, isOpen, onClose, onSave, editForm, setEditForm }: { 
+  order: OrderWithRelations; 
+  isOpen: boolean; 
+  onClose: () => void; 
+  onSave: () => void;
+  editForm: any;
+  setEditForm: (form: any) => void;
+}) {
+  const hasShippingAddress = !!(editForm.shipStreet || editForm.shipZip || editForm.shipCity || editForm.shipCountry);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-edit-order">
+        <DialogHeader>
+          <DialogTitle>Auftrag bearbeiten</DialogTitle>
+          <DialogDescription>
+            Ändern Sie die Auftragsdaten. Interne Aufträge können vollständig bearbeitet werden.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <h3 className="font-semibold">Kundendaten</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <Label>Firma</Label>
+                <Input
+                  value={editForm.company || ""}
+                  onChange={(e) => setEditForm({...editForm, company: e.target.value})}
+                  placeholder="Firmenname"
+                  data-testid="input-edit-company"
+                />
+              </div>
+              <div>
+                <Label>Vorname</Label>
+                <Input
+                  value={editForm.contactFirstName || ""}
+                  onChange={(e) => setEditForm({...editForm, contactFirstName: e.target.value})}
+                  placeholder="Vorname"
+                  data-testid="input-edit-firstName"
+                />
+              </div>
+              <div>
+                <Label>Nachname</Label>
+                <Input
+                  value={editForm.contactLastName || ""}
+                  onChange={(e) => setEditForm({...editForm, contactLastName: e.target.value})}
+                  placeholder="Nachname"
+                  data-testid="input-edit-lastName"
+                />
+              </div>
+              <div>
+                <Label>E-Mail *</Label>
+                <Input
+                  type="email"
+                  value={editForm.customerEmail || ""}
+                  onChange={(e) => setEditForm({...editForm, customerEmail: e.target.value})}
+                  placeholder="kunde@example.com"
+                  data-testid="input-edit-email"
+                />
+              </div>
+              <div>
+                <Label>Telefon *</Label>
+                <Input
+                  type="tel"
+                  value={editForm.customerPhone || ""}
+                  onChange={(e) => setEditForm({...editForm, customerPhone: e.target.value})}
+                  placeholder="+49 123 456789"
+                  data-testid="input-edit-phone"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="font-semibold">Rechnungsadresse</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="col-span-3">
+                <Label>Straße & Hausnummer *</Label>
+                <Input
+                  value={editForm.billStreet || ""}
+                  onChange={(e) => setEditForm({...editForm, billStreet: e.target.value})}
+                  placeholder="Musterstraße 123"
+                  data-testid="input-edit-billStreet"
+                />
+              </div>
+              <div>
+                <Label>PLZ *</Label>
+                <Input
+                  value={editForm.billZip || ""}
+                  onChange={(e) => setEditForm({...editForm, billZip: e.target.value})}
+                  placeholder="10115"
+                  data-testid="input-edit-billZip"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>Stadt *</Label>
+                <Input
+                  value={editForm.billCity || ""}
+                  onChange={(e) => setEditForm({...editForm, billCity: e.target.value})}
+                  placeholder="Berlin"
+                  data-testid="input-edit-billCity"
+                />
+              </div>
+              <div className="col-span-3">
+                <Label>Land</Label>
+                <Select 
+                  value={editForm.billCountry || "DE"} 
+                  onValueChange={(value) => setEditForm({...editForm, billCountry: value})}
+                >
+                  <SelectTrigger data-testid="select-edit-billCountry">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DE">Deutschland</SelectItem>
+                    <SelectItem value="AT">Österreich</SelectItem>
+                    <SelectItem value="CH">Schweiz</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Lieferadresse</h3>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="hasShipping"
+                  checked={hasShippingAddress}
+                  onCheckedChange={(checked) => {
+                    if (!checked) {
+                      setEditForm({
+                        ...editForm,
+                        shipStreet: "",
+                        shipZip: "",
+                        shipCity: "",
+                        shipCountry: ""
+                      });
+                    } else {
+                      setEditForm({
+                        ...editForm,
+                        shipCountry: "DE"
+                      });
+                    }
+                  }}
+                />
+                <Label htmlFor="hasShipping" className="cursor-pointer text-sm">
+                  Abweichende Lieferadresse
+                </Label>
+              </div>
+            </div>
+            
+            {hasShippingAddress && (
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-3">
+                  <Label>Straße & Hausnummer</Label>
+                  <Input
+                    value={editForm.shipStreet || ""}
+                    onChange={(e) => setEditForm({...editForm, shipStreet: e.target.value})}
+                    placeholder="Lieferstraße 456"
+                    data-testid="input-edit-shipStreet"
+                  />
+                </div>
+                <div>
+                  <Label>PLZ</Label>
+                  <Input
+                    value={editForm.shipZip || ""}
+                    onChange={(e) => setEditForm({...editForm, shipZip: e.target.value})}
+                    placeholder="67890"
+                    data-testid="input-edit-shipZip"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Label>Stadt</Label>
+                  <Input
+                    value={editForm.shipCity || ""}
+                    onChange={(e) => setEditForm({...editForm, shipCity: e.target.value})}
+                    placeholder="Lieferstadt"
+                    data-testid="input-edit-shipCity"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <Label>Land</Label>
+                  <Select 
+                    value={editForm.shipCountry || "DE"} 
+                    onValueChange={(value) => setEditForm({...editForm, shipCountry: value})}
+                  >
+                    <SelectTrigger data-testid="select-edit-shipCountry">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DE">Deutschland</SelectItem>
+                      <SelectItem value="AT">Österreich</SelectItem>
+                      <SelectItem value="CH">Schweiz</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="font-semibold">Auftragsdaten</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <Label>Titel *</Label>
+                <Input
+                  value={editForm.title || ""}
+                  onChange={(e) => setEditForm({...editForm, title: e.target.value})}
+                  placeholder="z.B. FC Bayern München Trikots 2024"
+                  data-testid="input-edit-title"
+                />
+              </div>
+              <div>
+                <Label>Kunde (Anzeigename) *</Label>
+                <Input
+                  value={editForm.customer || ""}
+                  onChange={(e) => setEditForm({...editForm, customer: e.target.value})}
+                  placeholder="Name für Auftragsübersicht"
+                  data-testid="input-edit-customer"
+                />
+              </div>
+              <div>
+                <Label>Abteilung *</Label>
+                <Select 
+                  value={editForm.department || "TEAMSPORT"} 
+                  onValueChange={(value) => setEditForm({...editForm, department: value})}
+                >
+                  <SelectTrigger data-testid="select-edit-department">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="TEAMSPORT">Teamsport</SelectItem>
+                    <SelectItem value="TEXTILVEREDELUNG">Textilveredelung</SelectItem>
+                    <SelectItem value="STICKEREI">Stickerei</SelectItem>
+                    <SelectItem value="DRUCK">Druck</SelectItem>
+                    <SelectItem value="SONSTIGES">Sonstiges</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Fälligkeitsdatum</Label>
+                <Input
+                  type="date"
+                  value={editForm.dueDate || ""}
+                  onChange={(e) => setEditForm({...editForm, dueDate: e.target.value})}
+                  data-testid="input-edit-dueDate"
+                />
+              </div>
+              <div>
+                <Label>Standort</Label>
+                <Input
+                  value={editForm.location || ""}
+                  onChange={(e) => setEditForm({...editForm, location: e.target.value})}
+                  placeholder="z.B. Regal A3"
+                  data-testid="input-edit-location"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>Notizen</Label>
+                <Textarea
+                  value={editForm.notes || ""}
+                  onChange={(e) => setEditForm({...editForm, notes: e.target.value})}
+                  placeholder="Zusätzliche Anmerkungen..."
+                  rows={3}
+                  data-testid="input-edit-notes"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} data-testid="button-cancel-edit">
+            Abbrechen
+          </Button>
+          <Button onClick={onSave} data-testid="button-save-edit">
+            <Save className="h-4 w-4 mr-2" />
+            Speichern
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
