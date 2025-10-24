@@ -791,6 +791,19 @@ function PositionsSection({ orderId, order }: { orderId: string; order: OrderWit
             </div>
           ) : (
             <div className="space-y-2">
+              {/* Table Header */}
+              <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/30 rounded-md text-xs font-medium text-muted-foreground">
+                <div className="col-span-2">Art.-Nr.</div>
+                <div className="col-span-3">Artikelname</div>
+                <div className="col-span-1 text-right">Menge</div>
+                <div className="col-span-1">Einheit</div>
+                <div className="col-span-2 text-right">Einzelpreis</div>
+                <div className="col-span-1 text-center">MwSt%</div>
+                <div className="col-span-1">Beschaffung</div>
+                <div className="col-span-1 text-right">Aktionen</div>
+              </div>
+              
+              {/* Position Rows */}
               {displayPositions.map((pos: any) => (
                 <PositionRow
                   key={pos.id}
@@ -850,6 +863,7 @@ function PositionRow({
   onCancel: () => void;
 }) {
   const [editedPos, setEditedPos] = useState(position);
+  const [priceMode, setPriceMode] = useState<"netto" | "brutto">("netto");
 
   const formatCurrency = (amount: number | Decimal | undefined | null) => {
     if (amount === undefined || amount === null) return "—";
@@ -873,10 +887,54 @@ function PositionRow({
     
     setEditedPos(updated);
   };
+  
+  const updatePriceField = (value: string) => {
+    const price = Number(value) || 0;
+    const vatRate = Number(editedPos.vatRate) || 0;
+    
+    let netPrice: number;
+    if (priceMode === "brutto") {
+      // Brutto → Netto umrechnen
+      netPrice = price / (1 + vatRate / 100);
+    } else {
+      netPrice = price;
+    }
+    
+    updateField("unitPriceNet", netPrice);
+  };
 
   if (isEditing) {
+    const displayPrice = priceMode === "brutto" 
+      ? editedPos.unitPriceNet * (1 + editedPos.vatRate / 100)
+      : editedPos.unitPriceNet;
+      
     return (
       <div className="border rounded-md p-3 space-y-3" data-testid={`position-row-edit-${position.id}`}>
+        {/* Brutto/Netto Switch */}
+        <div className="flex items-center gap-4 pb-2 border-b">
+          <Label className="text-xs text-muted-foreground">PREISEINGABE:</Label>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={priceMode === "netto" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPriceMode("netto")}
+              data-testid="button-price-netto"
+            >
+              Netto
+            </Button>
+            <Button
+              type="button"
+              variant={priceMode === "brutto" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPriceMode("brutto")}
+              data-testid="button-price-brutto"
+            >
+              Brutto
+            </Button>
+          </div>
+        </div>
+        
         <div className="grid grid-cols-12 gap-2">
           <div className="col-span-2">
             <Label className="text-xs">Art.-Nr.</Label>
@@ -916,14 +974,14 @@ function PositionRow({
             />
           </div>
           <div className="col-span-2">
-            <Label className="text-xs">Einzelpreis</Label>
+            <Label className="text-xs">Einzelpreis ({priceMode === "brutto" ? "Brutto" : "Netto"})</Label>
             <Input
               type="number"
-              value={editedPos.unitPriceNet}
-              onChange={(e) => updateField("unitPriceNet", e.target.value)}
+              value={displayPrice.toFixed(2)}
+              onChange={(e) => updatePriceField(e.target.value)}
               min="0"
               step="0.01"
-              data-testid="input-unitPriceNet"
+              data-testid="input-unitPrice"
             />
           </div>
           <div className="col-span-1">

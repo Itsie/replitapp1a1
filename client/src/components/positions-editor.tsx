@@ -31,6 +31,7 @@ interface PositionsEditorProps {
 
 export function PositionsEditor({ positions, onChange, readOnly = false }: PositionsEditorProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [priceMode, setPriceMode] = useState<"netto" | "brutto">("netto");
 
   const calculateLineTotal = (qty: number, unitPrice: number, vatRate: number) => {
     const net = qty * unitPrice;
@@ -72,6 +73,21 @@ export function PositionsEditor({ positions, onChange, readOnly = false }: Posit
 
     onChange(updated);
   };
+  
+  const updatePriceField = (index: number, value: string) => {
+    const price = parseFloat(value) || 0;
+    const vatRate = positions[index].vatRate;
+    
+    let netPrice: number;
+    if (priceMode === "brutto") {
+      // Brutto → Netto umrechnen
+      netPrice = price / (1 + vatRate / 100);
+    } else {
+      netPrice = price;
+    }
+    
+    updatePosition(index, "unitPriceNet", netPrice);
+  };
 
   const deletePosition = (index: number) => {
     onChange(positions.filter((_, i) => i !== index));
@@ -99,16 +115,45 @@ export function PositionsEditor({ positions, onChange, readOnly = false }: Posit
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
           <CardTitle>Positionen</CardTitle>
-          {!readOnly && (
-            <Button
-              onClick={addPosition}
-              size="sm"
-              data-testid="button-add-position"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Position hinzufügen
-            </Button>
-          )}
+          <div className="flex items-center gap-4">
+            {!readOnly && (
+              <>
+                {/* Brutto/Netto Switch */}
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-muted-foreground">PREISE:</Label>
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      variant={priceMode === "netto" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setPriceMode("netto")}
+                      data-testid="button-price-mode-netto"
+                    >
+                      Netto
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={priceMode === "brutto" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setPriceMode("brutto")}
+                      data-testid="button-price-mode-brutto"
+                    >
+                      Brutto
+                    </Button>
+                  </div>
+                </div>
+                
+                <Button
+                  onClick={addPosition}
+                  size="sm"
+                  data-testid="button-add-position"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Position hinzufügen
+                </Button>
+              </>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {positions.length === 0 ? (
@@ -124,7 +169,7 @@ export function PositionsEditor({ positions, onChange, readOnly = false }: Posit
                     <TableHead className="min-w-[200px]">Artikelname</TableHead>
                     <TableHead className="w-[80px]">Menge</TableHead>
                     <TableHead className="w-[80px]">Einheit</TableHead>
-                    <TableHead className="w-[120px]">Preis/Netto</TableHead>
+                    <TableHead className="w-[120px]">Preis/{priceMode === "brutto" ? "Brutto" : "Netto"}</TableHead>
                     <TableHead className="w-[80px]">MwSt %</TableHead>
                     <TableHead className="w-[100px]">Netto</TableHead>
                     <TableHead className="w-[100px]">MwSt</TableHead>
@@ -198,11 +243,15 @@ export function PositionsEditor({ positions, onChange, readOnly = false }: Posit
                         ) : (
                           <Input
                             type="number"
-                            value={position.unitPriceNet}
-                            onChange={(e) => updatePosition(index, "unitPriceNet", parseFloat(e.target.value) || 0)}
+                            value={
+                              priceMode === "brutto"
+                                ? (position.unitPriceNet * (1 + position.vatRate / 100)).toFixed(2)
+                                : position.unitPriceNet.toFixed(2)
+                            }
+                            onChange={(e) => updatePriceField(index, e.target.value)}
                             min="0"
                             step="0.01"
-                            data-testid={`input-unitPriceNet-${index}`}
+                            data-testid={`input-unitPrice-${index}`}
                             className="h-8"
                           />
                         )}
