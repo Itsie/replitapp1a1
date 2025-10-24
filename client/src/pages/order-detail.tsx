@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { ArrowLeft, Check, AlertTriangle, Copy, ExternalLink } from "lucide-react";
@@ -864,7 +864,12 @@ function PositionRow({
 }
 
 function SizeTableTab({ order, setSizeDialogOpen }: { order: OrderWithRelations; setSizeDialogOpen: (open: boolean) => void }) {
-  if (!order.sizeTable) {
+  const { data: sizeTableData } = useQuery<{ scheme: string; rows: any[]; comment: string | null; countsBySize: Record<string, number> }>({
+    queryKey: [`/api/orders/${order.id}/size`],
+    enabled: !!order.sizeTable,
+  });
+  
+  if (!order.sizeTable || !sizeTableData) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-16">
@@ -883,33 +888,90 @@ function SizeTableTab({ order, setSizeDialogOpen }: { order: OrderWithRelations;
     );
   }
   
+  const { scheme, rows, comment, countsBySize } = sizeTableData;
+  const totalCount = Object.values(countsBySize).reduce((sum, count) => sum + count, 0);
+  
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
-        <CardTitle>Größentabelle</CardTitle>
-        <Button onClick={() => setSizeDialogOpen(true)} variant="outline" data-testid="button-edit-sizetable">
-          Bearbeiten
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <Label className="text-xs text-muted-foreground">SCHEMA</Label>
-          <p data-testid="text-scheme">{order.sizeTable.scheme}</p>
-        </div>
-        {order.sizeTable.comment && (
-          <div>
-            <Label className="text-xs text-muted-foreground">KOMMENTAR</Label>
-            <p data-testid="text-comment">{order.sizeTable.comment}</p>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+          <CardTitle>Größentabelle</CardTitle>
+          <Button onClick={() => setSizeDialogOpen(true)} variant="outline" data-testid="button-edit-sizetable">
+            Bearbeiten
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">SCHEMA</Label>
+              <p data-testid="text-scheme">{scheme}</p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">GESAMT ANZAHL</Label>
+              <p data-testid="text-total-count" className="font-semibold">{totalCount}</p>
+            </div>
           </div>
-        )}
-        <div>
-          <Label className="text-xs text-muted-foreground">DATEN</Label>
-          <pre className="bg-muted p-4 rounded-md text-xs overflow-auto" data-testid="text-rows">
-            {JSON.stringify(order.sizeTable.rows, null, 2)}
-          </pre>
-        </div>
-      </CardContent>
-    </Card>
+          {comment && (
+            <div>
+              <Label className="text-xs text-muted-foreground">KOMMENTAR</Label>
+              <p data-testid="text-comment">{comment}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Größenverteilung</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {Object.entries(countsBySize).map(([size, count]) => (
+              <div
+                key={size}
+                className="border rounded-md p-3 flex items-center justify-between"
+                data-testid={`size-${size}`}
+              >
+                <span className="font-medium text-sm">{size}</span>
+                <Badge variant="secondary" data-testid={`count-${size}`}>{count}</Badge>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+      
+      {rows.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Detaillierte Roster</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted">
+                  <tr>
+                    <th className="text-left p-2">Nr.</th>
+                    <th className="text-left p-2">Größe</th>
+                    <th className="text-left p-2">Name</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, index) => (
+                    <tr key={index} className="border-t" data-testid={`row-${index}`}>
+                      <td className="p-2" data-testid={`row-number-${index}`}>{row.number}</td>
+                      <td className="p-2" data-testid={`row-size-${index}`}>{row.size}</td>
+                      <td className="p-2 text-muted-foreground" data-testid={`row-name-${index}`}>
+                        {row.name || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 
@@ -967,9 +1029,27 @@ function PrintAssetsTab({ order, setAssetDialogOpen }: { order: OrderWithRelatio
 
 function SizeTableDialog({ orderId, open, onOpenChange }: { orderId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
+  const [step, setStep] = useState(1);
   const [scheme, setScheme] = useState("ALPHA");
-  const [rows, setRows] = useState('[{"size":"M","qty":10,"name":"","number":""}]');
+  const [sizeEntries, setSizeEntries] = useState<Array<{ size: string; qty: number }>>([{ size: "", qty: 0 }]);
   const [comment, setComment] = useState("");
+  
+  // Fetch existing size table data
+  const { data: existingData } = useQuery<{ scheme: string; rows: any[]; comment: string | null }>({
+    queryKey: [`/api/orders/${orderId}/size`],
+    enabled: open,
+  });
+  
+  // Load existing data when dialog opens
+  useEffect(() => {
+    if (existingData) {
+      setScheme(existingData.scheme);
+      setComment(existingData.comment || "");
+      if (existingData.rows && existingData.rows.length > 0) {
+        setSizeEntries(existingData.rows.map(r => ({ size: r.size, qty: Number(r.number) || 0 })));
+      }
+    }
+  }, [existingData]);
   
   const sizeMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -983,6 +1063,7 @@ function SizeTableDialog({ orderId, open, onOpenChange }: { orderId: string; ope
         description: "Die Größentabelle wurde erfolgreich gespeichert.",
       });
       onOpenChange(false);
+      setStep(1);
     },
     onError: () => {
       toast({
@@ -993,74 +1074,194 @@ function SizeTableDialog({ orderId, open, onOpenChange }: { orderId: string; ope
     },
   });
   
-  const handleSubmit = () => {
-    try {
-      const parsedRows = JSON.parse(rows);
-      sizeMutation.mutate({ scheme, rows: parsedRows, comment: comment || null });
-    } catch (e) {
+  const addSizeEntry = () => {
+    setSizeEntries([...sizeEntries, { size: "", qty: 0 }]);
+  };
+  
+  const removeSizeEntry = (index: number) => {
+    setSizeEntries(sizeEntries.filter((_, i) => i !== index));
+  };
+  
+  const updateSizeEntry = (index: number, field: 'size' | 'qty', value: string | number) => {
+    const updated = [...sizeEntries];
+    if (field === 'size') {
+      updated[index].size = value as string;
+    } else {
+      updated[index].qty = Number(value);
+    }
+    setSizeEntries(updated);
+  };
+  
+  const handleNext = () => {
+    // Validation
+    const hasEmptySizes = sizeEntries.some(e => !e.size || e.qty <= 0);
+    if (hasEmptySizes) {
       toast({
         title: "Fehler",
-        description: "Ungültiges JSON-Format",
+        description: "Bitte füllen Sie alle Größen und Mengen aus.",
         variant: "destructive",
       });
+      return;
     }
+    setStep(2);
+  };
+  
+  const handleSave = () => {
+    // Convert sizeEntries to rows format with number field
+    const rows = sizeEntries.map(e => ({
+      size: e.size,
+      number: e.qty.toString(),
+      name: "",
+    }));
+    
+    sizeMutation.mutate({ 
+      scheme, 
+      rows, 
+      comment: comment || null,
+      allowDuplicates: false,
+    });
   };
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl" data-testid="dialog-sizetable">
         <DialogHeader>
-          <DialogTitle>Größentabelle anlegen</DialogTitle>
+          <DialogTitle>
+            {step === 1 ? "Größen & Mengen" : "Zusammenfassung"}
+          </DialogTitle>
           <DialogDescription>
-            Definieren Sie Größen und Mengen für diesen Auftrag.
+            {step === 1 ? "Definieren Sie Größen und Mengen für diesen Auftrag." : "Überprüfen Sie Ihre Eingaben"}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>Schema</Label>
-            <Select value={scheme} onValueChange={setScheme}>
-              <SelectTrigger data-testid="select-scheme">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALPHA">ALPHA (XS, S, M, L, XL)</SelectItem>
-                <SelectItem value="NUMERIC">NUMERIC (40, 42, 44...)</SelectItem>
-                <SelectItem value="CUSTOM">CUSTOM</SelectItem>
-              </SelectContent>
-            </Select>
+        
+        {step === 1 ? (
+          <div className="space-y-4">
+            <div>
+              <Label>Schema</Label>
+              <Select value={scheme} onValueChange={setScheme}>
+                <SelectTrigger data-testid="select-scheme">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALPHA">ALPHA (XS, S, M, L, XL)</SelectItem>
+                  <SelectItem value="NUMERIC">NUMERIC (40, 42, 44...)</SelectItem>
+                  <SelectItem value="CUSTOM">CUSTOM</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <Label>Größeneinträge</Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={addSizeEntry}
+                  data-testid="button-add-size"
+                >
+                  + Hinzufügen
+                </Button>
+              </div>
+              
+              {sizeEntries.map((entry, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <Input
+                    placeholder="Größe (z.B. M, 42)"
+                    value={entry.size}
+                    onChange={(e) => updateSizeEntry(index, 'size', e.target.value)}
+                    data-testid={`input-size-${index}`}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Menge"
+                    value={entry.qty || ""}
+                    onChange={(e) => updateSizeEntry(index, 'qty', e.target.value)}
+                    data-testid={`input-qty-${index}`}
+                    className="w-24"
+                    min="1"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeSizeEntry(index)}
+                    data-testid={`button-remove-${index}`}
+                    disabled={sizeEntries.length === 1}
+                  >
+                    ×
+                  </Button>
+                </div>
+              ))}
+            </div>
+            
+            <div>
+              <Label>Kommentar (optional)</Label>
+              <Input
+                data-testid="input-comment"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Zusätzliche Informationen..."
+              />
+            </div>
           </div>
-          
-          <div>
-            <Label>Daten (JSON)</Label>
-            <Textarea
-              data-testid="textarea-rows"
-              value={rows}
-              onChange={(e) => setRows(e.target.value)}
-              rows={10}
-              className="font-mono text-xs"
-              placeholder='[{"size":"M","qty":10,"name":"Mustermann","number":"10"}]'
-            />
+        ) : (
+          <div className="space-y-4">
+            <div className="border rounded p-4">
+              <h4 className="font-semibold mb-2">Übersicht</h4>
+              <div className="text-sm space-y-1">
+                <p><strong>Schema:</strong> {scheme}</p>
+                <p><strong>Anzahl Einträge:</strong> {sizeEntries.length}</p>
+                <p><strong>Gesamt Menge:</strong> {sizeEntries.reduce((sum, e) => sum + e.qty, 0)}</p>
+              </div>
+            </div>
+            
+            <div className="max-h-64 overflow-y-auto border rounded">
+              <table className="w-full text-sm">
+                <thead className="bg-muted sticky top-0">
+                  <tr>
+                    <th className="text-left p-2">Größe</th>
+                    <th className="text-right p-2">Menge</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sizeEntries.map((entry, index) => (
+                    <tr key={index} className="border-t">
+                      <td className="p-2">{entry.size}</td>
+                      <td className="text-right p-2">{entry.qty}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            {comment && (
+              <div>
+                <Label>Kommentar</Label>
+                <p className="text-sm text-muted-foreground">{comment}</p>
+              </div>
+            )}
           </div>
-          
-          <div>
-            <Label>Kommentar (optional)</Label>
-            <Input
-              data-testid="input-comment"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Zusätzliche Informationen..."
-            />
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-sizetable">
-              Abbrechen
+        )}
+        
+        <DialogFooter>
+          {step === 2 && (
+            <Button variant="outline" onClick={() => setStep(1)} data-testid="button-back">
+              Zurück
             </Button>
-            <Button onClick={handleSubmit} disabled={sizeMutation.isPending} data-testid="button-save-sizetable">
+          )}
+          <Button variant="outline" onClick={() => {onOpenChange(false); setStep(1);}} data-testid="button-cancel-sizetable">
+            Abbrechen
+          </Button>
+          {step === 1 ? (
+            <Button onClick={handleNext} data-testid="button-next">
+              Weiter
+            </Button>
+          ) : (
+            <Button onClick={handleSave} disabled={sizeMutation.isPending} data-testid="button-save-sizetable">
               {sizeMutation.isPending ? "Wird gespeichert..." : "Speichern"}
             </Button>
-          </DialogFooter>
-        </div>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
