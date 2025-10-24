@@ -112,6 +112,16 @@ export default function OrdersList() {
   
   const columns: ColumnDef<OrderWithRelations>[] = [
     {
+      accessorKey: "displayOrderNumber",
+      header: "Auftragsnummer",
+      cell: ({ row }) => (
+        <div className="font-mono text-sm min-w-[140px]">
+          {row.original.displayOrderNumber || "—"}
+        </div>
+      ),
+      enableSorting: true,
+    },
+    {
       accessorKey: "title",
       header: "Titel",
       cell: ({ row }) => (
@@ -460,6 +470,11 @@ export default function OrdersList() {
                     data-testid={`card-order-${order.id}`}
                   >
                     <div>
+                      {order.displayOrderNumber && (
+                        <div className="font-mono text-xs text-muted-foreground mb-1">
+                          {order.displayOrderNumber}
+                        </div>
+                      )}
                       <h3 className="font-medium text-base truncate mb-1">{order.title}</h3>
                       <p className="text-sm text-muted-foreground truncate">{order.customer}</p>
                     </div>
