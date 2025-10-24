@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { Order, SizeTable, PrintAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState } from "@prisma/client";
+import type { Order, SizeTable, PrintAsset, OrderAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState } from "@prisma/client";
 
 // Re-export Prisma types
-export type { Order, SizeTable, PrintAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState };
+export type { Order, SizeTable, PrintAsset, OrderAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState };
 
 // Enum schemas
 export const orderSourceSchema = z.enum(["JTL", "INTERNAL"]);
@@ -92,6 +92,26 @@ export const insertPrintAssetSchema = z.object({
   required: z.boolean().default(true),
 });
 
+// Schema for OrderAsset (new asset system)
+export const assetKindSchema = z.enum(["PRINT", "FILE"]);
+
+export const insertOrderAssetSchema = z.object({
+  kind: assetKindSchema,
+  label: z.string().min(1, "Label is required"),
+  path: z.string().optional().nullable(),
+  url: z.string().optional().nullable(),
+  ext: z.string().optional().nullable(),
+  size: z.number().int().positive().optional().nullable(),
+  required: z.boolean().default(false),
+  notes: z.string().optional().nullable(),
+}).refine(
+  (data) => data.path || data.url,
+  {
+    message: "Either path or url must be provided",
+    path: ["path"],
+  }
+);
+
 // Position procurement status enum
 export const procurementStatusSchema = z.enum(["NONE", "ORDER_NEEDED", "ORDERED", "RECEIVED"]);
 
@@ -148,6 +168,8 @@ export type InsertSizeTable = z.infer<typeof insertSizeTableSchema>;
 export type CSVImport = z.infer<typeof csvImportSchema>;
 export type SizeTableRow = z.infer<typeof sizeTableRowSchema>;
 export type InsertPrintAsset = z.infer<typeof insertPrintAssetSchema>;
+export type InsertOrderAsset = z.infer<typeof insertOrderAssetSchema>;
+export type AssetKind = z.infer<typeof assetKindSchema>;
 export type InsertPosition = z.infer<typeof insertPositionSchema>;
 export type UpdatePosition = z.infer<typeof updatePositionSchema>;
 
@@ -163,5 +185,6 @@ export type SizeTableResponse = {
 export type OrderWithRelations = Order & {
   sizeTable: SizeTable | null;
   printAssets: PrintAsset[];
+  orderAssets: OrderAsset[];
   positions: OrderPosition[];
 };

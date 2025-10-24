@@ -95,6 +95,7 @@ model Order {
   totalGross          Decimal?
   sizeTable           SizeTable?
   printAssets         PrintAsset[]
+  orderAssets         OrderAsset[]
   positions           OrderPosition[]
   timeSlots           TimeSlot[]
   invoiceQueueItem    InvoiceQueueItem?
@@ -140,6 +141,22 @@ model PrintAsset {
   url       String
   required  Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+model OrderAsset {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  kind        String   // "PRINT" | "FILE"
+  label       String
+  path        String?  // internal UNC path like //server/share/folder/file.pdf
+  url         String?  // hosted file url (uploaded to /uploads)
+  ext         String?
+  size        Int?     // bytes
+  required    Boolean  @default(false)  // only relevant for PRINT
+  notes       String?
+  createdAt   DateTime @default(now())
+  uploadedBy  String?  // optional user id/name
 }
 
 model TimeSlot {

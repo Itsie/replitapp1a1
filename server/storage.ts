@@ -1,5 +1,5 @@
-import { PrismaClient, type OrderSource, type Department, type WorkflowState, type OrderPosition, Prisma } from "@prisma/client";
-import type { InsertOrder, InsertSizeTable, InsertPrintAsset, InsertPosition, UpdatePosition, OrderWithRelations } from "@shared/schema";
+import { PrismaClient, type OrderSource, type Department, type WorkflowState, type OrderPosition, type OrderAsset, Prisma } from "@prisma/client";
+import type { InsertOrder, InsertSizeTable, InsertPrintAsset, InsertOrderAsset, InsertPosition, UpdatePosition, OrderWithRelations } from "@shared/schema";
 
 const prisma = new PrismaClient();
 
@@ -23,6 +23,11 @@ export interface IStorage {
   
   // Print Assets
   addPrintAsset(orderId: string, asset: InsertPrintAsset): Promise<OrderWithRelations>;
+  
+  // Order Assets
+  getOrderAssets(orderId: string): Promise<OrderAsset[]>;
+  createOrderAsset(orderId: string, asset: InsertOrderAsset): Promise<OrderAsset>;
+  deleteOrderAsset(orderId: string, assetId: string): Promise<{ filePath?: string }>;
   
   // Positions
   getPositions(orderId: string): Promise<OrderPosition[]>;
@@ -99,6 +104,7 @@ export class PrismaStorage implements IStorage {
       include: {
         sizeTable: true,
         printAssets: true,
+        orderAssets: true,
         positions: true,
       },
       orderBy: {
@@ -114,6 +120,7 @@ export class PrismaStorage implements IStorage {
       include: {
         sizeTable: true,
         printAssets: true,
+        orderAssets: true,
         positions: true,
       },
     });
@@ -134,6 +141,7 @@ export class PrismaStorage implements IStorage {
       include: {
         sizeTable: true,
         printAssets: true,
+        orderAssets: true,
         positions: true,
       },
     });
@@ -208,6 +216,7 @@ export class PrismaStorage implements IStorage {
       include: {
         sizeTable: true,
         printAssets: true,
+        orderAssets: true,
         positions: true,
       },
     });
@@ -293,11 +302,90 @@ export class PrismaStorage implements IStorage {
     return await this.getOrderById(orderId) as OrderWithRelations;
   }
   
+  async getOrderAssets(orderId: string): Promise<OrderAsset[]> {
+    // Verify order exists
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    
+    if (!order) {
+      throw new Error('Order not found');
+    }
+    
+    return await prisma.orderAsset.findMany({
+      where: { orderId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+  
+  async createOrderAsset(orderId: string, assetData: InsertOrderAsset): Promise<OrderAsset> {
+    // Verify order exists
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    
+    if (!order) {
+      throw new Error('Order not found');
+    }
+    
+    // Normalize UNC path if provided
+    let normalizedPath = assetData.path;
+    if (normalizedPath) {
+      // Convert backslashes to forward slashes and ensure it starts with //
+      normalizedPath = normalizedPath.replace(/\\/g, '/');
+      if (!normalizedPath.startsWith('//')) {
+        throw new Error('UNC path must start with // or \\\\');
+      }
+    }
+    
+    return await prisma.orderAsset.create({
+      data: {
+        orderId,
+        kind: assetData.kind,
+        label: assetData.label,
+        path: normalizedPath,
+        url: assetData.url,
+        ext: assetData.ext,
+        size: assetData.size,
+        required: assetData.required || false,
+        notes: assetData.notes,
+      },
+    });
+  }
+  
+  async deleteOrderAsset(orderId: string, assetId: string): Promise<{ filePath?: string }> {
+    // Verify asset exists and belongs to order
+    const asset = await prisma.orderAsset.findUnique({
+      where: { id: assetId },
+    });
+    
+    if (!asset) {
+      throw new Error('Asset not found');
+    }
+    
+    if (asset.orderId !== orderId) {
+      throw new Error('Asset does not belong to this order');
+    }
+    
+    // Delete from database
+    await prisma.orderAsset.delete({
+      where: { id: assetId },
+    });
+    
+    // Return file path if it's an uploaded file (for deletion by route handler)
+    if (asset.url && asset.url.startsWith('/uploads/')) {
+      return { filePath: asset.url };
+    }
+    
+    return {};
+  }
+  
   async submitOrder(orderId: string): Promise<OrderWithRelations> {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
         printAssets: true,
+        orderAssets: true,
         sizeTable: true,
         positions: true,
       },
@@ -312,16 +400,20 @@ export class PrismaStorage implements IStorage {
       throw new Error('At least one position is required');
     }
     
-    // Check if at least one required print asset exists
-    const hasRequiredAsset = order.printAssets.some(asset => asset.required);
-    
-    if (!hasRequiredAsset) {
-      throw new Error('Required print asset missing');
-    }
-    
-    // Check if size table is required and exists for TEAMSPORT department
-    if (order.department === 'TEAMSPORT' && !order.sizeTable) {
-      throw new Error('Size table required for TEAMSPORT department');
+    // NEW: Check for PRINT assets (path or url) for TEAMSPORT department
+    if (order.department === 'TEAMSPORT') {
+      const hasPrintAsset = order.orderAssets.some(
+        asset => asset.kind === 'PRINT' && (asset.path || asset.url)
+      );
+      
+      if (!hasPrintAsset) {
+        throw new Error('At least one PRINT asset (path or upload) is required for TEAMSPORT department');
+      }
+      
+      // Check if size table exists for TEAMSPORT
+      if (!order.sizeTable) {
+        throw new Error('Size table required for TEAMSPORT department');
+      }
     }
     
     const updated = await prisma.order.update({
@@ -330,6 +422,7 @@ export class PrismaStorage implements IStorage {
       include: {
         sizeTable: true,
         printAssets: true,
+        orderAssets: true,
         positions: true,
       },
     });
