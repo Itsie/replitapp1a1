@@ -147,6 +147,8 @@ export default function OrderDetail() {
   
   const canSubmit = order.workflow !== "FUER_PROD" && order.workflow !== "IN_PROD" && order.workflow !== "FERTIG";
   const hasRequiredAssets = order.printAssets.some(asset => asset.required);
+  const hasPositions = order.positions && order.positions.length > 0;
+  const canSubmitOrder = hasRequiredAssets && hasPositions;
   const hasShippingAddress = order.shipStreet || order.shipZip || order.shipCity || order.shipCountry;
   
   return (
@@ -202,7 +204,7 @@ export default function OrderDetail() {
                 <div>
                   <Button
                     onClick={() => setConfirmSubmitOpen(true)}
-                    disabled={!hasRequiredAssets || submitMutation.isPending}
+                    disabled={!canSubmitOrder || submitMutation.isPending}
                     data-testid="button-submit"
                   >
                     <Check className="h-4 w-4 mr-2" />
@@ -210,9 +212,15 @@ export default function OrderDetail() {
                   </Button>
                 </div>
               </TooltipTrigger>
-              {!hasRequiredAssets && (
+              {!canSubmitOrder && (
                 <TooltipContent>
-                  <p>Benötigte Druckdaten fehlen</p>
+                  <p>
+                    {!hasPositions && !hasRequiredAssets
+                      ? "Positionen und Druckdaten fehlen"
+                      : !hasPositions
+                      ? "Positionen fehlen"
+                      : "Benötigte Druckdaten fehlen"}
+                  </p>
                 </TooltipContent>
               )}
             </Tooltip>
@@ -223,6 +231,7 @@ export default function OrderDetail() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList data-testid="tabs-list">
           <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
+          <TabsTrigger value="positions" data-testid="tab-positions">Positionen</TabsTrigger>
           <TabsTrigger value="sizes" data-testid="tab-sizes">Größen</TabsTrigger>
           <TabsTrigger value="assets" data-testid="tab-assets">Druckdaten</TabsTrigger>
           <TabsTrigger value="history" data-testid="tab-history">Historie</TabsTrigger>
@@ -409,6 +418,10 @@ export default function OrderDetail() {
             </div>
           </div>
         </TabsContent>
+
+        <TabsContent value="positions">
+          <PositionsTab orderId={orderId!} order={order} />
+        </TabsContent>
         
         <TabsContent value="sizes">
           <SizeTableTab order={order} setSizeDialogOpen={setSizeDialogOpen} />
@@ -469,6 +482,384 @@ export default function OrderDetail() {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+function PositionsTab({ orderId, order }: { orderId: string; order: OrderWithRelations }) {
+  const { toast } = useToast();
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [localPositions, setLocalPositions] = useState<any[]>([]);
+
+  const { data: positions = [], isLoading } = useQuery<any[]>({
+    queryKey: [`/api/orders/${orderId}/positions`],
+  });
+
+  // Update local state when positions change
+  useState(() => {
+    if (positions.length > 0) {
+      setLocalPositions(positions);
+    }
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", `/api/orders/${orderId}/positions`, [data]);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}/positions`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}`] });
+      toast({
+        title: "Position erstellt",
+        description: "Die Position wurde erfolgreich erstellt.",
+      });
+      setEditingId(null);
+    },
+    onError: () => {
+      toast({
+        title: "Fehler",
+        description: "Die Position konnte nicht erstellt werden.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ posId, data }: { posId: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/orders/${orderId}/positions/${posId}`, data);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}/positions`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}`] });
+      toast({
+        title: "Position aktualisiert",
+        description: "Die Position wurde erfolgreich aktualisiert.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Fehler",
+        description: "Die Position konnte nicht aktualisiert werden.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (posId: number) => {
+      const res = await apiRequest("DELETE", `/api/orders/${orderId}/positions/${posId}`);
+      if (!res.ok) throw new Error("Delete failed");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}/positions`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}`] });
+      toast({
+        title: "Position gelöscht",
+        description: "Die Position wurde erfolgreich gelöscht.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Fehler",
+        description: "Die Position konnte nicht gelöscht werden.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addPosition = () => {
+    const newPos = {
+      id: -Date.now(), // temporary ID
+      articleName: "",
+      articleNumber: null,
+      qty: 1,
+      unit: "Stk",
+      unitPriceNet: 0,
+      vatRate: 19,
+      procurement: "NONE",
+      supplierNote: null,
+      lineNet: 0,
+      lineVat: 0,
+      lineGross: 0,
+    };
+    setLocalPositions([...positions, newPos]);
+    setEditingId(newPos.id);
+  };
+
+  const savePosition = (pos: any) => {
+    if (pos.id < 0) {
+      // New position
+      const { id, lineNet, lineVat, lineGross, ...data } = pos;
+      createMutation.mutate(data);
+    } else {
+      // Update existing
+      const { id, lineNet, lineVat, lineGross, orderId, ...data } = pos;
+      updateMutation.mutate({ posId: id, data });
+    }
+  };
+
+  const formatCurrency = (amount: number | undefined | null) => {
+    if (amount === undefined || amount === null) return "—";
+    return new Intl.NumberFormat("de-DE", {
+      style: "currency",
+      currency: "EUR",
+    }).format(Number(amount));
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-12 text-center">
+          <p className="text-muted-foreground">Lade Positionen...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const displayPositions = localPositions.length > 0 ? localPositions : positions;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+          <CardTitle>Positionen</CardTitle>
+          <Button
+            onClick={addPosition}
+            size="sm"
+            data-testid="button-add-position"
+          >
+            Position hinzufügen
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {displayPositions.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground" data-testid="text-no-positions">
+              Keine Positionen vorhanden. Fügen Sie eine Position hinzu.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {displayPositions.map((pos: any, index: number) => (
+                <PositionRow
+                  key={pos.id}
+                  position={pos}
+                  isEditing={editingId === pos.id}
+                  onEdit={() => setEditingId(pos.id)}
+                  onSave={savePosition}
+                  onDelete={() => pos.id > 0 && deleteMutation.mutate(pos.id)}
+                  onCancel={() => {
+                    if (pos.id < 0) {
+                      setLocalPositions(positions);
+                    }
+                    setEditingId(null);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {displayPositions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Summen</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="flex justify-between">
+              <Label>Gesamt Netto:</Label>
+              <span className="font-medium" data-testid="text-total-net">
+                {formatCurrency(order.totalNet)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <Label>Gesamt MwSt:</Label>
+              <span className="font-medium" data-testid="text-total-vat">
+                {formatCurrency(order.totalVat)}
+              </span>
+            </div>
+            <div className="flex justify-between border-t pt-2">
+              <Label className="text-lg">Gesamt Brutto:</Label>
+              <span className="text-lg font-bold" data-testid="text-total-gross">
+                {formatCurrency(order.totalGross)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function PositionRow({
+  position,
+  isEditing,
+  onEdit,
+  onSave,
+  onDelete,
+  onCancel,
+}: {
+  position: any;
+  isEditing: boolean;
+  onEdit: () => void;
+  onSave: (pos: any) => void;
+  onDelete: () => void;
+  onCancel: () => void;
+}) {
+  const [editedPos, setEditedPos] = useState(position);
+
+  const formatCurrency = (amount: number | undefined | null) => {
+    if (amount === undefined || amount === null) return "—";
+    return new Intl.NumberFormat("de-DE", {
+      style: "currency",
+      currency: "EUR",
+    }).format(Number(amount));
+  };
+
+  if (!isEditing) {
+    return (
+      <div
+        className="border rounded-md p-3 hover-elevate"
+        data-testid={`position-${position.id}`}
+      >
+        <div className="grid grid-cols-12 gap-2 text-sm">
+          <div className="col-span-1">
+            <Label className="text-xs text-muted-foreground">Art.-Nr</Label>
+            <p>{position.articleNumber || "—"}</p>
+          </div>
+          <div className="col-span-3">
+            <Label className="text-xs text-muted-foreground">Artikelname</Label>
+            <p className="font-medium">{position.articleName}</p>
+          </div>
+          <div className="col-span-1">
+            <Label className="text-xs text-muted-foreground">Menge</Label>
+            <p>{position.qty}</p>
+          </div>
+          <div className="col-span-1">
+            <Label className="text-xs text-muted-foreground">Einheit</Label>
+            <p>{position.unit}</p>
+          </div>
+          <div className="col-span-1">
+            <Label className="text-xs text-muted-foreground">Preis</Label>
+            <p>{formatCurrency(position.unitPriceNet)}</p>
+          </div>
+          <div className="col-span-1">
+            <Label className="text-xs text-muted-foreground">MwSt</Label>
+            <p>{position.vatRate}%</p>
+          </div>
+          <div className="col-span-1">
+            <Label className="text-xs text-muted-foreground">Netto</Label>
+            <p className="font-medium">{formatCurrency(position.lineNet)}</p>
+          </div>
+          <div className="col-span-1">
+            <Label className="text-xs text-muted-foreground">Brutto</Label>
+            <p className="font-medium">{formatCurrency(position.lineGross)}</p>
+          </div>
+          <div className="col-span-2 flex items-end gap-1">
+            <Button variant="outline" size="sm" onClick={onEdit} data-testid={`button-edit-${position.id}`}>
+              Bearbeiten
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onDelete} data-testid={`button-delete-${position.id}`}>
+              Löschen
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border rounded-md p-3 bg-muted/50" data-testid={`position-edit-${position.id}`}>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-xs">Art.-Nr</Label>
+            <Input
+              value={editedPos.articleNumber || ""}
+              onChange={(e) => setEditedPos({ ...editedPos, articleNumber: e.target.value || null })}
+              placeholder="Art.-Nr"
+              data-testid={`input-edit-articleNumber-${position.id}`}
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Artikelname *</Label>
+            <Input
+              value={editedPos.articleName}
+              onChange={(e) => setEditedPos({ ...editedPos, articleName: e.target.value })}
+              placeholder="Artikelname"
+              required
+              data-testid={`input-edit-articleName-${position.id}`}
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          <div>
+            <Label className="text-xs">Menge</Label>
+            <Input
+              type="number"
+              value={editedPos.qty}
+              onChange={(e) => setEditedPos({ ...editedPos, qty: parseFloat(e.target.value) || 0 })}
+              min="0.01"
+              step="0.01"
+              data-testid={`input-edit-qty-${position.id}`}
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Einheit</Label>
+            <Input
+              value={editedPos.unit}
+              onChange={(e) => setEditedPos({ ...editedPos, unit: e.target.value })}
+              data-testid={`input-edit-unit-${position.id}`}
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Preis/Netto</Label>
+            <Input
+              type="number"
+              value={editedPos.unitPriceNet}
+              onChange={(e) => setEditedPos({ ...editedPos, unitPriceNet: parseFloat(e.target.value) || 0 })}
+              min="0"
+              step="0.01"
+              data-testid={`input-edit-unitPriceNet-${position.id}`}
+            />
+          </div>
+          <div>
+            <Label className="text-xs">MwSt %</Label>
+            <Select
+              value={editedPos.vatRate.toString()}
+              onValueChange={(value) => setEditedPos({ ...editedPos, vatRate: parseInt(value) })}
+            >
+              <SelectTrigger data-testid={`select-edit-vatRate-${position.id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">0%</SelectItem>
+                <SelectItem value="7">7%</SelectItem>
+                <SelectItem value="19">19%</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCancel}
+            data-testid={`button-cancel-edit-${position.id}`}
+          >
+            Abbrechen
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => onSave(editedPos)}
+            disabled={!editedPos.articleName}
+            data-testid={`button-save-edit-${position.id}`}
+          >
+            Speichern
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
