@@ -16,6 +16,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import logoImage from "@assets/1a-textillogo_1761317866259.png";
 
 interface NavSection {
   label: string;
@@ -113,13 +114,18 @@ export function AppSidebar() {
       {/* Branding */}
       <div className="flex h-14 items-center gap-2 border-b px-4">
         {!collapsed && (
-          <>
-            <div className="text-lg font-semibold tracking-tight">1aShirt</div>
-            <span className="text-xs text-muted-foreground">Produktion</span>
-          </>
+          <img 
+            src={logoImage} 
+            alt="1aShirt Logo" 
+            className="h-8 w-auto object-contain brightness-0 dark:brightness-100"
+          />
         )}
         {collapsed && (
-          <div className="text-lg font-semibold tracking-tight">1a</div>
+          <img 
+            src={logoImage} 
+            alt="1a" 
+            className="h-6 w-auto object-contain brightness-0 dark:brightness-100"
+          />
         )}
       </div>
 
