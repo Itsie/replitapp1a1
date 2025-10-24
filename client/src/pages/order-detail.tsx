@@ -368,46 +368,47 @@ export default function OrderDetail() {
               )}
               
               <div className="grid lg:grid-cols-12 gap-4">
-                {/* Left Column - Customer & Billing Info */}
+                {/* Left Column - Customer & Addresses */}
                 <div className="lg:col-span-8 space-y-4">
-                  {/* Combined Customer & Billing Address Card */}
+                  {/* Combined Customer & Addresses Card */}
                   <Card className="rounded-2xl border-muted/60 h-full">
                     <CardHeader>
-                      <CardTitle>Kunde & Rechnungsadresse</CardTitle>
+                      <CardTitle>Kunde & Adressen</CardTitle>
                     </CardHeader>
-                    <CardContent className="h-full">
-                      {/* Two-column grid */}
-                      <div className="grid grid-cols-2 gap-4 h-full">
-                        {/* Left: Contact Info */}
-                        <div className="space-y-3">
-                          <div>
-                            <Label className="text-xs text-muted-foreground">E-MAIL</Label>
-                            {order.customerEmail ? (
-                              <p className="text-primary hover:underline" data-testid="link-email">
-                                <a href={`mailto:${order.customerEmail}`}>
-                                  {order.customerEmail}
-                                </a>
-                              </p>
-                            ) : (
-                              <p>—</p>
-                            )}
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground">TELEFON</Label>
-                            {order.customerPhone ? (
-                              <p className="text-primary hover:underline" data-testid="link-phone">
-                                <a href={`tel:${order.customerPhone}`}>
-                                  {order.customerPhone}
-                                </a>
-                              </p>
-                            ) : (
-                              <p>—</p>
-                            )}
-                          </div>
+                    <CardContent>
+                      {/* Customer Contact Info */}
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">E-MAIL</Label>
+                          {order.customerEmail ? (
+                            <p className="text-primary hover:underline" data-testid="link-email">
+                              <a href={`mailto:${order.customerEmail}`}>
+                                {order.customerEmail}
+                              </a>
+                            </p>
+                          ) : (
+                            <p>—</p>
+                          )}
                         </div>
-                        
-                        {/* Right: Billing Address with Gradient */}
+                        <div>
+                          <Label className="text-xs text-muted-foreground">TELEFON</Label>
+                          {order.customerPhone ? (
+                            <p className="text-primary hover:underline" data-testid="link-phone">
+                              <a href={`tel:${order.customerPhone}`}>
+                                {order.customerPhone}
+                              </a>
+                            </p>
+                          ) : (
+                            <p>—</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Addresses Grid */}
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Billing Address with Blue/Primary Gradient */}
                         <div className="rounded-xl p-4 bg-gradient-to-br from-primary/5 via-primary/3 to-transparent border border-primary/10">
+                          <Label className="text-xs text-muted-foreground mb-2 block">RECHNUNGSADRESSE</Label>
                           <div className="space-y-3">
                             <div>
                               <Label className="text-xs text-muted-foreground">FIRMA</Label>
@@ -433,25 +434,44 @@ export default function OrderDetail() {
                             </div>
                           </div>
                         </div>
+                        
+                        {/* Shipping Address with Green/Accent Gradient or Same-as-billing */}
+                        {hasShippingAddress ? (
+                          <div className="rounded-xl p-4 bg-gradient-to-br from-green-500/5 via-emerald-500/3 to-transparent border border-green-500/10">
+                            <Label className="text-xs text-muted-foreground mb-2 block">LIEFERADRESSE</Label>
+                            <div className="space-y-3">
+                              <div>
+                                <Label className="text-xs text-muted-foreground">FIRMA</Label>
+                                <p className="font-medium">{order.company || "—"}</p>
+                              </div>
+                              <div>
+                                <Label className="text-xs text-muted-foreground">ANSPRECHPARTNER</Label>
+                                <p>
+                                  {order.contactFirstName && order.contactLastName
+                                    ? `${order.contactFirstName} ${order.contactLastName}`
+                                    : "—"}
+                                </p>
+                              </div>
+                              <div>
+                                <Label className="text-xs text-muted-foreground">ADRESSE</Label>
+                                <div className="space-y-1">
+                                  <p data-testid="text-ship-street">{order.shipStreet || "—"}</p>
+                                  <p data-testid="text-ship-city">
+                                    {order.shipZip && order.shipCity ? `${order.shipZip} ${order.shipCity}` : "—"}
+                                  </p>
+                                  <p data-testid="text-ship-country">{order.shipCountry || "—"}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-xl p-4 bg-gradient-to-br from-muted/30 to-transparent border border-muted/20 flex items-center justify-center">
+                            <p className="text-sm text-muted-foreground italic">Gleiche wie Rechnungsadresse</p>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
-                  
-                  {/* Shipping Address Card (if different) */}
-                  {hasShippingAddress && (
-                    <Card className="rounded-2xl border-muted/60">
-                      <CardHeader>
-                        <CardTitle>Lieferadresse</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-1">
-                        <p data-testid="text-ship-street">{order.shipStreet || "—"}</p>
-                        <p data-testid="text-ship-city">
-                          {order.shipZip && order.shipCity ? `${order.shipZip} ${order.shipCity}` : "—"}
-                        </p>
-                        <p data-testid="text-ship-country">{order.shipCountry || "—"}</p>
-                      </CardContent>
-                    </Card>
-                  )}
                 </div>
                 
                 {/* Right Column - Order Data */}
