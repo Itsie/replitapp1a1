@@ -166,7 +166,7 @@ export default function OrderNew() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto pb-40">
+      <div className="flex-1 overflow-auto">
         <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -605,45 +605,45 @@ export default function OrderNew() {
                     onChange={setPositions}
                   />
                 </div>
+
+                <div className="lg:col-span-12">
+                  <div className="border-t pt-6 mt-6">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex-1">
+                        {showValidationHint && missingFields.length > 0 && (
+                          <div className="flex items-center gap-2 text-destructive text-sm">
+                            <AlertTriangle className="h-4 w-4 shrink-0" />
+                            <span className="font-medium">
+                              Noch {missingFields.length} Pflichtfeld{missingFields.length > 1 ? 'er' : ''} fehlt: {missingFields.join(", ")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setLocation("/orders")}
+                          data-testid="button-cancel"
+                        >
+                          Abbrechen
+                        </Button>
+                        <Button
+                          type="submit"
+                          disabled={!isFormValid || createMutation.isPending}
+                          onClick={form.handleSubmit(onSubmit)}
+                          data-testid="button-create"
+                        >
+                          {createMutation.isPending ? "Wird erstellt..." : "Auftrag erstellen"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </form>
           </Form>
-        </div>
-      </div>
-
-      <div className="fixed bottom-0 left-0 right-0 border-t bg-background z-10">
-        <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex-1">
-              {showValidationHint && missingFields.length > 0 && (
-                <div className="flex items-center gap-2 text-destructive text-sm">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span className="font-medium">
-                    Noch {missingFields.length} Pflichtfeld{missingFields.length > 1 ? 'er' : ''} fehlt: {missingFields.join(", ")}
-                  </span>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex gap-2 shrink-0">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setLocation("/orders")}
-                data-testid="button-cancel"
-              >
-                Abbrechen
-              </Button>
-              <Button
-                type="submit"
-                disabled={!isFormValid || createMutation.isPending}
-                onClick={form.handleSubmit(onSubmit)}
-                data-testid="button-create"
-              >
-                {createMutation.isPending ? "Wird erstellt..." : "Auftrag erstellen"}
-              </Button>
-            </div>
-          </div>
         </div>
       </div>
     </div>
