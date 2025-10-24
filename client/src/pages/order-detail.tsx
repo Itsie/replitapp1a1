@@ -22,6 +22,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SizeTableEditor } from "@/components/size-table-editor";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AttachmentsTab } from "@/components/attachments-tab";
+import { Decimal } from "@prisma/client/runtime/library";
 
 export default function OrderDetail() {
   const [, params] = useRoute("/orders/:id");
@@ -450,68 +451,70 @@ export default function OrderDetail() {
                 </div>
                 
                 {/* Right Column - Order Data */}
-                <div className="lg:col-span-4 space-y-4">
+                <div className="lg:col-span-4">
                   {/* Order Details Card */}
                   <Card className="rounded-2xl border-muted/60">
                     <CardHeader>
                       <CardTitle>Auftrag</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">ABTEILUNG</Label>
+                    <CardContent className="space-y-4">
+                      {/* Two-column grid for compact layout */}
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                         <div>
-                          <Badge variant="outline" data-testid="badge-department">{order.department}</Badge>
+                          <Label className="text-xs text-muted-foreground">ABTEILUNG</Label>
+                          <div>
+                            <Badge variant="outline" data-testid="badge-department">{order.department}</Badge>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">QUELLE</Label>
+                          <div>
+                            <Badge variant={getSourceBadgeVariant(order.source)} data-testid="badge-source-detail">
+                              {order.source}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">WORKFLOW</Label>
+                          <div>
+                            <Badge variant={getWorkflowBadgeVariant(order.workflow)} data-testid="badge-workflow-detail">
+                              {order.workflow}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">FÄLLIGKEITSDATUM</Label>
+                          <p data-testid="text-duedate">{formatDate(order.dueDate)}</p>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">STANDORT</Label>
+                          <p data-testid="text-location">{order.location || "—"}</p>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">ERSTELLT AM</Label>
+                          <p data-testid="text-created">{formatDate(order.createdAt)}</p>
                         </div>
                       </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">QUELLE</Label>
-                        <div>
-                          <Badge variant={getSourceBadgeVariant(order.source)} data-testid="badge-source-detail">
-                            {order.source}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">WORKFLOW</Label>
-                        <div>
-                          <Badge variant={getWorkflowBadgeVariant(order.workflow)} data-testid="badge-workflow-detail">
-                            {order.workflow}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">FÄLLIGKEITSDATUM</Label>
-                        <p data-testid="text-duedate">{formatDate(order.dueDate)}</p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">STANDORT</Label>
-                        <p data-testid="text-location">{order.location || "—"}</p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">ERSTELLT AM</Label>
-                        <p data-testid="text-created">{formatDate(order.createdAt)}</p>
-                      </div>
+                      
                       {order.notes && (
                         <div>
                           <Label className="text-xs text-muted-foreground">NOTIZEN</Label>
                           <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{order.notes}</p>
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
-                  
-                  {/* Quick Link to Assets Tab */}
-                  <Card className="rounded-2xl border-muted/60">
-                    <CardContent className="p-4">
-                      <Button
-                        variant="outline"
-                        onClick={() => setActiveTab("assets")}
-                        className="w-full"
-                        data-testid="button-open-assets"
-                      >
-                        <FileText className="h-4 w-4 mr-2" />
-                        Druckdaten öffnen
-                      </Button>
+                      
+                      {/* Druckdaten Button */}
+                      <div className="pt-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => setActiveTab("assets")}
+                          className="w-full"
+                          data-testid="button-open-assets"
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          Druckdaten öffnen
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 </div>
@@ -713,7 +716,7 @@ function PositionsSection({ orderId, order }: { orderId: string; order: OrderWit
     setEditingId(null);
   };
 
-  const formatCurrency = (amount: number | undefined | null) => {
+  const formatCurrency = (amount: number | Decimal | undefined | null) => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("de-DE", {
       style: "currency",
@@ -814,7 +817,7 @@ function PositionRow({
 }) {
   const [editedPos, setEditedPos] = useState(position);
 
-  const formatCurrency = (amount: number | undefined | null) => {
+  const formatCurrency = (amount: number | Decimal | undefined | null) => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("de-DE", {
       style: "currency",
