@@ -371,37 +371,23 @@ export default function OrderDetail() {
                 {/* Left Column - Customer & Billing Info */}
                 <div className="lg:col-span-8 space-y-4">
                   {/* Combined Customer & Billing Address Card */}
-                  <Card className="rounded-2xl border-muted/60">
+                  <Card className="rounded-2xl border-muted/60 h-full">
                     <CardHeader>
                       <CardTitle>Kunde & Rechnungsadresse</CardTitle>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="h-full">
                       {/* Two-column grid */}
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                        {/* Left: Customer Info */}
+                      <div className="grid grid-cols-2 gap-4 h-full">
+                        {/* Left: Contact Info */}
                         <div className="space-y-3">
-                          <div>
-                            <Label className="text-xs text-muted-foreground">FIRMA</Label>
-                            <p data-testid="text-company">{order.company || "—"}</p>
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground">ANSPRECHPARTNER</Label>
-                            <p data-testid="text-contact">
-                              {order.contactFirstName && order.contactLastName
-                                ? `${order.contactFirstName} ${order.contactLastName}`
-                                : "—"}
-                            </p>
-                          </div>
                           <div>
                             <Label className="text-xs text-muted-foreground">E-MAIL</Label>
                             {order.customerEmail ? (
-                              <a
-                                href={`mailto:${order.customerEmail}`}
-                                className="text-primary hover:underline"
-                                data-testid="link-email"
-                              >
-                                {order.customerEmail}
-                              </a>
+                              <p className="text-primary hover:underline" data-testid="link-email">
+                                <a href={`mailto:${order.customerEmail}`}>
+                                  {order.customerEmail}
+                                </a>
+                              </p>
                             ) : (
                               <p>—</p>
                             )}
@@ -409,28 +395,42 @@ export default function OrderDetail() {
                           <div>
                             <Label className="text-xs text-muted-foreground">TELEFON</Label>
                             {order.customerPhone ? (
-                              <a
-                                href={`tel:${order.customerPhone}`}
-                                className="text-primary hover:underline"
-                                data-testid="link-phone"
-                              >
-                                {order.customerPhone}
-                              </a>
+                              <p className="text-primary hover:underline" data-testid="link-phone">
+                                <a href={`tel:${order.customerPhone}`}>
+                                  {order.customerPhone}
+                                </a>
+                              </p>
                             ) : (
                               <p>—</p>
                             )}
                           </div>
                         </div>
                         
-                        {/* Right: Billing Address */}
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-3 block">RECHNUNGSADRESSE</Label>
-                          <div className="space-y-1">
-                            <p data-testid="text-bill-street">{order.billStreet || "—"}</p>
-                            <p data-testid="text-bill-city">
-                              {order.billZip && order.billCity ? `${order.billZip} ${order.billCity}` : "—"}
-                            </p>
-                            <p data-testid="text-bill-country">{order.billCountry || "—"}</p>
+                        {/* Right: Billing Address with Gradient */}
+                        <div className="rounded-xl p-4 bg-gradient-to-br from-primary/5 via-primary/3 to-transparent border border-primary/10">
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-xs text-muted-foreground">FIRMA</Label>
+                              <p className="font-medium" data-testid="text-company">{order.company || "—"}</p>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">ANSPRECHPARTNER</Label>
+                              <p data-testid="text-contact">
+                                {order.contactFirstName && order.contactLastName
+                                  ? `${order.contactFirstName} ${order.contactLastName}`
+                                  : "—"}
+                              </p>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">ADRESSE</Label>
+                              <div className="space-y-1">
+                                <p data-testid="text-bill-street">{order.billStreet || "—"}</p>
+                                <p data-testid="text-bill-city">
+                                  {order.billZip && order.billCity ? `${order.billZip} ${order.billCity}` : "—"}
+                                </p>
+                                <p data-testid="text-bill-country">{order.billCountry || "—"}</p>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -457,11 +457,11 @@ export default function OrderDetail() {
                 {/* Right Column - Order Data */}
                 <div className="lg:col-span-4">
                   {/* Order Details Card */}
-                  <Card className="rounded-2xl border-muted/60">
+                  <Card className="rounded-2xl border-muted/60 h-full flex flex-col">
                     <CardHeader>
                       <CardTitle>Auftrag</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="space-y-4 flex-1 flex flex-col">
                       {/* Two-column grid for compact layout */}
                       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                         <div>
@@ -507,8 +507,8 @@ export default function OrderDetail() {
                         </div>
                       )}
                       
-                      {/* Druckdaten Button */}
-                      <div className="pt-2">
+                      {/* Druckdaten Button - pushed to bottom */}
+                      <div className="mt-auto pt-4">
                         <Button
                           variant="outline"
                           onClick={() => setActiveTab("assets")}
@@ -704,12 +704,22 @@ function PositionsSection({ orderId, order }: { orderId: string; order: OrderWit
   };
 
   const savePosition = (pos: any) => {
+    // Convert string values to numbers for backend validation
+    const convertedData = {
+      articleName: pos.articleName,
+      articleNumber: pos.articleNumber || null,
+      qty: Number(pos.qty),
+      unit: pos.unit,
+      unitPriceNet: Number(pos.unitPriceNet),
+      vatRate: Number(pos.vatRate),
+      procurement: pos.procurement,
+      supplierNote: pos.supplierNote || null,
+    };
+    
     if (pos.isNew) {
-      const { id, isNew, lineNet, lineVat, lineGross, ...data } = pos;
-      createMutation.mutate(data);
+      createMutation.mutate(convertedData);
     } else {
-      const { id, lineNet, lineVat, lineGross, orderId: _, createdAt, updatedAt, ...data } = pos;
-      updateMutation.mutate({ posId: id, data });
+      updateMutation.mutate({ posId: pos.id, data: convertedData });
     }
   };
 
