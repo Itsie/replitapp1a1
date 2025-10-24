@@ -1,0 +1,47 @@
+TASK
+Clean up and align the Orders overview table  Remove row selection checkboxes and fix column/header alignment. Right-align dates and currency.
+
+REQUIREMENTS
+
+A) Remove selection checkboxes
+- TanStack Table: disable row selection globally.
+  • enableRowSelection: false
+  • enableMultiRowSelection: false
+  • show “select all” checkbox in header = false
+- Do not render any Checkbox component in header or rows.
+
+B) Column set and order (keep as is, just align):
+  Titel | Kunde | Abteilung | Quelle | Status | Fälligkeit | Größe | Druckdaten | Gesamt (Brutto) | Aktionen
+
+C) Alignment and width
+- Use a consistent cell/header class for each column to avoid drift.
+- Numeric/date columns right-aligned:
+  • Fälligkeit → text-right, tabular-nums
+  • Gesamt (Brutto) → text-right, tabular-nums, fixed min-w (e.g. min-w-[7.5rem])
+- Other columns left-aligned.
+- Table layout:
+  • <table className="w-full table-fixed border-collapse">
+  • Set sensible min/max widths via colDefs or className (e.g. Kunde min-w-[14rem], Titel min-w-[16rem]).
+- Ensure header cells and body cells share the exact same padding classes (px-3 py-2) to prevent misalignment.
+
+D) Localization
+- “Quelle: INTERNAL” already changed to “Intern”; ensure the badge text uses the localized string everywhere (table + cards).
+
+E) View toggle stability
+- When switching between card/table view, state must not re-create the table instance.
+- Memoize columns and data with useMemo, and avoid conditional hook calls.
+- No freeze/crash when toggling.
+
+F) Remove bulk actions UI
+- Since selection is off, hide any bulk action bar, selection counters, or keyboard selection handlers.
+
+G) Acceptance
+- No checkboxes in header or rows.
+- Column headers line up exactly with cells; currency and date are right-aligned.
+- Toggling views is instant, no CPU spike or errors in console.
+- Visual test: “Gesamt (Brutto)” header and amounts line up perfectly on the right edge.
+
+Implementation hints (Tailwind):
+- const cellBase = "px-3 py-2 whitespace-nowrap";
+- const cellRight = cellBase + " text-right tabular-nums";
+- Apply the same classes to <th> and <td> for each column.
