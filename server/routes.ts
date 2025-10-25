@@ -610,7 +610,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ) {
           return res.status(412).json({ error: error.message });
         }
-        if (error.message === "Time slot must be within working hours (07:00-18:00)") {
+        if (
+          error.message === "Time slot must be within working hours (07:00-18:00)" ||
+          error.message.includes("Kapazität") ||
+          error.message.includes("Capacity exceeded")
+        ) {
           return res.status(422).json({ error: error.message });
         }
       }

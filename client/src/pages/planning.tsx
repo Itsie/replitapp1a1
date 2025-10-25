@@ -271,14 +271,14 @@ export default function PlanningPage() {
         <div className="flex items-center gap-2">
           {/* Department Filter */}
           <Select
-            value={selectedDepartment}
-            onValueChange={(val) => setSelectedDepartment(val as Department | "")}
+            value={selectedDepartment || "ALL"}
+            onValueChange={(val) => setSelectedDepartment(val === "ALL" ? "" : val as Department)}
           >
             <SelectTrigger className="w-48" data-testid="select-department">
               <SelectValue placeholder="Alle Bereiche" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="" data-testid="option-all-departments">Alle Bereiche</SelectItem>
+              <SelectItem value="ALL" data-testid="option-all-departments">Alle Bereiche</SelectItem>
               <SelectItem value="TEAMSPORT">Teamsport</SelectItem>
               <SelectItem value="TEXTILVEREDELUNG">Textilveredelung</SelectItem>
               <SelectItem value="STICKEREI">Stickerei</SelectItem>
@@ -456,11 +456,11 @@ export default function PlanningPage() {
               <div className="space-y-2">
                 <Label htmlFor="order">Auftrag</Label>
                 <Select
-                  value={slotDialog.data.orderId || ""}
+                  value={slotDialog.data.orderId || "NONE"}
                   onValueChange={(val) =>
                     setSlotDialog({
                       ...slotDialog,
-                      data: { ...slotDialog.data!, orderId: val || null },
+                      data: { ...slotDialog.data!, orderId: val === "NONE" ? null : val },
                     })
                   }
                 >
@@ -468,7 +468,7 @@ export default function PlanningPage() {
                     <SelectValue placeholder="Kein Auftrag (Blocker)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Kein Auftrag (Blocker)</SelectItem>
+                    <SelectItem value="NONE">Kein Auftrag (Blocker)</SelectItem>
                     {fuerProdOrders.map((order) => (
                       <SelectItem key={order.id} value={order.id}>
                         {order.displayOrderNumber || order.id.slice(0, 8)} - {order.title}
