@@ -291,8 +291,9 @@ export default function OrdersList() {
       accessorKey: "title",
       header: () => <div className="px-3 py-2">Titel</div>,
       cell: ({ row }) => (
-        <div className={`${cellBase} font-medium min-w-[16rem]`}>{row.original.title}</div>
+        <div className={`${cellBase} font-medium`}>{row.original.title}</div>
       ),
+      size: 250,
       enableSorting: true,
     },
     {
@@ -302,8 +303,9 @@ export default function OrdersList() {
         const name = row.original.company || 
           `${row.original.contactFirstName || ''} ${row.original.contactLastName || ''}`.trim() ||
           row.original.customer;
-        return <div className={`${cellBase} min-w-[14rem]`}>{name}</div>;
+        return <div className={cellBase}>{name}</div>;
       },
+      size: 220,
     },
     {
       accessorKey: "department",
@@ -313,6 +315,7 @@ export default function OrdersList() {
           <Badge variant="outline">{row.original.department}</Badge>
         </div>
       ),
+      size: 180,
     },
     {
       accessorKey: "source",
@@ -327,6 +330,7 @@ export default function OrdersList() {
           </div>
         );
       },
+      size: 110,
     },
     {
       accessorKey: "workflow",
@@ -338,6 +342,7 @@ export default function OrdersList() {
           </Badge>
         </div>
       ),
+      size: 180,
       enableSorting: true,
     },
     {
@@ -353,6 +358,7 @@ export default function OrdersList() {
           </div>
         );
       },
+      size: 140,
       enableSorting: true,
     },
     {
@@ -367,6 +373,7 @@ export default function OrdersList() {
           )}
         </div>
       ),
+      size: 100,
     },
     {
       id: "assets",
@@ -383,6 +390,7 @@ export default function OrdersList() {
           </div>
         );
       },
+      size: 120,
     },
     {
       accessorKey: "totalGross",
@@ -393,11 +401,12 @@ export default function OrdersList() {
           return <div className={cellRight}>—</div>;
         }
         return (
-          <div className={`${cellRight} font-medium min-w-[7.5rem]`}>
+          <div className={`${cellRight} font-medium`}>
             {formatCurrency(Number(total))}
           </div>
         );
       },
+      size: 150,
       enableSorting: true,
     },
     {
@@ -412,6 +421,7 @@ export default function OrdersList() {
           </Link>
         </div>
       ),
+      size: 100,
       enableHiding: false,
     },
   ], []);
@@ -769,6 +779,7 @@ export default function OrdersList() {
                       <TableHead 
                         key={header.id} 
                         className="sticky top-0 bg-background z-10 border-b p-0"
+                        style={{ width: header.getSize() }}
                       >
                         {header.isPlaceholder ? null : header.column.getCanSort() ? (
                           <button
@@ -808,8 +819,8 @@ export default function OrdersList() {
                 {isLoading ? (
                   [...Array(8)].map((_, i) => (
                     <TableRow key={i}>
-                      {columns.map((_, j) => (
-                        <TableCell key={j} className="p-0">
+                      {columns.map((col, j) => (
+                        <TableCell key={j} className="p-0" style={{ width: col.size }}>
                           <div className="px-3 py-2">
                             <Skeleton className="h-4 w-full" />
                           </div>
@@ -857,6 +868,7 @@ export default function OrdersList() {
                         <TableCell 
                           key={cell.id}
                           className="p-0"
+                          style={{ width: cell.column.getSize() }}
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
