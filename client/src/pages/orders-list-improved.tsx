@@ -289,83 +289,79 @@ export default function OrdersList() {
   const columns: ColumnDef<OrderWithRelations>[] = useMemo(() => [
     {
       accessorKey: "title",
-      header: () => <div className="px-3 py-2">Titel</div>,
+      header: () => <div className="px-3 py-2 w-64">Titel</div>,
       cell: ({ row }) => (
-        <div className={`${cellBase} font-medium`}>{row.original.title}</div>
+        <div className={`${cellBase} font-medium w-64 truncate`} title={row.original.title}>
+          {row.original.title}
+        </div>
       ),
-      size: 250,
       enableSorting: true,
     },
     {
       accessorKey: "customer",
-      header: () => <div className="px-3 py-2">Kunde</div>,
+      header: () => <div className="px-3 py-2 w-56">Kunde</div>,
       cell: ({ row }) => {
         const name = row.original.company || 
           `${row.original.contactFirstName || ''} ${row.original.contactLastName || ''}`.trim() ||
           row.original.customer;
-        return <div className={cellBase}>{name}</div>;
+        return <div className={`${cellBase} w-56 truncate`} title={name}>{name}</div>;
       },
-      size: 220,
     },
     {
       accessorKey: "department",
-      header: () => <div className="px-3 py-2">Abteilung</div>,
+      header: () => <div className="px-3 py-2 w-44">Abteilung</div>,
       cell: ({ row }) => (
-        <div className={cellBase}>
+        <div className={`${cellBase} w-44`}>
           <Badge variant="outline">{row.original.department}</Badge>
         </div>
       ),
-      size: 180,
     },
     {
       accessorKey: "source",
-      header: () => <div className="px-3 py-2">Quelle</div>,
+      header: () => <div className="px-3 py-2 w-28">Quelle</div>,
       cell: ({ row }) => {
         const sourceLabel = row.original.source === "INTERNAL" ? "Intern" : row.original.source;
         return (
-          <div className={cellBase}>
+          <div className={`${cellBase} w-28`}>
             <Badge variant={getSourceBadgeVariant(row.original.source)}>
               {sourceLabel}
             </Badge>
           </div>
         );
       },
-      size: 110,
     },
     {
       accessorKey: "workflow",
-      header: () => <div className="px-3 py-2">Status</div>,
+      header: () => <div className="px-3 py-2 w-44">Status</div>,
       cell: ({ row }) => (
-        <div className={cellBase}>
+        <div className={`${cellBase} w-44`}>
           <Badge variant={getWorkflowBadgeVariant(row.original.workflow)}>
             {row.original.workflow}
           </Badge>
         </div>
       ),
-      size: 180,
       enableSorting: true,
     },
     {
       accessorKey: "dueDate",
-      header: () => <div className="px-3 py-2 text-right">Fälligkeit</div>,
+      header: () => <div className="px-3 py-2 text-right w-36">Fälligkeit</div>,
       cell: ({ row }) => {
         const { label, variant } = getDueDateStatus(row.original.dueDate);
         return (
-          <div className={cellRight}>
+          <div className={`${cellRight} w-36`}>
             <Badge variant={variant} className="min-w-[6.5rem] justify-center tabular-nums">
               {label}
             </Badge>
           </div>
         );
       },
-      size: 140,
       enableSorting: true,
     },
     {
       id: "sizeTable",
-      header: () => <div className="px-3 py-2 text-center">Größe</div>,
+      header: () => <div className="px-3 py-2 text-center w-24">Größe</div>,
       cell: ({ row }) => (
-        <div className={`${cellBase} text-center`}>
+        <div className={`${cellBase} text-center w-24`}>
           {row.original.sizeTable ? (
             <Check className="h-4 w-4 text-green-600 inline" />
           ) : (
@@ -373,15 +369,14 @@ export default function OrdersList() {
           )}
         </div>
       ),
-      size: 100,
     },
     {
       id: "assets",
-      header: () => <div className="px-3 py-2 text-center">Druckdaten</div>,
+      header: () => <div className="px-3 py-2 text-center w-28">Druckdaten</div>,
       cell: ({ row }) => {
         const requiredAssets = row.original.printAssets.filter(a => a.required);
         return (
-          <div className={`${cellBase} text-center`}>
+          <div className={`${cellBase} text-center w-28`}>
             {requiredAssets.length > 0 ? (
               <Badge variant="secondary">{requiredAssets.length}</Badge>
             ) : (
@@ -390,30 +385,28 @@ export default function OrdersList() {
           </div>
         );
       },
-      size: 120,
     },
     {
       accessorKey: "totalGross",
-      header: () => <div className="px-3 py-2 text-right">Gesamt (Brutto)</div>,
+      header: () => <div className="px-3 py-2 text-right w-40">Gesamt (Brutto)</div>,
       cell: ({ row }) => {
         const total = row.original.totalGross;
         if (total === null || total === undefined) {
-          return <div className={cellRight}>—</div>;
+          return <div className={`${cellRight} w-40`}>—</div>;
         }
         return (
-          <div className={`${cellRight} font-medium`}>
+          <div className={`${cellRight} font-medium w-40`}>
             {formatCurrency(Number(total))}
           </div>
         );
       },
-      size: 150,
       enableSorting: true,
     },
     {
       id: "actions",
-      header: () => <div className="px-3 py-2">Aktionen</div>,
+      header: () => <div className="px-3 py-2 w-24">Aktionen</div>,
       cell: ({ row }) => (
-        <div className={cellBase}>
+        <div className={`${cellBase} w-24`}>
           <Link href={`/orders/${row.original.id}`}>
             <Button variant="ghost" size="icon" data-testid={`button-view-${row.original.id}`}>
               <Eye className="h-4 w-4" />
@@ -421,7 +414,6 @@ export default function OrdersList() {
           </Link>
         </div>
       ),
-      size: 100,
       enableHiding: false,
     },
   ], []);
@@ -441,8 +433,10 @@ export default function OrdersList() {
     getSortedRowModel: getSortedRowModel(),
   });
   
-  // Get sorted data for card view
-  const sortedOrders = table.getRowModel().rows.map(row => row.original);
+  // Get sorted data for card view - memoized to prevent re-renders
+  const sortedOrders = useMemo(() => {
+    return table.getRowModel().rows.map(row => row.original);
+  }, [table.getRowModel().rows]);
   
   // CSV Export function
   const exportToCSV = () => {
@@ -771,7 +765,7 @@ export default function OrdersList() {
       {viewMode === 'table' && (
         <div className="border rounded-2xl overflow-hidden">
           <div className="relative overflow-x-auto max-h-[calc(100vh-400px)]">
-            <Table className="w-full table-fixed border-collapse">
+            <Table className="w-full border-collapse">
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
@@ -779,7 +773,6 @@ export default function OrdersList() {
                       <TableHead 
                         key={header.id} 
                         className="sticky top-0 bg-background z-10 border-b p-0"
-                        style={{ width: header.getSize() }}
                       >
                         {header.isPlaceholder ? null : header.column.getCanSort() ? (
                           <button
@@ -819,8 +812,8 @@ export default function OrdersList() {
                 {isLoading ? (
                   [...Array(8)].map((_, i) => (
                     <TableRow key={i}>
-                      {columns.map((col, j) => (
-                        <TableCell key={j} className="p-0" style={{ width: col.size }}>
+                      {columns.map((_, j) => (
+                        <TableCell key={j} className="p-0">
                           <div className="px-3 py-2">
                             <Skeleton className="h-4 w-full" />
                           </div>
@@ -868,7 +861,6 @@ export default function OrdersList() {
                         <TableCell 
                           key={cell.id}
                           className="p-0"
-                          style={{ width: cell.column.getSize() }}
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
