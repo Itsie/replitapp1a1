@@ -197,6 +197,7 @@ export const insertWorkCenterSchema = z.object({
   name: z.string().min(1, "Name is required"),
   department: departmentSchema,
   capacityMin: z.number().int().positive("Capacity must be positive").default(660),
+  concurrentCapacity: z.number().int().min(1, "Concurrent capacity must be at least 1").default(2),
   active: z.boolean().default(true),
 });
 
@@ -205,6 +206,7 @@ export const updateWorkCenterSchema = z.object({
   name: z.string().min(1, "Name is required").optional(),
   department: departmentSchema.optional(),
   capacityMin: z.number().int().positive("Capacity must be positive").optional(),
+  concurrentCapacity: z.number().int().min(1, "Concurrent capacity must be at least 1").optional(),
   active: z.boolean().optional(),
 });
 

@@ -711,6 +711,7 @@ export class PrismaStorage implements IStorage {
         name: data.name,
         department: data.department,
         capacityMin: data.capacityMin ?? 660,
+        concurrentCapacity: data.concurrentCapacity ?? 2,
         active: data.active ?? true,
       },
     });
@@ -752,34 +753,71 @@ export class PrismaStorage implements IStorage {
 
   // ===== TimeSlot Methods =====
 
-  private async checkTimeSlotOverlap(
+  private async checkTimeSlotCapacity(
     date: string,
     startMin: number,
     lengthMin: number,
     workCenterId: string,
+    isBlocked: boolean,
     excludeId?: string
-  ): Promise<boolean> {
+  ): Promise<{ hasCapacity: boolean; message?: string }> {
     const endMin = startMin + lengthMin;
     const dateObj = new Date(date);
 
+    // Get WorkCenter to check concurrentCapacity
+    const workCenter = await prisma.workCenter.findUnique({
+      where: { id: workCenterId },
+    });
+
+    if (!workCenter) {
+      return { hasCapacity: false, message: 'WorkCenter not found' };
+    }
+
+    const { concurrentCapacity } = workCenter;
+
+    // Get all existing slots for this WorkCenter on this date (excluding current slot if updating)
     const where: any = {
       workCenterId,
       date: dateObj,
-      blocked: false,
-      NOT: excludeId ? { id: excludeId } : undefined,
     };
+    if (excludeId) {
+      where.NOT = { id: excludeId };
+    }
 
     const existingSlots = await prisma.timeSlot.findMany({ where });
 
-    for (const slot of existingSlots) {
-      const slotEnd = slot.startMin + slot.lengthMin;
-      // Check overlap: NOT (existingEnd <= newStart OR existingStart >= newEnd)
-      if (!(slotEnd <= startMin || slot.startMin >= endMin)) {
-        return true; // Overlap detected
+    // For each minute in the proposed slot's range, check capacity usage
+    for (let min = startMin; min < endMin; min++) {
+      let usedCapacity = 0;
+
+      for (const slot of existingSlots) {
+        const slotEnd = slot.startMin + slot.lengthMin;
+        
+        // Check if this minute falls within the slot's range
+        if (min >= slot.startMin && min < slotEnd) {
+          if (slot.blocked) {
+            // Blocker takes full capacity
+            usedCapacity += concurrentCapacity;
+          } else {
+            // Regular slot takes 1 unit
+            usedCapacity += 1;
+          }
+        }
+      }
+
+      // Calculate capacity needed for the new slot
+      const newSlotCapacity = isBlocked ? concurrentCapacity : 1;
+
+      // Check if adding the new slot would exceed capacity
+      if (usedCapacity + newSlotCapacity > concurrentCapacity) {
+        return {
+          hasCapacity: false,
+          message: `Kapazität überschritten um ${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')} Uhr (${usedCapacity}/${concurrentCapacity} belegt)`,
+        };
       }
     }
 
-    return false;
+    return { hasCapacity: true };
   }
 
   private async validateTimeSlot(
@@ -826,17 +864,18 @@ export class PrismaStorage implements IStorage {
       }
     }
 
-    // Check overlap
-    const hasOverlap = await this.checkTimeSlotOverlap(
+    // Check capacity
+    const capacityCheck = await this.checkTimeSlotCapacity(
       merged.date! as unknown as string,
       startMin,
       lengthMin,
       merged.workCenterId!,
+      merged.blocked ?? false,
       existingSlot?.id
     );
 
-    if (hasOverlap) {
-      throw new Error('Time slot overlaps with existing slot');
+    if (!capacityCheck.hasCapacity) {
+      throw new Error(capacityCheck.message || 'Capacity exceeded');
     }
   }
 
