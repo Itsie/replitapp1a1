@@ -64,12 +64,13 @@ model User {
 }
 
 model WorkCenter {
-  id          String     @id @default(cuid())
-  name        String
-  department  Department
-  capacityMin Int        @default(660)
-  active      Boolean    @default(true)
-  timeSlots   TimeSlot[]
+  id                 String     @id @default(cuid())
+  name               String
+  department         Department
+  capacityMin        Int        @default(660)
+  concurrentCapacity Int        @default(2)
+  active             Boolean    @default(true)
+  timeSlots          TimeSlot[]
 }
 
 model Order {

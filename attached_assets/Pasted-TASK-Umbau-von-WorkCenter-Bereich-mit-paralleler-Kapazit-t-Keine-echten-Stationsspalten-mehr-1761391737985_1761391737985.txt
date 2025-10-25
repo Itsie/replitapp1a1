@@ -1,0 +1,35 @@
+TASK: Umbau von "WorkCenter" → "Bereich" mit paralleler Kapazität. Keine echten Stationsspalten mehr.
+Behalte Tabellen/Endpoints-namen kompatibel, aber erweitere das Modell und Validation.
+
+SCHEMA-ÄNDERUNG (Migration)
+- WorkCenter: füge Feld `concurrentCapacity Int @default(2)` hinzu  // max parallele Slots im Bereich
+- TimeSlot bleibt wie ist (date, startMin, lengthMin, workCenterId, orderId?, blocked, note?)
+
+VALIDIERUNG (POST/PATCH Timeslots)
+- 5-Minuten-Raster: startMin % 5 == 0, lengthMin % 5 == 0, lengthMin > 0
+- Arbeitszeit: 07:00–18:00 (startMin >= 420 AND startMin+lengthMin <= 1080)
+- Department-/Workflow-Guards unverändert
+- Overlap-Logik NEU (Kapazität):
+  Erlaube bis zu `workCenter.concurrentCapacity` gleichzeitige, NICHT-blockierte Slots im selben Bereich+Datum.
+  Blocker belegen die GESAMTE Kapazität (d. h. wenn blocked=true, zählt der Slot als `concurrentCapacity` Einheiten).
+  Implementierung: Zähle für das Intervall [start,end) die Anzahl existierender Slots, wobei:
+    - Für blocked=false: jeder zählt als 1
+    - Für blocked=true: zählt als workCenter.concurrentCapacity
+  Wenn neue Summe > concurrentCapacity → 409 Conflict.
+
+BLOCKER-API (weiterhin über /api/timeslots)
+- Blocker erstellen: POST /api/timeslots mit { blocked:true, date, startMin, lengthMin, workCenterId, note? } (ohne orderId)
+- Blocker dürfen NICHT mit existierenden Slots kollidieren, weil sie volle Kapazität ziehen (409 bei Konflikt).
+- Löschen/Ändern via PATCH/DELETE wie normale Slots.
+
+ENDPOINTS (Bezeichnungen beibehalten)
+- GET /api/workcenters: liefere zusätzlich `concurrentCapacity`
+- POST/PATCH /api/workcenters: erlaube Update von `concurrentCapacity` (>=1, integer)
+- GET /api/calendar: unverändert, aber antworte auch mit workCenter.concurrentCapacity in jeder group, falls Response strukturiert ist. Falls flach: erweitere Datensatz um `capacity: concurrentCapacity` für das Frontend.
+- Rest bleibt gleich (orders/:id/timeslots, batch, etc.).
+
+AKZEPTANZ / TESTS
+- In einem Bereich mit concurrentCapacity=2 dürfen zwei normale Slots überlappen, der dritte gleicher Zeit → 409.
+- Ein Blocker 08:00–10:00 verhindert jede weitere Planung in diesem Bereich+Zeitraum (409).
+- Änderungen an concurrentCapacity wirken sofort in Validierung.
+- 5-Minuten-Raster, 07–18-Uhr-Guard bleiben aktiv.

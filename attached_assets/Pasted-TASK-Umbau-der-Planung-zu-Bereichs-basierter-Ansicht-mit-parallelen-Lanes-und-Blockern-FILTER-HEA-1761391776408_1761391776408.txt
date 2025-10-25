@@ -1,0 +1,48 @@
+TASK: Umbau der Planung zu Bereichs-basierter Ansicht mit parallelen Lanes und Blockern.
+
+FILTER/HEADER
+- Links: Umschalter Bereich(e) statt Stations-Checkliste:
+  • Dropdown "Bereich" (einzeln oder multi-select). Wenn multi: zeige nur die gewählten Bereiche.
+  • Umschalter Abteilung: TEAMSORT + TEXTILVEREDELUNG optional kombinierbar ("Beide"), Filter wirkt auf Auftragsliste.
+- Rechts: "Aufträge bereit" (FUER_PROD), Multi-Select möglich (Cmd/Ctrl/Shift).
+
+BOARD-GRUNDLAGE
+- Spalten = Wochentage (Mo–Fr). Y-Achse = Uhrzeiten (07:00–18:00).
+- Jede Spalte zeigt den aktuell gewählten Bereich (oder alle nacheinander untereinander, je nach Filter).
+- Parallelität sichtbar:
+  • Render pro Bereich/Lane entsprechend `concurrentCapacity`. Beispiel: capacity=2 → zwei Lanes.
+  • Auto-Packing der Slots in die erste freie Lane (greedy). Bei Drag überlappt UI nur, wenn Lane frei. Ansonsten Toast "Kapazität belegt".
+
+DRAG & DROP
+- Drag von Auftragskarte in Tages-Spalte → Popover "Termin festlegen":
+  • Bereich: vorgefüllt (aus Filter), änderbar bei Multi-Bereich
+  • Startzeit: Select 07:00–18:00 (5-Min-Schritte)
+  • Dauer: 30, 45, 60 (default), 90, 120, 180, "Benutzerdefiniert…" (Minuten, step=5)
+  • Optional: "Parallel planen, wenn Kapazität frei" (Checkbox). Wenn an: versucht zeitgleichen Slot, sonst next freie Zeit ab Start.
+  → POST /api/timeslots; bei 409/412/422 Toast + Rollback.
+- Move/Resize:
+  • Snap auf 5 Minuten. PATCH startMin/lengthMin/workCenterId.
+  • Bei Kapazitätskonflikt: revert.
+
+BLOCKER
+- Doppelklick in leere Zone → Dialog "Blocker setzen": Startzeit/Dauer/Notiz → POST /api/timeslots blocked=true.
+- Darstellung: dezenter roter Balken über alle Lanes (Blocker = volle Kapazität).
+
+ZEIT / KAPAZITÄT
+- Jede Tages-Spalte zeigt oben "Kapazität heute": Sum(lengthMin aller Slots)/ (concurrentCapacity * 660) als Prozent-Badge.
+- In der Rasterfläche Times auf 30min-Grid gezeichnet, Snapping 5 min.
+
+MULTI-ZUWEISUNG (Quality-of-life)
+- In "Aufträge bereit" mehrere Aufträge markieren → Drag als Gruppe:
+  • Modus "parallel" (nebeneinander, wenn Kapazität reicht) oder "sequenziell" (hintereinander) via Toggle im Popover.
+  • Sequenziell: legt Slots direkt aneinander.
+
+LABELS (DE)
+- "Bereich", "Kapazität", "Parallel planen", "Sequenziell", "Blocker", "Benutzerdefiniert".
+
+AKZEPTANZ
+- Parallelität sichtbar und korrekt (capacity=2 → max 2 gleichzeitige Slots).
+- Blocker blockieren alle Lanes.
+- Multi-Select Zuweisung funktioniert (parallel/seriell).
+- Kombi-Filter "Abteilungen" (Teamsport + Textilveredelung) steuert nur Auftragsliste, nicht die Bereichs-Kalender.
+- Keine Ruckler beim Wechsel Woche/Tag.
