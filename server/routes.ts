@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertOrderSchema, updateOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertOrderAssetSchema, insertPositionSchema, updatePositionSchema, insertWorkCenterSchema, updateWorkCenterSchema, insertTimeSlotSchema, updateTimeSlotSchema, batchTimeSlotSchema } from "@shared/schema";
+import { insertOrderSchema, updateOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertOrderAssetSchema, insertPositionSchema, updatePositionSchema, insertWorkCenterSchema, updateWorkCenterSchema, insertTimeSlotSchema, updateTimeSlotSchema, batchTimeSlotSchema, timeSlotQCSchema, timeSlotMissingPartsSchema } from "@shared/schema";
 import { z } from "zod";
 import { Decimal } from "@prisma/client/runtime/library";
 import { upload } from "./upload";
@@ -694,6 +694,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error in batch operation:", error);
       res.status(500).json({ error: "Failed to execute batch operation" });
+    }
+  });
+
+  // ===== TimeSlot Action Routes =====
+
+  // POST /api/timeslots/:id/start - Start a time slot
+  app.post("/api/timeslots/:id/start", async (req, res) => {
+    try {
+      const timeSlot = await storage.startTimeSlot(req.params.id);
+      res.json(timeSlot);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === "TimeSlot nicht gefunden") {
+          return res.status(404).json({ error: error.message });
+        }
+        if (error.message.includes("kann nur aus Status")) {
+          return res.status(422).json({ error: error.message });
+        }
+        if (error.message === "TimeSlot muss einem Auftrag zugeordnet sein") {
+          return res.status(422).json({ error: error.message });
+        }
+      }
+      console.error("Error starting time slot:", error);
+      res.status(500).json({ error: "Failed to start time slot" });
+    }
+  });
+
+  // POST /api/timeslots/:id/pause - Pause a time slot
+  app.post("/api/timeslots/:id/pause", async (req, res) => {
+    try {
+      const timeSlot = await storage.pauseTimeSlot(req.params.id);
+      res.json(timeSlot);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === "TimeSlot nicht gefunden") {
+          return res.status(404).json({ error: error.message });
+        }
+        if (error.message.includes("kann nur aus Status")) {
+          return res.status(422).json({ error: error.message });
+        }
+      }
+      console.error("Error pausing time slot:", error);
+      res.status(500).json({ error: "Failed to pause time slot" });
+    }
+  });
+
+  // POST /api/timeslots/:id/stop - Stop a time slot
+  app.post("/api/timeslots/:id/stop", async (req, res) => {
+    try {
+      const timeSlot = await storage.stopTimeSlot(req.params.id);
+      res.json(timeSlot);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === "TimeSlot nicht gefunden") {
+          return res.status(404).json({ error: error.message });
+        }
+        if (error.message.includes("kann nur aus Status")) {
+          return res.status(422).json({ error: error.message });
+        }
+      }
+      console.error("Error stopping time slot:", error);
+      res.status(500).json({ error: "Failed to stop time slot" });
+    }
+  });
+
+  // POST /api/timeslots/:id/qc - Set QC for a time slot
+  app.post("/api/timeslots/:id/qc", async (req, res) => {
+    try {
+      const validated = timeSlotQCSchema.parse(req.body);
+      const timeSlot = await storage.setTimeSlotQC(req.params.id, validated.qc, validated.note);
+      res.json(timeSlot);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error) {
+        if (error.message === "TimeSlot nicht gefunden") {
+          return res.status(404).json({ error: error.message });
+        }
+        if (error.message.includes("kann nur für abgeschlossene")) {
+          return res.status(422).json({ error: error.message });
+        }
+      }
+      console.error("Error setting QC:", error);
+      res.status(500).json({ error: "Failed to set QC" });
+    }
+  });
+
+  // POST /api/timeslots/:id/missing-parts - Mark time slot as having missing parts
+  app.post("/api/timeslots/:id/missing-parts", async (req, res) => {
+    try {
+      const validated = timeSlotMissingPartsSchema.parse(req.body);
+      const timeSlot = await storage.setTimeSlotMissingParts(
+        req.params.id, 
+        validated.note, 
+        validated.updateOrderWorkflow
+      );
+      res.json(timeSlot);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error) {
+        if (error.message === "TimeSlot nicht gefunden") {
+          return res.status(404).json({ error: error.message });
+        }
+        if (error.message === "TimeSlot muss einem Auftrag zugeordnet sein") {
+          return res.status(422).json({ error: error.message });
+        }
+      }
+      console.error("Error marking missing parts:", error);
+      res.status(500).json({ error: "Failed to mark missing parts" });
     }
   });
 
