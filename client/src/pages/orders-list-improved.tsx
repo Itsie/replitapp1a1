@@ -277,15 +277,18 @@ export default function OrdersList() {
     return filtered;
   }, [ordersRaw, activeQuickFilters]);
   
-  // Apply 500-row cap
-  const orders = filteredOrders.slice(0, MAX_ROWS);
+  // Apply 500-row cap and sorting
   const isRowLimitReached = filteredOrders.length > MAX_ROWS;
   
-  // Manual sorting for card view (table view uses TanStack Table sorting)
-  const sortedOrders = useMemo(() => {
-    if (sorting.length === 0) return orders;
+  // Apply sorting and row limit (works for both table and card view)
+  const sortedAndLimitedOrders = useMemo(() => {
+    // First limit to MAX_ROWS
+    const limited = filteredOrders.slice(0, MAX_ROWS);
     
-    const sorted = [...orders];
+    // Then apply sorting if needed
+    if (sorting.length === 0) return limited;
+    
+    const sorted = [...limited];
     const sort = sorting[0];
     
     sorted.sort((a, b) => {
@@ -319,7 +322,11 @@ export default function OrdersList() {
     });
     
     return sorted;
-  }, [orders, sorting]);
+  }, [filteredOrders, sorting]);
+  
+  // Aliases for clarity in the code
+  const orders = sortedAndLimitedOrders;
+  const sortedOrders = sortedAndLimitedOrders;
   
   // Cell class constants for consistent alignment
   const cellBase = "px-3 py-2 whitespace-nowrap";
