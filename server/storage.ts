@@ -31,6 +31,12 @@ export interface TimeSlotWithOrder extends TimeSlot {
     workflow: WorkflowState;
     dueDate: Date | null;
   } | null;
+  workCenter: {
+    id: string;
+    name: string;
+    department: Department;
+    concurrentCapacity: number;
+  };
 }
 
 export interface IStorage {
@@ -911,6 +917,14 @@ export class PrismaStorage implements IStorage {
             dueDate: true,
           },
         },
+        workCenter: {
+          select: {
+            id: true,
+            name: true,
+            department: true,
+            concurrentCapacity: true,
+          },
+        },
       },
       orderBy: [
         { date: 'asc' },
@@ -934,6 +948,14 @@ export class PrismaStorage implements IStorage {
             department: true,
             workflow: true,
             dueDate: true,
+          },
+        },
+        workCenter: {
+          select: {
+            id: true,
+            name: true,
+            department: true,
+            concurrentCapacity: true,
           },
         },
       },
