@@ -433,11 +433,6 @@ export default function OrdersList() {
     getSortedRowModel: getSortedRowModel(),
   });
   
-  // Get sorted data for card view - memoized to prevent re-renders
-  const sortedOrders = useMemo(() => {
-    return table.getRowModel().rows.map(row => row.original);
-  }, [table.getRowModel().rows]);
-  
   // CSV Export function
   const exportToCSV = () => {
     const dataToExport = orders;
@@ -910,7 +905,8 @@ export default function OrdersList() {
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {sortedOrders.map((order) => {
+              {table.getRowModel().rows.map((row) => {
+                const order = row.original;
                 const { label: dueLabel, variant: dueVariant } = getDueDateStatus(order.dueDate);
                 const requiredAssets = order.printAssets.filter(a => a.required);
                 
