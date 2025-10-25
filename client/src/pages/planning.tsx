@@ -476,20 +476,31 @@ export default function PlanningPage() {
       </Card>
 
       {/* Appointment Dialog */}
-      {appointmentDialog.orderId && (
-        <AppointmentDialog
-          open={appointmentDialog.open}
-          onOpenChange={(open) =>
-            setAppointmentDialog((prev) => ({ ...prev, open }))
-          }
-          onConfirm={handleConfirmAppointment}
-          orderId={appointmentDialog.orderId}
-          orderNumber={appointmentDialog.orderNumber}
-          date={appointmentDialog.date}
-          workCenters={workCenters}
-          defaultWorkCenterId={selectedWorkCenters.length === 1 ? selectedWorkCenters[0] : undefined}
-        />
-      )}
+      {appointmentDialog.orderId && (() => {
+        // Find the order to get its department
+        const order = fuerProdOrders.find(o => o.id === appointmentDialog.orderId);
+        const orderDepartment = order?.department;
+        
+        // Filter workCenters to only show those matching the order's department
+        const filteredWorkCenters = orderDepartment
+          ? workCenters.filter(wc => wc.department === orderDepartment)
+          : workCenters;
+        
+        return (
+          <AppointmentDialog
+            open={appointmentDialog.open}
+            onOpenChange={(open) =>
+              setAppointmentDialog((prev) => ({ ...prev, open }))
+            }
+            onConfirm={handleConfirmAppointment}
+            orderId={appointmentDialog.orderId}
+            orderNumber={appointmentDialog.orderNumber}
+            date={appointmentDialog.date}
+            workCenters={filteredWorkCenters}
+            defaultWorkCenterId={selectedWorkCenters.length === 1 ? selectedWorkCenters[0] : undefined}
+          />
+        );
+      })()}
     </div>
   );
 }

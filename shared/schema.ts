@@ -156,6 +156,7 @@ export const updateOrderSchema = z.object({
   title: z.string().trim().min(1, "Title is required").optional(),
   customer: z.string().trim().min(1, "Customer is required").optional(),
   department: departmentSchema.optional(),
+  workflow: workflowStateSchema.optional(),
   dueDate: z.string().datetime().optional().nullable().transform(val => val || null),
   location: z.string().trim().optional().nullable(),
   notes: z.string().trim().optional().nullable(),

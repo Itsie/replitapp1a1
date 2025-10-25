@@ -244,6 +244,7 @@ export class PrismaStorage implements IStorage {
       if (updateData.title !== undefined) data.title = updateData.title;
       if (updateData.customer !== undefined) data.customer = updateData.customer;
       if (updateData.department !== undefined) data.department = updateData.department;
+      if (updateData.workflow !== undefined) data.workflow = updateData.workflow;
       if (updateData.dueDate !== undefined) data.dueDate = updateData.dueDate ? new Date(updateData.dueDate) : null;
       if (updateData.location !== undefined) data.location = updateData.location;
       if (updateData.notes !== undefined) data.notes = updateData.notes;
