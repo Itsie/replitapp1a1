@@ -576,6 +576,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/timeslots - Get time slots with filters (weekly planning)
+  app.get("/api/timeslots", async (req, res) => {
+    try {
+      const department = req.query.department as string | undefined;
+      const weekStart = req.query.weekStart as string | undefined;
+      
+      if (!department) {
+        return res.status(400).json({ error: "department parameter is required" });
+      }
+      
+      if (!weekStart) {
+        return res.status(400).json({ error: "weekStart parameter is required" });
+      }
+
+      // Calculate week end (Sunday, 6 days after Monday)
+      const startDate = new Date(weekStart);
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 6);
+
+      const filters = {
+        startDate: weekStart,
+        endDate: endDate.toISOString().split('T')[0],
+        department: department as any,
+      };
+
+      const slots = await storage.getCalendar(filters);
+      res.json(slots);
+    } catch (error) {
+      console.error("Error fetching time slots:", error);
+      res.status(500).json({ error: "Failed to fetch time slots" });
+    }
+  });
+
   // GET /api/orders/:id/timeslots - Get time slots for an order
   app.get("/api/orders/:id/timeslots", async (req, res) => {
     try {
@@ -601,7 +634,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (error.message === "Order not found" || error.message === "WorkCenter not found") {
           return res.status(404).json({ error: error.message });
         }
-        if (error.message === "Time slot overlaps with existing slot") {
+        if (
+          error.message === "Time slot overlaps with existing slot" ||
+          error.message.includes("Kapazität") ||
+          error.message.includes("Capacity exceeded")
+        ) {
           return res.status(409).json({ error: error.message });
         }
         if (
@@ -610,11 +647,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ) {
           return res.status(412).json({ error: error.message });
         }
-        if (
-          error.message === "Time slot must be within working hours (07:00-18:00)" ||
-          error.message.includes("Kapazität") ||
-          error.message.includes("Capacity exceeded")
-        ) {
+        if (error.message === "Time slot must be within working hours (07:00-18:00)") {
           return res.status(422).json({ error: error.message });
         }
       }
@@ -637,7 +670,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (error.message === "TimeSlot not found" || error.message === "Order not found" || error.message === "WorkCenter not found") {
           return res.status(404).json({ error: error.message });
         }
-        if (error.message === "Time slot overlaps with existing slot") {
+        if (
+          error.message === "Time slot overlaps with existing slot" ||
+          error.message.includes("Kapazität") ||
+          error.message.includes("Capacity exceeded")
+        ) {
           return res.status(409).json({ error: error.message });
         }
         if (

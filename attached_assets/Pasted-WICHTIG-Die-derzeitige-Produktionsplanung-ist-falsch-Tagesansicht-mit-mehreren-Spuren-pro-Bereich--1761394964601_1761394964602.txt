@@ -1,0 +1,104 @@
+WICHTIG: Die derzeitige Produktionsplanung ist falsch (Tagesansicht mit mehreren Spuren pro Bereich). Diese MUSS ersetzt werden durch die folgende, eindeutige Spezifikation:
+
+ZIEL
+Eine echte wöchentliche Produktionsplanung für EINEN ausgewählten Bereich, dargestellt als Matrix:
+- SPALTEN = Tage (Mo–Fr einer Kalenderwoche)
+- ZEILEN = Zeit (07:00–18:00 in 5-Minuten-Raster)
+- Rechts: Auftragspool „Aufträge bereit” (workflow=FUER_PROD oder WARTET_FEHLTEILE wenn Start ohne Teile erlaubt)
+
+Bereiche (Departments)
+- Benutzer wählt EINEN Bereich aus einer Dropdown-Liste („Bereich: Teamsport | Textilveredelung | Stickerei | Druck“)
+- KEINE Arbeitsstationen
+- JEDER Bereich kann eine feste Kapazität an PARALLELEN Jobs besitzen (z.B. 2 parallel)
+- Darstellung: Pro Tag gibt es so viele übereinanderliegende „Lanes“ wie parallel möglich
+
+UI-Layout (verpflichtend)
+—————————————————
+HEADER:
+- Dropdown „Bereich“
+- KW-Anzeige + Vor/Zurück + „Heute“
+- Hinweis „Kapazität: X parallel“
+
+GRID (Kalender):
+- Spalten: Mo., Di., Mi., Do., Fr.
+- Zeilen: Uhrzeit 07:00 bis 18:00 (5-Minuten-Snap)
+- Slots werden als farbige Kacheln dargestellt
+
+ORDER PANEL (rechts):
+- Liste: Alle freigegebenen Aufträge
+- Badges: Abteilung farbig, Fehlteile-Warnung
+- Drag & Drop in den Kalender
+
+DRAG & DROP Verhalten
+—————————————————
+1️⃣ Auftragskarte → Day Column ziehen → sofort Popover:
+- „Startzeit“ (Zeiten in 5-Minuten Schritten)
+- „Dauer“ Auswahl: 30 / 45 / 60 (Default) / 90 / 120 / 180 Min / „Benutzerdefiniert…“
+- Checkbox: „Start nur wenn Fehlteile vollständig“
+- Submit → Erzeugt TimeSlot via Backend
+
+2️⃣ Nachträgliche Bearbeitung:
+- Slot verschieben → PATCH /api/timeslots/:id
+- Slot kürzen/verlängern → PATCH startMin/lengthMin
+- Löschen → DELETE Slot (Rückführung Auftrag ins Pool)
+
+3️⃣ Blocker:
+- Rechtsklick / Langklick → „Blocker hinzufügen“
+- Blocker rote Kachel (blocked=true, note Pflicht)
+- Drag-Resize identisch zu Slots
+
+VALIDIERUNG (verpflichtend)
+—————————————————
+Server rejected:
+- startMin % 5 ≠ 0 oder lengthMin % 5 ≠ 0 → 422
+- Start < 07:00 oder Ende > 18:00 → 422
+- Parallel-Capacity überschritten → 409
+- Slot kollidiert mit anderem Slot im selben Bereich → 409
+- Fehlteile-Block: Wenn Checkbox aktiv & offene Fehlteile → 412
+→ UI zeigt Toast auf DE mit Fehlertext
+
+BACKEND IMPLEMENTIEREN:
+—————————————————
+Neue REST-API Endpoints:
+
+WorkCenter ersetzen durch "Bereichsplanung" (pro Department):
+(+ neues Modell „planning_areas“ falls benötigt oder mapping auf Department)
+
+TIME SLOTS:
+GET    /api/timeslots?department&weekStart
+POST   /api/timeslots
+PATCH  /api/timeslots/:id
+DELETE /api/timeslots/:id
+
+ORDERS:
+GET /api/orders?workflow=FUER_PROD|WARTET_FEHLTEILE
+→ im Kalender rechts anzeigen
+
+NICHT IMPLEMENTIEREN:
+- KEINE Multi-Bereichs-Ansichten gleichzeitig
+- KEINE Maschinen‐ oder Arbeitsstationslogik mehr
+
+SPRACHE
+- Alle UI-Texte, Fehlerinformationen und Tooltips in DE
+Labels:
+Mo., Di., Mi., Do., Fr.
+„Bereich“
+„Aufträge bereit“
+„Blocker“
+„Fehlteile offen“
+„Start nur wenn Fehlteile vollständig“
+
+ERWARTETE FUNKTIONALITÄT
+—————————————————
+✅ Drag & Drop Scheduling (Woche)  
+✅ Flexible Dauer (5-Minuten-Snap)  
+✅ Mehrere parallele Slots pro Bereich/Tag  
+✅ Blocker setzen  
+✅ Auftrag fliegt aus der Liste in den Kalender  
+✅ Re-Planung per Drag/Resize  
+✅ Fehlteile-Warnung blockiert Start (wenn gewünscht)  
+✅ Voll DE-UI  
+✅ Saubere Backend-Validierung
+
+KEINE anderen Features oder Änderungen, die hier nicht beschrieben sind.
+Strict scope.
