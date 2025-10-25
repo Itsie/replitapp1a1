@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,6 +10,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from "date-fns";
 import { de } from "date-fns/locale";
+import { WeekCalendar } from "@/components/week-calendar";
+import { AppointmentDialog, type AppointmentFormData } from "@/components/appointment-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 
 type Department = "TEAMSPORT" | "TEXTILVEREDELUNG" | "STICKEREI" | "DRUCK" | "SONSTIGES";
 type ViewMode = "week" | "day";
@@ -55,6 +60,18 @@ export default function PlanningPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedDepartment, setSelectedDepartment] = useState<Department | "">("");
   const [selectedWorkCenters, setSelectedWorkCenters] = useState<string[]>([]);
+  const [appointmentDialog, setAppointmentDialog] = useState<{
+    open: boolean;
+    orderId: string | null;
+    orderNumber: string;
+    date: string;
+  }>({
+    open: false,
+    orderId: null,
+    orderNumber: "",
+    date: "",
+  });
+  const { toast } = useToast();
 
   // Calculate date range based on view mode
   const dateRange = useMemo(() => {
@@ -118,8 +135,90 @@ export default function PlanningPage() {
     },
   });
 
+  // Mutation to create time slot
+  const createTimeSlotMutation = useMutation({
+    mutationFn: async (data: {
+      date: string;
+      startMin: number;
+      lengthMin: number;
+      workCenterId: string;
+      orderId: string;
+    }) => {
+      const res = await apiRequest("POST", "/api/timeslots", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      // Invalidate calendar and orders queries
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders", "FUER_PROD"] });
+      toast({
+        title: "Termin erstellt",
+        description: "Der Produktionstermin wurde erfolgreich erstellt.",
+      });
+    },
+    onError: (error: any) => {
+      let errorMessage = "Ein unerwarteter Fehler ist aufgetreten.";
+      
+      if (error.message?.includes("409")) {
+        errorMessage = "Der Termin überschneidet sich mit einem bestehenden Slot.";
+      } else if (error.message?.includes("412")) {
+        errorMessage = "Abteilung oder Workflow-Status stimmt nicht überein.";
+      } else if (error.message?.includes("422")) {
+        errorMessage = "Validierungsfehler: Bitte überprüfen Sie die Eingaben.";
+      }
+      
+      toast({
+        title: "Fehler beim Erstellen",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    },
+  });
+
   const navigateWeek = (direction: "prev" | "next") => {
     setSelectedDate((prev) => (direction === "prev" ? subWeeks(prev, 1) : addWeeks(prev, 1)));
+  };
+
+  const handleDragStart = (e: React.DragEvent, order: Order) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData(
+      "application/json",
+      JSON.stringify({
+        orderId: order.id,
+        orderNumber: order.displayOrderNumber,
+      })
+    );
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent, date: string, workCenterId?: string) => {
+    e.preventDefault();
+    const data = JSON.parse(e.dataTransfer.getData("application/json"));
+    
+    setAppointmentDialog({
+      open: true,
+      orderId: data.orderId,
+      orderNumber: data.orderNumber,
+      date,
+    });
+  };
+
+  const handleConfirmAppointment = (data: AppointmentFormData) => {
+    if (!appointmentDialog.orderId) return;
+
+    createTimeSlotMutation.mutate({
+      date: appointmentDialog.date,
+      startMin: data.startMin,
+      lengthMin: data.lengthMin,
+      workCenterId: data.workCenterId,
+      orderId: appointmentDialog.orderId,
+    });
+
+    setAppointmentDialog({ open: false, orderId: null, orderNumber: "", date: "" });
   };
 
   return (
@@ -293,15 +392,23 @@ export default function PlanningPage() {
           </Button>
         </div>
 
-        <div className="flex-1 overflow-auto p-4">
-          <div className="min-h-full bg-muted/20 rounded-lg p-4">
-            <p className="text-center text-muted-foreground">
-              Kalender-Grid wird hier implementiert
-            </p>
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              {timeSlots.length} Termine gefunden
-            </p>
-          </div>
+        <div className="flex-1 overflow-hidden">
+          {viewMode === "week" ? (
+            <WeekCalendar
+              startDate={dateRange.start}
+              timeSlots={timeSlots}
+              workCenters={workCenters}
+              selectedWorkCenters={selectedWorkCenters}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-muted-foreground">
+                Tagesansicht wird in Kürze implementiert
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -323,6 +430,8 @@ export default function PlanningPage() {
                 <Card
                   key={order.id}
                   className="p-3 cursor-move hover-elevate"
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, order)}
                   data-testid={`card-order-${order.id}`}
                 >
                   <div className="space-y-2">
@@ -350,6 +459,22 @@ export default function PlanningPage() {
           )}
         </div>
       </Card>
+
+      {/* Appointment Dialog */}
+      {appointmentDialog.orderId && (
+        <AppointmentDialog
+          open={appointmentDialog.open}
+          onOpenChange={(open) =>
+            setAppointmentDialog((prev) => ({ ...prev, open }))
+          }
+          onConfirm={handleConfirmAppointment}
+          orderId={appointmentDialog.orderId}
+          orderNumber={appointmentDialog.orderNumber}
+          date={appointmentDialog.date}
+          workCenters={workCenters}
+          defaultWorkCenterId={selectedWorkCenters.length === 1 ? selectedWorkCenters[0] : undefined}
+        />
+      )}
     </div>
   );
 }
