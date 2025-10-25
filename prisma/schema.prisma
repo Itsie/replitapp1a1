@@ -38,6 +38,14 @@ enum QCState {
   UNGEPRUEFT
 }
 
+enum TimeSlotStatus {
+  PLANNED
+  RUNNING
+  PAUSED
+  DONE
+  BLOCKED
+}
+
 enum JTLRowType {
   NORMAL
   BUNDLE_PARENT
@@ -160,16 +168,21 @@ model OrderAsset {
 }
 
 model TimeSlot {
-  id           String      @id @default(cuid())
-  date         DateTime
-  startMin     Int
-  lengthMin    Int
-  workCenterId String
-  workCenter   WorkCenter  @relation(fields: [workCenterId], references: [id])
-  orderId      String?
-  order        Order?      @relation(fields: [orderId], references: [id])
-  blocked      Boolean     @default(false)
-  note         String?
+  id               String          @id @default(cuid())
+  date             DateTime
+  startMin         Int
+  lengthMin        Int
+  workCenterId     String
+  workCenter       WorkCenter      @relation(fields: [workCenterId], references: [id])
+  orderId          String?
+  order            Order?          @relation(fields: [orderId], references: [id])
+  blocked          Boolean         @default(false)
+  note             String?
+  status           TimeSlotStatus  @default(PLANNED)
+  startedAt        DateTime?
+  stoppedAt        DateTime?
+  qc               QCState?
+  missingPartsNote String?
 }
 
 model JTLOrderPosition {
