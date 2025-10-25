@@ -56,10 +56,10 @@ The backend exposes a RESTful API with the following key endpoints:
 - `POST /api/orders/:id/submit` - Validate and submit order for production
 
 **Production Planning & Execution:**
-- `GET /api/calendar` - Get time slots for calendar view with date range filters
-- `GET /api/workcenters` - List work centers with optional filtering
-- `POST /api/workcenters` - Create new work center
-- `POST /api/timeslots` - Create new time slot
+- `GET /api/calendar` - Get time slots with embedded workCenter and order data, supports date range and department filters
+- `GET /api/workcenters` - List Bereiche (work centers) with optional filtering
+- `POST /api/workcenters` - Create new Bereich with concurrentCapacity configuration
+- `POST /api/timeslots` - Create new time slot with capacity-aware validation (returns 422 if capacity exceeded)
 - `POST /api/timeslots/:id/start` - Start time slot execution (PLANNED/PAUSED → RUNNING)
 - `POST /api/timeslots/:id/pause` - Pause running time slot (RUNNING → PAUSED)
 - `POST /api/timeslots/:id/stop` - Stop time slot execution (RUNNING/PAUSED → DONE)
@@ -73,6 +73,14 @@ The backend exposes a RESTful API with the following key endpoints:
 - TimeSlot state machine enforces valid transitions with 422 errors for invalid state changes
 - Missing parts reporting can optionally escalate order workflow to WARTET_FEHLTEILE
 - Validation layer using Zod schemas for type safety
+
+**Capacity-Based Scheduling:**
+- Bereiche (WorkCenters) support concurrent capacity configuration (default: 2 parallel slots)
+- Regular TimeSlots occupy 1 capacity unit; blockers occupy full capacity
+- 5-minute time grid enforcement (07:00-18:00 working hours)
+- Capacity validation at API layer returns HTTP 422 for capacity exceeded errors
+- Planning UI renders parallel lanes based on concurrentCapacity
+- Department matching enforced between Orders and WorkCenters
 
 ### Data Storage Solutions
 
