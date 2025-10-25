@@ -197,14 +197,29 @@ export default function PlanningPage() {
 
   const handleDrop = (e: React.DragEvent, date: string, workCenterId?: string) => {
     e.preventDefault();
-    const data = JSON.parse(e.dataTransfer.getData("application/json"));
     
-    setAppointmentDialog({
-      open: true,
-      orderId: data.orderId,
-      orderNumber: data.orderNumber,
-      date,
-    });
+    try {
+      const data = JSON.parse(e.dataTransfer.getData("application/json"));
+      
+      if (!data.orderId || !data.orderNumber) {
+        console.error("Invalid drop data:", data);
+        return;
+      }
+      
+      setAppointmentDialog({
+        open: true,
+        orderId: data.orderId,
+        orderNumber: data.orderNumber,
+        date,
+      });
+    } catch (error) {
+      console.error("Failed to parse drop data:", error);
+      toast({
+        title: "Fehler",
+        description: "Ungültige Drag & Drop Daten",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleConfirmAppointment = (data: AppointmentFormData) => {
