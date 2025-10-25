@@ -281,6 +281,46 @@ export default function OrdersList() {
   const orders = filteredOrders.slice(0, MAX_ROWS);
   const isRowLimitReached = filteredOrders.length > MAX_ROWS;
   
+  // Manual sorting for card view (table view uses TanStack Table sorting)
+  const sortedOrders = useMemo(() => {
+    if (sorting.length === 0) return orders;
+    
+    const sorted = [...orders];
+    const sort = sorting[0];
+    
+    sorted.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+      
+      switch (sort.id) {
+        case 'title':
+          aValue = a.title;
+          bValue = b.title;
+          break;
+        case 'workflow':
+          aValue = a.workflow;
+          bValue = b.workflow;
+          break;
+        case 'dueDate':
+          aValue = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+          bValue = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+          break;
+        case 'totalGross':
+          aValue = Number(a.totalGross) || 0;
+          bValue = Number(b.totalGross) || 0;
+          break;
+        default:
+          return 0;
+      }
+      
+      if (aValue < bValue) return sort.desc ? 1 : -1;
+      if (aValue > bValue) return sort.desc ? -1 : 1;
+      return 0;
+    });
+    
+    return sorted;
+  }, [orders, sorting]);
+  
   // Cell class constants for consistent alignment
   const cellBase = "px-3 py-2 whitespace-nowrap";
   const cellRight = `${cellBase} text-right tabular-nums`;
@@ -905,8 +945,7 @@ export default function OrdersList() {
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {table.getRowModel().rows.map((row) => {
-                const order = row.original;
+              {sortedOrders.map((order) => {
                 const { label: dueLabel, variant: dueVariant } = getDueDateStatus(order.dueDate);
                 const requiredAssets = order.printAssets.filter(a => a.required);
                 
