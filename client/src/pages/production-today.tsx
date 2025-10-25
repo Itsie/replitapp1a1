@@ -50,6 +50,12 @@ interface TimeSlotWithOrder {
     workflow: string;
     dueDate: Date | null;
   } | null;
+  workCenter: {
+    id: string;
+    name: string;
+    department: Department;
+    concurrentCapacity: number;
+  };
 }
 
 interface WorkCenterWithSlotCount extends WorkCenter {
@@ -368,8 +374,6 @@ export default function ProductionToday() {
       ) : (
         <div className="space-y-4">
           {filteredSlots.map(slot => {
-            const workCenter = workCenters.find(wc => wc.id === slot.workCenterId);
-            
             return (
               <Card key={slot.id} data-testid={`card-timeslot-${slot.id}`}>
                 <CardContent className="p-6">
@@ -414,7 +418,7 @@ export default function ProductionToday() {
 
                       {/* WorkCenter */}
                       <p className="text-xs text-muted-foreground">
-                        Arbeitsplatz: {workCenter?.name || 'Unbekannt'}
+                        Bereich: {slot.workCenter.name}
                       </p>
 
                       {/* Timer for RUNNING slots */}

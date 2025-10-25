@@ -1,30 +1,28 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from "date-fns";
+import { Textarea } from "@/components/ui/textarea";
+import { ChevronLeft, ChevronRight, Plus, Lock } from "lucide-react";
+import { format, addDays, subDays, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
-import { WeekCalendar } from "@/components/week-calendar";
-import { AppointmentDialog, type AppointmentFormData } from "@/components/appointment-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 
 type Department = "TEAMSPORT" | "TEXTILVEREDELUNG" | "STICKEREI" | "DRUCK" | "SONSTIGES";
-type ViewMode = "week" | "day";
 
 interface WorkCenter {
   id: string;
   name: string;
   department: Department;
   active: boolean;
-  capacityMin: number;
+  concurrentCapacity: number;
 }
 
 interface TimeSlot {
@@ -38,51 +36,55 @@ interface TimeSlot {
   note: string | null;
   order?: {
     id: string;
-    displayOrderNumber: string;
+    displayOrderNumber: string | null;
     title: string;
-    dueDate: string | null;
-    workflow: string;
+    customer: string;
     department: Department;
+    workflow: string;
+    dueDate: string | null;
+  } | null;
+  workCenter: {
+    id: string;
+    name: string;
+    department: Department;
+    concurrentCapacity: number;
   };
 }
 
 interface Order {
   id: string;
-  displayOrderNumber: string;
+  displayOrderNumber: string | null;
   title: string;
-  dueDate: string | null;
-  workflow: string;
+  customer: string;
   department: Department;
+  workflow: string;
+  dueDate: string | null;
+}
+
+interface SlotFormData {
+  workCenterId: string;
+  date: string;
+  startMin: number;
+  lengthMin: number;
+  orderId: string | null;
+  blocked: boolean;
+  note: string | null;
 }
 
 export default function PlanningPage() {
-  const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedDepartment, setSelectedDepartment] = useState<Department | "">("");
-  const [selectedWorkCenters, setSelectedWorkCenters] = useState<string[]>([]);
-  const [appointmentDialog, setAppointmentDialog] = useState<{
+  const [slotDialog, setSlotDialog] = useState<{
     open: boolean;
-    orderId: string | null;
-    orderNumber: string;
-    date: string;
+    data: SlotFormData | null;
   }>({
     open: false,
-    orderId: null,
-    orderNumber: "",
-    date: "",
+    data: null,
   });
   const { toast } = useToast();
 
-  // Calculate date range based on view mode
-  const dateRange = useMemo(() => {
-    if (viewMode === "week") {
-      const start = startOfWeek(selectedDate, { weekStartsOn: 1 }); // Monday
-      const end = endOfWeek(selectedDate, { weekStartsOn: 1 }); // Sunday
-      return { start, end };
-    } else {
-      return { start: selectedDate, end: selectedDate };
-    }
-  }, [viewMode, selectedDate]);
+  // Calculate date for API
+  const dateStr = format(selectedDate, "yyyy-MM-dd");
 
   // Fetch work centers
   const { data: workCenters = [] } = useQuery<WorkCenter[]>({
@@ -90,6 +92,7 @@ export default function PlanningPage() {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedDepartment) params.append("department", selectedDepartment);
+      params.append("active", "true");
       const url = `/api/workcenters${params.toString() ? `?${params.toString()}` : ""}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch work centers");
@@ -97,24 +100,15 @@ export default function PlanningPage() {
     },
   });
 
-  // Fetch calendar data
+  // Fetch calendar data (single day)
   const { data: timeSlots = [] } = useQuery<TimeSlot[]>({
-    queryKey: [
-      "/api/calendar",
-      format(dateRange.start, "yyyy-MM-dd"),
-      format(dateRange.end, "yyyy-MM-dd"),
-      selectedDepartment,
-      selectedWorkCenters.join(","),
-    ],
+    queryKey: ["/api/calendar", dateStr, selectedDepartment],
     queryFn: async () => {
       const params = new URLSearchParams({
-        startDate: format(dateRange.start, "yyyy-MM-dd"),
-        endDate: format(dateRange.end, "yyyy-MM-dd"),
+        startDate: dateStr,
+        endDate: dateStr,
       });
       if (selectedDepartment) params.append("department", selectedDepartment);
-      if (selectedWorkCenters.length > 0) {
-        selectedWorkCenters.forEach((id) => params.append("workCenterId", id));
-      }
       const url = `/api/calendar?${params.toString()}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch calendar");
@@ -123,7 +117,7 @@ export default function PlanningPage() {
   });
 
   // Fetch orders ready for production
-  const { data: readyOrders = [] } = useQuery<Order[]>({
+  const { data: fuerProdOrders = [] } = useQuery<Order[]>({
     queryKey: ["/api/orders", "FUER_PROD", selectedDepartment],
     queryFn: async () => {
       const params = new URLSearchParams({ workflow: "FUER_PROD" });
@@ -135,372 +129,445 @@ export default function PlanningPage() {
     },
   });
 
-  // Mutation to create time slot
-  const createTimeSlotMutation = useMutation({
-    mutationFn: async (data: {
-      date: string;
-      startMin: number;
-      lengthMin: number;
-      workCenterId: string;
-      orderId: string;
-    }) => {
-      const res = await apiRequest("POST", "/api/timeslots", data);
+  // Create time slot mutation
+  const createSlotMutation = useMutation({
+    mutationFn: async (data: SlotFormData) => {
+      const res = await fetch("/api/timeslots", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to create slot");
+      }
       return res.json();
     },
     onSuccess: () => {
-      // Invalidate calendar and orders queries
-      queryClient.invalidateQueries({ queryKey: ["/api/calendar"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/orders", "FUER_PROD"] });
-      toast({
-        title: "Termin erstellt",
-        description: "Der Produktionstermin wurde erfolgreich erstellt.",
-      });
+      queryClient.refetchQueries({ queryKey: ["/api/calendar"] });
+      queryClient.refetchQueries({ queryKey: ["/api/orders"] });
+      toast({ title: "Termin erstellt" });
+      setSlotDialog({ open: false, data: null });
     },
     onError: (error: any) => {
-      let errorMessage = "Ein unerwarteter Fehler ist aufgetreten.";
-      
-      if (error.message?.includes("409")) {
-        errorMessage = "Der Termin überschneidet sich mit einem bestehenden Slot.";
-      } else if (error.message?.includes("412")) {
-        errorMessage = "Abteilung oder Workflow-Status stimmt nicht überein.";
-      } else if (error.message?.includes("422")) {
-        errorMessage = "Validierungsfehler: Bitte überprüfen Sie die Eingaben.";
-      }
-      
       toast({
         title: "Fehler beim Erstellen",
-        description: errorMessage,
+        description: error.message || "Ein Fehler ist aufgetreten",
         variant: "destructive",
       });
     },
   });
 
-  const navigateWeek = (direction: "prev" | "next") => {
-    setSelectedDate((prev) => (direction === "prev" ? subWeeks(prev, 1) : addWeeks(prev, 1)));
+  // Group time slots by work center
+  const slotsByWorkCenter = useMemo(() => {
+    const grouped = new Map<string, TimeSlot[]>();
+    timeSlots.forEach((slot) => {
+      const wcId = slot.workCenterId;
+      if (!grouped.has(wcId)) grouped.set(wcId, []);
+      grouped.get(wcId)!.push(slot);
+    });
+    return grouped;
+  }, [timeSlots]);
+
+  // Time conversion helpers
+  const minToTime = (min: number) => {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
   };
 
-  const handleDragStart = (e: React.DragEvent, order: Order) => {
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData(
-      "application/json",
-      JSON.stringify({
-        orderId: order.id,
-        orderNumber: order.displayOrderNumber,
-      })
-    );
+  // Working hours: 07:00-18:00 (420-1080 minutes)
+  const workingHours = Array.from({ length: 12 }, (_, i) => 420 + i * 60); // 07:00, 08:00, ..., 18:00
+
+  // Open dialog to create slot
+  const handleCreateSlot = (workCenterId: string, startMin: number) => {
+    setSlotDialog({
+      open: true,
+      data: {
+        workCenterId,
+        date: dateStr,
+        startMin,
+        lengthMin: 60,
+        orderId: null,
+        blocked: false,
+        note: null,
+      },
+    });
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
+  // Handle form submission
+  const handleSubmitSlot = () => {
+    if (!slotDialog.data) return;
+    createSlotMutation.mutate(slotDialog.data);
   };
 
-  const handleDrop = (e: React.DragEvent, date: string, workCenterId?: string) => {
-    e.preventDefault();
-    
-    try {
-      const data = JSON.parse(e.dataTransfer.getData("application/json"));
+  // Calculate slot position and height
+  const getSlotStyle = (slot: TimeSlot) => {
+    const startPixel = ((slot.startMin - 420) / 60) * 80; // 80px per hour
+    const heightPixel = (slot.lengthMin / 60) * 80;
+    return {
+      top: `${startPixel}px`,
+      height: `${heightPixel}px`,
+    };
+  };
+
+  // Assign lanes to slots based on overlaps and capacity
+  const assignLanes = (slots: TimeSlot[], capacity: number) => {
+    const sorted = [...slots].sort((a, b) => a.startMin - b.startMin);
+    const lanes: TimeSlot[][] = Array.from({ length: capacity }, () => []);
+
+    sorted.forEach((slot) => {
+      const slotEnd = slot.startMin + slot.lengthMin;
       
-      if (!data.orderId || !data.orderNumber) {
-        console.error("Invalid drop data:", data);
+      // If blocked, it occupies all lanes
+      if (slot.blocked) {
+        lanes.forEach((lane) => lane.push(slot));
         return;
       }
-      
-      setAppointmentDialog({
-        open: true,
-        orderId: data.orderId,
-        orderNumber: data.orderNumber,
-        date,
-      });
-    } catch (error) {
-      console.error("Failed to parse drop data:", error);
-      toast({
-        title: "Fehler",
-        description: "Ungültige Drag & Drop Daten",
-        variant: "destructive",
-      });
-    }
-  };
 
-  const handleConfirmAppointment = (data: AppointmentFormData) => {
-    if (!appointmentDialog.orderId) return;
+      // Find first available lane
+      let assignedLane = -1;
+      for (let i = 0; i < capacity; i++) {
+        const overlaps = lanes[i].some((existing) => {
+          const existingEnd = existing.startMin + existing.lengthMin;
+          return !(slotEnd <= existing.startMin || slot.startMin >= existingEnd);
+        });
+        if (!overlaps) {
+          assignedLane = i;
+          break;
+        }
+      }
 
-    createTimeSlotMutation.mutate({
-      date: appointmentDialog.date,
-      startMin: data.startMin,
-      lengthMin: data.lengthMin,
-      workCenterId: data.workCenterId,
-      orderId: appointmentDialog.orderId,
+      if (assignedLane !== -1) {
+        lanes[assignedLane].push(slot);
+      }
     });
 
-    setAppointmentDialog({ open: false, orderId: null, orderNumber: "", date: "" });
+    // Return lane assignments
+    const assignments = new Map<string, number>();
+    sorted.forEach((slot) => {
+      if (slot.blocked) {
+        assignments.set(slot.id, -1); // Special value for blockers
+        return;
+      }
+      for (let i = 0; i < lanes.length; i++) {
+        if (lanes[i].includes(slot)) {
+          assignments.set(slot.id, i);
+          break;
+        }
+      }
+    });
+
+    return assignments;
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background" data-testid="page-planning">
-      {/* Left Sidebar - Filters */}
-      <Card className="w-64 flex-shrink-0 m-4 p-4 space-y-4 overflow-y-auto">
-        <div>
-          <h2 className="text-lg font-semibold mb-4">Filter</h2>
-
-          {/* View Mode Toggle */}
-          <div className="space-y-2 mb-4">
-            <label className="text-xs font-medium uppercase text-muted-foreground">
-              Ansicht
-            </label>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={viewMode === "week" ? "default" : "outline"}
-                onClick={() => setViewMode("week")}
-                className="flex-1"
-                data-testid="button-view-week"
-              >
-                Woche
-              </Button>
-              <Button
-                size="sm"
-                variant={viewMode === "day" ? "default" : "outline"}
-                onClick={() => setViewMode("day")}
-                className="flex-1"
-                data-testid="button-view-day"
-              >
-                Tag
-              </Button>
-            </div>
-          </div>
-
-          {/* Date Picker */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium uppercase text-muted-foreground">
-              Datum
-            </label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-left font-normal"
-                  data-testid="button-date-picker"
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {format(selectedDate, "PPP", { locale: de })}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => date && setSelectedDate(date)}
-                  initialFocus
-                  locale={de}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 p-4 border-b">
+        <h1 className="text-2xl font-semibold" data-testid="text-page-title">Produktionsplanung</h1>
+        
+        <div className="flex items-center gap-2">
           {/* Department Filter */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium uppercase text-muted-foreground">
-              Abteilung
-            </label>
-            <Select
-              value={selectedDepartment || undefined}
-              onValueChange={(value) => setSelectedDepartment(value as Department)}
-            >
-              <SelectTrigger data-testid="select-department">
-                <SelectValue placeholder="Alle Abteilungen" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="TEAMSPORT">Teamsport</SelectItem>
-                <SelectItem value="TEXTILVEREDELUNG">Textilveredelung</SelectItem>
-                <SelectItem value="STICKEREI">Stickerei</SelectItem>
-                <SelectItem value="DRUCK">Druck</SelectItem>
-                <SelectItem value="SONSTIGES">Sonstiges</SelectItem>
-              </SelectContent>
-            </Select>
-            {selectedDepartment && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedDepartment("")}
-                className="w-full text-xs"
-                data-testid="button-clear-department"
-              >
-                Filter zurücksetzen
-              </Button>
-            )}
-          </div>
+          <Select
+            value={selectedDepartment}
+            onValueChange={(val) => setSelectedDepartment(val as Department | "")}
+          >
+            <SelectTrigger className="w-48" data-testid="select-department">
+              <SelectValue placeholder="Alle Bereiche" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="" data-testid="option-all-departments">Alle Bereiche</SelectItem>
+              <SelectItem value="TEAMSPORT">Teamsport</SelectItem>
+              <SelectItem value="TEXTILVEREDELUNG">Textilveredelung</SelectItem>
+              <SelectItem value="STICKEREI">Stickerei</SelectItem>
+              <SelectItem value="DRUCK">Druck</SelectItem>
+              <SelectItem value="SONSTIGES">Sonstiges</SelectItem>
+            </SelectContent>
+          </Select>
 
-          {/* WorkCenter Filter */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium uppercase text-muted-foreground">
-              Arbeitsstationen
-            </label>
-            <div className="space-y-1 max-h-48 overflow-y-auto">
-              {workCenters.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">
-                  Keine Arbeitsstationen verfügbar
-                </p>
-              ) : (
-                workCenters.map((wc) => (
-                  <label
-                    key={wc.id}
-                    className="flex items-center gap-2 p-2 rounded hover-elevate cursor-pointer"
-                    data-testid={`checkbox-workcenter-${wc.id}`}
-                  >
-                    <Checkbox
-                      checked={selectedWorkCenters.includes(wc.id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedWorkCenters([...selectedWorkCenters, wc.id]);
-                        } else {
-                          setSelectedWorkCenters(selectedWorkCenters.filter((id) => id !== wc.id));
-                        }
-                      }}
-                    />
-                    <span className="text-sm flex-1">{wc.name}</span>
-                    {!wc.active && (
-                      <Badge variant="secondary" className="text-xs">
-                        Inaktiv
-                      </Badge>
-                    )}
-                  </label>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Main Calendar Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b flex items-center justify-between bg-background">
-          <div className="flex items-center gap-4">
+          {/* Date Navigation */}
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="icon"
-              onClick={() => navigateWeek("prev")}
-              data-testid="button-prev-week"
+              onClick={() => setSelectedDate(subDays(selectedDate, 1))}
+              data-testid="button-prev-day"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h1 className="text-2xl font-semibold" data-testid="text-calendar-title">
-              {viewMode === "week"
-                ? `KW ${format(dateRange.start, "w", { locale: de })} - ${format(dateRange.start, "dd.MM")} bis ${format(dateRange.end, "dd.MM.yyyy")}`
-                : format(selectedDate, "EEEE, dd. MMMM yyyy", { locale: de })}
-            </h1>
+            <div className="text-sm font-medium min-w-32 text-center" data-testid="text-current-date">
+              {format(selectedDate, "EEE, d. MMM yyyy", { locale: de })}
+            </div>
             <Button
               variant="outline"
               size="icon"
-              onClick={() => navigateWeek("next")}
-              data-testid="button-next-week"
+              onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+              data-testid="button-next-day"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedDate(new Date())}
+              data-testid="button-today"
+            >
+              Heute
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setSelectedDate(new Date())}
-            data-testid="button-today"
-          >
-            Heute
-          </Button>
-        </div>
-
-        <div className="flex-1 overflow-hidden">
-          {viewMode === "week" ? (
-            <WeekCalendar
-              startDate={dateRange.start}
-              timeSlots={timeSlots}
-              workCenters={workCenters}
-              selectedWorkCenters={selectedWorkCenters}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground">
-                Tagesansicht wird in Kürze implementiert
-              </p>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Right Sidebar - Orders Ready for Production */}
-      <Card className="w-80 flex-shrink-0 m-4 p-4 space-y-4 overflow-y-auto">
-        <div>
-          <h2 className="text-lg font-semibold mb-4">Aufträge bereit</h2>
-          <p className="text-xs text-muted-foreground mb-4">
-            {readyOrders.length} Aufträge für Produktion
-          </p>
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto p-4">
+        {workCenters.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center text-muted-foreground">
+              Keine Arbeitsbereiche gefunden
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            {workCenters.map((wc) => {
+              const slots = slotsByWorkCenter.get(wc.id) || [];
+              const laneAssignments = assignLanes(slots, wc.concurrentCapacity);
 
-          {readyOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic text-center mt-8">
-              Keine Aufträge bereit für Produktion
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {readyOrders.map((order) => (
-                <Card
-                  key={order.id}
-                  className="p-3 cursor-move hover-elevate"
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, order)}
-                  data-testid={`card-order-${order.id}`}
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="font-mono text-sm font-medium">
-                        {order.displayOrderNumber}
-                      </span>
-                      <Badge variant="secondary" className="text-xs">
-                        {order.department}
-                      </Badge>
-                    </div>
-                    <p className="text-sm line-clamp-2" title={order.title}>
-                      {order.title}
-                    </p>
-                    {order.dueDate && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <CalendarIcon className="h-3 w-3" />
-                        Fällig: {format(new Date(order.dueDate), "dd.MM.yyyy")}
+              return (
+                <Card key={wc.id}>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-4">
+                    <CardTitle className="text-lg">{wc.name}</CardTitle>
+                    <Badge variant="secondary" data-testid={`badge-capacity-${wc.id}`}>
+                      {wc.concurrentCapacity} parallel
+                    </Badge>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex gap-4">
+                      {/* Time Labels */}
+                      <div className="flex flex-col gap-0 pt-2">
+                        {workingHours.map((min) => (
+                          <div key={min} className="h-20 text-xs text-muted-foreground">
+                            {minToTime(min)}
+                          </div>
+                        ))}
                       </div>
-                    )}
-                  </div>
+
+                      {/* Lanes */}
+                      <div className="flex-1 flex gap-2">
+                        {Array.from({ length: wc.concurrentCapacity }, (_, laneIdx) => (
+                          <div
+                            key={laneIdx}
+                            className="flex-1 relative border rounded-md bg-muted/20"
+                            style={{ minHeight: `${12 * 80}px` }}
+                          >
+                            {/* Hour Grid Lines */}
+                            {workingHours.slice(1).map((min, idx) => (
+                              <div
+                                key={min}
+                                className="absolute left-0 right-0 border-t border-border/30"
+                                style={{ top: `${(idx + 1) * 80}px` }}
+                              />
+                            ))}
+
+                            {/* Time Slots in this lane */}
+                            {slots
+                              .filter((slot) => {
+                                const lane = laneAssignments.get(slot.id);
+                                return slot.blocked ? true : lane === laneIdx;
+                              })
+                              .map((slot) => {
+                                const isBlocked = slot.blocked;
+                                const style = getSlotStyle(slot);
+
+                                return (
+                                  <div
+                                    key={slot.id}
+                                    className={`absolute left-1 right-1 rounded px-2 py-1 text-xs overflow-hidden cursor-pointer hover-elevate ${
+                                      isBlocked
+                                        ? "bg-destructive/20 border-2 border-destructive text-destructive-foreground"
+                                        : slot.orderId
+                                        ? "bg-primary/80 text-primary-foreground border border-primary"
+                                        : "bg-muted border border-border"
+                                    }`}
+                                    style={style}
+                                    data-testid={`slot-${slot.id}`}
+                                  >
+                                    {isBlocked ? (
+                                      <div className="flex items-center gap-1">
+                                        <Lock className="h-3 w-3" />
+                                        <span className="font-semibold">Gesperrt</span>
+                                      </div>
+                                    ) : slot.order ? (
+                                      <>
+                                        <div className="font-semibold truncate">
+                                          {slot.order.displayOrderNumber || slot.order.id.slice(0, 8)}
+                                        </div>
+                                        <div className="truncate text-muted-foreground">
+                                          {slot.order.title}
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className="text-muted-foreground">Frei</div>
+                                    )}
+                                    {slot.note && (
+                                      <div className="text-xs italic mt-1 truncate">{slot.note}</div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+
+                            {/* Add Slot Buttons (every hour) */}
+                            {workingHours.map((min) => (
+                              <Button
+                                key={min}
+                                variant="ghost"
+                                size="sm"
+                                className="absolute left-1/2 -translate-x-1/2 opacity-0 hover:opacity-100"
+                                style={{ top: `${((min - 420) / 60) * 80 + 30}px` }}
+                                onClick={() => handleCreateSlot(wc.id, min)}
+                                data-testid={`button-add-slot-${wc.id}-${min}-${laneIdx}`}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
                 </Card>
-              ))}
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Slot Creation Dialog */}
+      <Dialog open={slotDialog.open} onOpenChange={(open) => setSlotDialog({ open, data: null })}>
+        <DialogContent data-testid="dialog-create-slot">
+          <DialogHeader>
+            <DialogTitle>Neuen Termin erstellen</DialogTitle>
+          </DialogHeader>
+
+          {slotDialog.data && (
+            <div className="space-y-4">
+              {/* Order Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="order">Auftrag</Label>
+                <Select
+                  value={slotDialog.data.orderId || ""}
+                  onValueChange={(val) =>
+                    setSlotDialog({
+                      ...slotDialog,
+                      data: { ...slotDialog.data!, orderId: val || null },
+                    })
+                  }
+                >
+                  <SelectTrigger id="order" data-testid="select-order">
+                    <SelectValue placeholder="Kein Auftrag (Blocker)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Kein Auftrag (Blocker)</SelectItem>
+                    {fuerProdOrders.map((order) => (
+                      <SelectItem key={order.id} value={order.id}>
+                        {order.displayOrderNumber || order.id.slice(0, 8)} - {order.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Start Time */}
+              <div className="space-y-2">
+                <Label htmlFor="startTime">Startzeit</Label>
+                <Input
+                  id="startTime"
+                  type="time"
+                  value={minToTime(slotDialog.data.startMin)}
+                  onChange={(e) => {
+                    const [h, m] = e.target.value.split(":").map(Number);
+                    const min = h * 60 + m;
+                    setSlotDialog({
+                      ...slotDialog,
+                      data: { ...slotDialog.data!, startMin: min },
+                    });
+                  }}
+                  data-testid="input-start-time"
+                />
+              </div>
+
+              {/* Duration */}
+              <div className="space-y-2">
+                <Label htmlFor="duration">Dauer (Minuten)</Label>
+                <Input
+                  id="duration"
+                  type="number"
+                  min={5}
+                  step={5}
+                  value={slotDialog.data.lengthMin}
+                  onChange={(e) =>
+                    setSlotDialog({
+                      ...slotDialog,
+                      data: { ...slotDialog.data!, lengthMin: parseInt(e.target.value) || 60 },
+                    })
+                  }
+                  data-testid="input-duration"
+                />
+              </div>
+
+              {/* Blocked Checkbox */}
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="blocked"
+                  checked={slotDialog.data.blocked}
+                  onCheckedChange={(checked) =>
+                    setSlotDialog({
+                      ...slotDialog,
+                      data: { ...slotDialog.data!, blocked: checked === true },
+                    })
+                  }
+                  data-testid="checkbox-blocked"
+                />
+                <Label htmlFor="blocked">Komplett sperren (blockiert alle Spuren)</Label>
+              </div>
+
+              {/* Note */}
+              <div className="space-y-2">
+                <Label htmlFor="note">Notiz</Label>
+                <Textarea
+                  id="note"
+                  value={slotDialog.data.note || ""}
+                  onChange={(e) =>
+                    setSlotDialog({
+                      ...slotDialog,
+                      data: { ...slotDialog.data!, note: e.target.value || null },
+                    })
+                  }
+                  data-testid="textarea-note"
+                />
+              </div>
             </div>
           )}
-        </div>
-      </Card>
 
-      {/* Appointment Dialog */}
-      {appointmentDialog.orderId && (() => {
-        // Find the order to get its department
-        const order = fuerProdOrders.find(o => o.id === appointmentDialog.orderId);
-        const orderDepartment = order?.department;
-        
-        // Filter workCenters to only show those matching the order's department
-        const filteredWorkCenters = orderDepartment
-          ? workCenters.filter(wc => wc.department === orderDepartment)
-          : workCenters;
-        
-        return (
-          <AppointmentDialog
-            open={appointmentDialog.open}
-            onOpenChange={(open) =>
-              setAppointmentDialog((prev) => ({ ...prev, open }))
-            }
-            onConfirm={handleConfirmAppointment}
-            orderId={appointmentDialog.orderId}
-            orderNumber={appointmentDialog.orderNumber}
-            date={appointmentDialog.date}
-            workCenters={filteredWorkCenters}
-            defaultWorkCenterId={selectedWorkCenters.length === 1 ? selectedWorkCenters[0] : undefined}
-          />
-        );
-      })()}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSlotDialog({ open: false, data: null })}
+              data-testid="button-cancel"
+            >
+              Abbrechen
+            </Button>
+            <Button
+              onClick={handleSubmitSlot}
+              disabled={createSlotMutation.isPending}
+              data-testid="button-submit"
+            >
+              {createSlotMutation.isPending ? "Wird erstellt..." : "Erstellen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
