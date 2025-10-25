@@ -32,6 +32,7 @@ The application follows a "Design System-Inspired" approach prioritizing product
 - Tab-based navigation for order details (Details, Sizes, Print Assets, History)
 - Toast notifications for user feedback
 - Modal dialogs for data entry (size tables, print assets)
+- Real-time cache synchronization using `refetchQueries` for immediate UI updates after mutations
 
 ### Backend Architecture
 
@@ -45,6 +46,7 @@ The application follows a "Design System-Inspired" approach prioritizing product
 **API Structure:**
 The backend exposes a RESTful API with the following key endpoints:
 
+**Order Management:**
 - `GET /api/health` - Health check endpoint
 - `GET /api/orders` - List orders with filtering (query, department, source, workflow)
 - `POST /api/orders` - Create new internal orders
@@ -53,10 +55,23 @@ The backend exposes a RESTful API with the following key endpoints:
 - `POST /api/orders/:id/assets` - Add print assets
 - `POST /api/orders/:id/submit` - Validate and submit order for production
 
+**Production Planning & Execution:**
+- `GET /api/calendar` - Get time slots for calendar view with date range filters
+- `GET /api/workcenters` - List work centers with optional filtering
+- `POST /api/workcenters` - Create new work center
+- `POST /api/timeslots` - Create new time slot
+- `POST /api/timeslots/:id/start` - Start time slot execution (PLANNED/PAUSED → RUNNING)
+- `POST /api/timeslots/:id/pause` - Pause running time slot (RUNNING → PAUSED)
+- `POST /api/timeslots/:id/stop` - Stop time slot execution (RUNNING/PAUSED → DONE)
+- `POST /api/timeslots/:id/qc` - Set quality control result (requires DONE status)
+- `POST /api/timeslots/:id/missing-parts` - Report missing parts (requires DONE status)
+
 **Business Logic:**
 - Internal orders default to source=INTERNAL and workflow=NEU
 - JTL-sourced orders are read-only except for size/assets/location
 - Order submission requires at least one required print asset (HTTP 412 if missing)
+- TimeSlot state machine enforces valid transitions with 422 errors for invalid state changes
+- Missing parts reporting can optionally escalate order workflow to WARTET_FEHLTEILE
 - Validation layer using Zod schemas for type safety
 
 ### Data Storage Solutions
@@ -73,13 +88,16 @@ The backend exposes a RESTful API with the following key endpoints:
 - **SizeTable**: JSON-based size/quantity data with flexible schemes (ALPHA/NUMERIC/CUSTOM)
 - **PrintAsset**: File metadata with required flag for production validation
 - **InvoiceQueueItem**: Billing queue for non-JTL orders
-- Additional models: WorkCenter, Slot, JTLRow (for future implementation)
+- **WorkCenter**: Production work centers with department assignment and capacity
+- **TimeSlot**: Scheduling slots with execution tracking (status, startedAt, stoppedAt, qc, missingPartsNote)
+- Additional models: JTLRow (for future implementation)
 
 **Enum Types:**
 - OrderSource: JTL | INTERNAL
 - Department: TEAMSPORT | TEXTILVEREDELUNG | STICKEREI | DRUCK | SONSTIGES
 - WorkflowState: ENTWURF | NEU | PRUEFUNG | FUER_PROD | IN_PROD | WARTET_FEHLTEILE | FERTIG | ZUR_ABRECHNUNG | ABGERECHNET
 - QCState: IO | NIO | UNGEPRUEFT
+- TimeSlotStatus: PLANNED | RUNNING | PAUSED | DONE | BLOCKED
 
 ### Authentication & Authorization
 

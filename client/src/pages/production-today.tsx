@@ -114,12 +114,12 @@ export default function ProductionToday() {
 
   // Fetch work centers
   const { data: workCenters = [] } = useQuery<WorkCenterWithSlotCount[]>({
-    queryKey: ['/api/workcenters', { active: true }],
+    queryKey: ['/api/workcenters?active=true'],
   });
 
   // Fetch today's time slots
   const { data: timeSlots = [], isLoading } = useQuery<TimeSlotWithOrder[]>({
-    queryKey: ['/api/calendar', { startDate: today, endDate: today }],
+    queryKey: [`/api/calendar?startDate=${today}&endDate=${today}`],
   });
 
   // Filter time slots
@@ -137,11 +137,14 @@ export default function ProductionToday() {
   const startMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("POST", `/api/timeslots/${id}/start`);
-      if (!res.ok) throw new Error("Failed to start");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to start");
+      }
       return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calendar'] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: [`/api/calendar?startDate=${today}&endDate=${today}`] });
       toast({ title: "TimeSlot gestartet" });
     },
     onError: (error: any) => {
@@ -156,11 +159,14 @@ export default function ProductionToday() {
   const pauseMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("POST", `/api/timeslots/${id}/pause`);
-      if (!res.ok) throw new Error("Failed to pause");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to pause");
+      }
       return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calendar'] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: [`/api/calendar?startDate=${today}&endDate=${today}`] });
       toast({ title: "TimeSlot pausiert" });
     },
     onError: (error: any) => {
@@ -175,11 +181,14 @@ export default function ProductionToday() {
   const stopMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("POST", `/api/timeslots/${id}/stop`);
-      if (!res.ok) throw new Error("Failed to stop");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to stop");
+      }
       return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calendar'] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: [`/api/calendar?startDate=${today}&endDate=${today}`] });
       toast({ title: "TimeSlot beendet" });
     },
     onError: (error: any) => {
@@ -194,11 +203,14 @@ export default function ProductionToday() {
   const qcMutation = useMutation({
     mutationFn: async ({ id, qc, note }: { id: string; qc: "IO" | "NIO"; note?: string }) => {
       const res = await apiRequest("POST", `/api/timeslots/${id}/qc`, { qc, note });
-      if (!res.ok) throw new Error("Failed to set QC");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to set QC");
+      }
       return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calendar'] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: [`/api/calendar?startDate=${today}&endDate=${today}`] });
       toast({ title: "QC gesetzt" });
       setQcDialogOpen(false);
       setQcSlotId(null);
@@ -216,11 +228,14 @@ export default function ProductionToday() {
   const missingPartsMutation = useMutation({
     mutationFn: async ({ id, note, updateOrderWorkflow }: { id: string; note: string; updateOrderWorkflow: boolean }) => {
       const res = await apiRequest("POST", `/api/timeslots/${id}/missing-parts`, { note, updateOrderWorkflow });
-      if (!res.ok) throw new Error("Failed to report missing parts");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to report missing parts");
+      }
       return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calendar'] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: [`/api/calendar?startDate=${today}&endDate=${today}`] });
       toast({ title: "Fehlteile gemeldet" });
       setMissingPartsDialogOpen(false);
       setMissingPartsSlotId(null);
