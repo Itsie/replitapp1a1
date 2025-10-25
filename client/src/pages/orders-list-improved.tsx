@@ -97,9 +97,6 @@ export default function OrdersList() {
     return {};
   });
   
-  // Row selection
-  const [rowSelection, setRowSelection] = useState({});
-  
   // Sorting with localStorage
   const [sorting, setSorting] = useState<SortingState>(() => {
     const saved = localStorage.getItem('orders_sort');
@@ -287,27 +284,6 @@ export default function OrdersList() {
   // Memoize columns for performance optimization
   const columns: ColumnDef<OrderWithRelations>[] = useMemo(() => [
     {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected()}
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Alle auswählen"
-          data-testid="checkbox-select-all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Zeile auswählen"
-          data-testid={`checkbox-select-${row.original.id}`}
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-    },
-    {
       accessorKey: "displayOrderNumber",
       header: "Auftragsnr.",
       cell: ({ row }) => (
@@ -444,10 +420,9 @@ export default function OrdersList() {
     state: {
       sorting,
       columnVisibility,
-      rowSelection,
     },
-    enableRowSelection: true,
-    onRowSelectionChange: setRowSelection,
+    enableRowSelection: false,
+    enableMultiRowSelection: false,
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
@@ -457,13 +432,9 @@ export default function OrdersList() {
   // Get sorted data for card view
   const sortedOrders = table.getRowModel().rows.map(row => row.original);
   
-  const selectedCount = Object.keys(rowSelection).length;
-  
-  // CSV Export function using TanStack Table API
-  const exportToCSV = (selectedOnly: boolean = false) => {
-    const dataToExport = selectedOnly 
-      ? table.getSelectedRowModel().rows.map(row => row.original)
-      : orders;
+  // CSV Export function
+  const exportToCSV = () => {
+    const dataToExport = orders;
     
     if (dataToExport.length === 0) {
       toast({
@@ -589,26 +560,10 @@ export default function OrdersList() {
           </DropdownMenu>
           
           {/* CSV Export */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" data-testid="button-export">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => exportToCSV(false)} data-testid="menu-export-all">
-                <Download className="h-4 w-4 mr-2" />
-                Alle exportieren
-              </DropdownMenuItem>
-              {selectedCount > 0 && (
-                <DropdownMenuItem onClick={() => exportToCSV(true)} data-testid="menu-export-selected">
-                  <Download className="h-4 w-4 mr-2" />
-                  {selectedCount} Ausgewählte exportieren
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button variant="outline" size="sm" onClick={exportToCSV} data-testid="button-export">
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
           
           {/* View Mode Toggle */}
           <div className="flex items-center border rounded-lg p-1 gap-1">
@@ -790,48 +745,6 @@ export default function OrdersList() {
           </Button>
         )}
       </div>
-      
-      {/* Selection Counter */}
-      {selectedCount > 0 && viewMode === 'table' && (
-        <div className="flex items-center justify-between p-3 mb-4 bg-muted rounded-lg">
-          <p className="text-sm text-muted-foreground" data-testid="text-selection-count">
-            {selectedCount} {selectedCount === 1 ? 'Auftrag' : 'Aufträge'} ausgewählt
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportToCSV(true)}
-              data-testid="button-batch-export"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Exportieren
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const selectedOrders = table.getSelectedRowModel().rows.map(row => row.original);
-                selectedOrders.slice(0, 10).forEach((order, i) => {
-                  setTimeout(() => {
-                    window.open(`/orders/${order.id}`, '_blank');
-                  }, i * 100);
-                });
-                if (selectedOrders.length > 10) {
-                  toast({
-                    title: "Limit erreicht",
-                    description: "Maximal 10 Aufträge können gleichzeitig geöffnet werden.",
-                  });
-                }
-              }}
-              data-testid="button-batch-open"
-            >
-              <Eye className="h-4 w-4 mr-2" />
-              Öffnen (max. 10)
-            </Button>
-          </div>
-        </div>
-      )}
       
       {/* Row limit notice */}
       {isRowLimitReached && (
