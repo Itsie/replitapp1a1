@@ -263,7 +263,7 @@ export default function OrderDetail() {
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <div className="border-b">
-        <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4">
+        <div className="w-full">
           <Button
             variant="ghost"
             onClick={() => setLocation("/orders")}
@@ -350,7 +350,7 @@ export default function OrderDetail() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
-        <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4">
+        <div className="w-full">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList data-testid="tabs-list">
               <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>

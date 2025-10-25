@@ -544,7 +544,7 @@ export default function OrdersList() {
   };
   
   return (
-    <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4">
+    <div className="w-full">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Aufträge</h1>

@@ -155,7 +155,7 @@ export default function OrderNew() {
   return (
     <div className="min-h-screen flex flex-col w-full">
       <div className="border-b">
-        <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-4">
+        <div className="w-full">
           <Button
             variant="ghost"
             onClick={() => setLocation("/orders")}
@@ -170,7 +170,7 @@ export default function OrderNew() {
       </div>
 
       <div className="flex-1 overflow-auto">
-        <div className="max-w-[1600px] 2xl:max-w-[1920px] mx-auto px-6 py-6">
+        <div className="w-full">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid lg:grid-cols-12 gap-6">
