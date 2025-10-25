@@ -288,9 +288,29 @@ export const batchTimeSlotSchema = z.object({
   delete: z.array(z.string().min(1, "ID is required")).optional(),
 });
 
+// TimeSlot status enum schema
+export const timeSlotStatusSchema = z.enum(["PLANNED", "RUNNING", "PAUSED", "DONE", "BLOCKED"]);
+
+// TimeSlot QC enum schema (subset of QCState - only IO/NIO, no UNGEPRUEFT)
+export const timeSlotQCStateSchema = z.enum(["IO", "NIO"]);
+
+// TimeSlot action schemas
+export const timeSlotQCSchema = z.object({
+  qc: timeSlotQCStateSchema,
+  note: z.string().optional().nullable(),
+});
+
+export const timeSlotMissingPartsSchema = z.object({
+  note: z.string().min(1, "Hinweis ist erforderlich"),
+  updateOrderWorkflow: z.boolean().default(false), // optional: set order to WARTET_FEHLTEILE
+});
+
 // Infer types
 export type InsertWorkCenter = z.infer<typeof insertWorkCenterSchema>;
 export type UpdateWorkCenter = z.infer<typeof updateWorkCenterSchema>;
 export type InsertTimeSlot = z.infer<typeof insertTimeSlotSchema>;
 export type UpdateTimeSlot = z.infer<typeof updateTimeSlotSchema>;
 export type BatchTimeSlot = z.infer<typeof batchTimeSlotSchema>;
+export type TimeSlotStatus = z.infer<typeof timeSlotStatusSchema>;
+export type TimeSlotQC = z.infer<typeof timeSlotQCSchema>;
+export type TimeSlotMissingParts = z.infer<typeof timeSlotMissingPartsSchema>;
