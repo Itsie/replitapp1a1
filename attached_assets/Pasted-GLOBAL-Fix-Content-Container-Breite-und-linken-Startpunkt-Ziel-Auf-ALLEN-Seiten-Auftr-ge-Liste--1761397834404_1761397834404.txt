@@ -1,0 +1,48 @@
+GLOBAL: Fix Content-Container-Breite und linken Startpunkt
+
+Ziel
+- Auf ALLEN Seiten (Aufträge-Liste, Neuer Auftrag, Auftragsdetails, Produktionsplanung, etc.) soll der Haupt-Content direkt neben der Sidebar starten und die volle verfügbare Breite nutzen.
+- KEINE visuellen Redesigns, KEINE Feature-Änderungen. Nur Layout-Container/Margins/Padding anpassen.
+
+Scope & Regeln
+- Keine Backend-/Schema-Änderungen.
+- Behalte Typografie, Farben, Abstände innerhalb der Komponenten bei.
+- Entferne/ersetze alle künstlichen max-width- und zentrierenden Container (z. B. .container, max-w-screen-xl, mx-auto).
+- Content soll horizontal "px-4 md:px-6" haben, vertikal "py-4" wie bisher.
+- Tabellen/Planner/Detailkarten nutzen 100% der verfügbaren Breite.
+- Sidebar bleibt unverändert.
+
+Konkrete Aufgaben
+1) App-Shell/Layout:
+   - Finde den globalen Layout-Wrapper (z. B. in AppLayout / RootLayout / Shell).
+   - Ersetze Wrapper-Klassen durch: `class="flex w-full h-full"`
+   - Content-Wrapper direkt rechts neben der Sidebar: `class="flex-1 w-full min-w-0 px-4 md:px-6"`
+   - Entferne `max-w-*`, `mx-auto` und zentrale „container“-Klassen auf Seitenebene.
+
+2) Seiten-Container:
+   - Aufträge (/orders), Auftragsdetails (/orders/:id), Neuer Auftrag (/orders/new), Produktionsplanung (/planning), etc.:
+     - Oberster Seiten-Container: `w-full`
+     - Section-Wrapper: `w-full` statt `max-w-*`
+     - Keine festen Breiten auf Grids/Containern, außer responsive paddings.
+
+3) Tabellen:
+   - Setze `w-full` und entferne Breitenbegrenzungen auf Table-Parent.
+   - Header sticky behalten, aber keine zusätzliche Innenbreiten-Begrenzung.
+
+4) Produktionsplanung (/planning):
+   - Hauptgrid auf `w-full` + `min-w-0` setzen, damit es die volle Breite einnimmt.
+   - Rechte Auftragsliste NICHT umgestalten, nur sicherstellen, dass der Kalenderbereich breit wird.
+   - Keine Änderung am Slot-Raster oder DnD in diesem Schritt.
+
+5) Cleanup:
+   - Entferne doppelte Wrapper, die nur zentrieren.
+   - Achte darauf, dass keine horizontalen Scrollbars entstehen. Falls doch: Container mit `min-w-0` ausstatten.
+
+Akzeptanzkriterien (prüfen):
+- Auf 1440–1920px startet der Content direkt neben der Sidebar (kein großer linker Leerraum).
+- Tabellen und der Planner nutzen sichtbar mehr Platz (keine großen schwarzen Flächen rechts).
+- Keine Layout-Shifts oder gebrochene Zeilenumbrüche.
+- Keine Änderungen am Look & Feel der Komponenten selbst (Buttons, Karten, Badges bleiben wie sind).
+- Keine JS- oder Datenlogik geändert.
+
+Bitte Änderungen seitenweit anwenden, knappe Commits, kurz dokumentieren, welche Container/Klassen ersetzt wurden.

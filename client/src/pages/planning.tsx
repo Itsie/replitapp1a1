@@ -227,6 +227,13 @@ export default function PlanningPage() {
   const { data: workCenters = [] } = useQuery<WorkCenter[]>({
     queryKey: ["/api/workcenters", selectedDepartment],
     enabled: !!selectedDepartment,
+    queryFn: async () => {
+      if (!selectedDepartment) return [];
+      const params = new URLSearchParams({ department: selectedDepartment });
+      const res = await fetch(`/api/workcenters?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch work centers");
+      return res.json();
+    },
   });
 
   const selectedWorkCenter = workCenters.find(wc => wc.department === selectedDepartment);
@@ -285,7 +292,7 @@ export default function PlanningPage() {
   // Create time slot mutation
   const createSlotMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("/api/timeslots", "POST", data);
+      return apiRequest("POST", "/api/timeslots", data);
     },
     onSuccess: () => {
       queryClient.refetchQueries({ queryKey: ["/api/timeslots", selectedDepartment, weekStartStr] });
@@ -307,7 +314,7 @@ export default function PlanningPage() {
   // Delete time slot mutation
   const deleteSlotMutation = useMutation({
     mutationFn: async (slotId: string) => {
-      return apiRequest(`/api/timeslots/${slotId}`, "DELETE");
+      return apiRequest("DELETE", `/api/timeslots/${slotId}`);
     },
     onSuccess: () => {
       queryClient.refetchQueries({ queryKey: ["/api/timeslots", selectedDepartment, weekStartStr] });
@@ -327,7 +334,10 @@ export default function PlanningPage() {
   // Create blocker mutation
   const createBlockerMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("/api/timeslots", "POST", data);
+      console.log("[Blocker Creation] Sending payload:", data);
+      const result = await apiRequest("POST", "/api/timeslots", data);
+      console.log("[Blocker Creation] Success:", result);
+      return result;
     },
     onSuccess: () => {
       queryClient.refetchQueries({ queryKey: ["/api/timeslots", selectedDepartment, weekStartStr] });
@@ -336,7 +346,9 @@ export default function PlanningPage() {
       setCreateBlockerForm({ startMin: 480, lengthMin: 120, note: "" });
     },
     onError: (error: any) => {
-      const message = error.response?.data?.error || "Fehler beim Erstellen des Blockers";
+      console.error("[Blocker Creation] Error:", error);
+      console.error("[Blocker Creation] Error response:", error.response);
+      const message = error.response?.data?.error || error.message || "Fehler beim Erstellen des Blockers";
       toast({
         title: "Fehler",
         description: message,
@@ -394,7 +406,14 @@ export default function PlanningPage() {
   };
 
   const handleCreateBlocker = () => {
-    if (!selectedWorkCenter) return;
+    if (!selectedWorkCenter) {
+      toast({
+        title: "Fehler",
+        description: "Kein Bereich ausgewählt oder Bereich nicht gefunden",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const dayDate = weekDates[createBlockerDialog.day];
     const dateStr = format(dayDate, "yyyy-MM-dd");

@@ -1,0 +1,77 @@
+Rewrite the planning grid to be performant and production-usable. Drag & Drop must work reliably.
+
+⚙️ CORE CHANGES
+
+GRID RENDERING
+- Default granularity: 30 minutes per row (07:00–18:00 → 22 rows total).
+- Provide a "Zoom" select: 60 / 30 / 15 / 5 minutes. Default = 30.
+- Only grid rows change with zoom; slot positions remain pixel-precise.
+
+SLOT GEOMETRY
+- rowHeight = 28px (constant)
+- minutesPerRow = zoom value (default 30)
+- startMinBase = 07:00 → 420 minutes
+- Calculate positioning:
+    topPx = ((startMin - 420) / minutesPerRow) * rowHeight
+    heightPx = (lengthMin / minutesPerRow) * rowHeight
+- Use transform/translate for efficient repaints
+
+DRAG & DROP (FIX REQUIRED!)
+Current bug: Dragging orders into planning grid is not functional.
+Fix all handlers:
+- From "Aufträge bereit" list → drop into day column
+- Ghost preview while dragging
+- Live tooltip: Startzeit + Endzeit + Dauer
+- Snap-to-grid while dragging
+- After drop: open Popover → confirm → POST /api/timeslots
+- Refresh grid from backend immediately
+
+Snapping Logic:
+- zoom=60 → snap=30
+- zoom=30 → snap=15
+- zoom=15 → snap=15
+- zoom=5  → snap=5
+Backend always rounds to 5 min raster and prevents overlaps.
+
+SLOT EDITING
+- Drag move existing slot → PATCH /api/timeslots/:id
+- Resize bottom edge to change duration
+- Snapping + validation
+
+BLOCKERS
+- Right-click on empty grid → create a blocking slot
+- Visual style: red background
+- Same CRUD as other time slots
+
+PERFORMANCE RULES
+- react-window if zoom < 30 (row count >40)
+- Memoize DayColumn + SlotList
+- Throttle drag-move (≤16ms)
+- Avoid unnecessary re-renders
+
+📌 NEW: DISPLAY DEADLINES (LIEFERTERMINE)
+- Every order card (both "Aufträge bereit" list AND scheduled slot in grid) MUST show the dueDate from order
+- Compact badge format: e.g. "25.10."
+- If dueDate < today: badge in warning style (red/amber)
+- Tooltip: full ISO datetime / "Fälligkeitsdatum"
+
+UI LANGUAGE: GERMAN
+- Bereich, KW, Heute, Aufträge bereit, Startzeit, Dauer, Speichern, Blocker, Fällig, etc.
+
+NO SCOPE CREEP
+- Do NOT change Prisma schema
+- Do NOT reintroduce multiple workstations
+- Weekly Mon–Fri stays
+- Only show orders for selected Bereich
+- Keep existing endpoints, relations and workflow logic untouched
+
+✅ Deliverable:
+Planning grid fully operational with:
+✓ Working Drag & Drop
+✓ Zoom levels (5-60 min)
+✓ Correct slot geometry
+✓ Liefertermin visible everywhere
+✓ Blocker support
+✓ Backend API fully used
+
+Confirm everything works with visual testing before continuing.
