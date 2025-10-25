@@ -150,7 +150,7 @@ function DraggableOrderCard({ order }: { order: Order }) {
   );
 }
 
-function DroppableCell({ day, timeSlot, startMin, children }: { day: number; timeSlot: number; startMin: number; children?: React.ReactNode }) {
+function DroppableCell({ day, timeSlot, startMin }: { day: number; timeSlot: number; startMin: number }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `cell-${day}-${timeSlot}`,
     data: { type: "cell", day, timeSlot, startMin },
@@ -159,13 +159,10 @@ function DroppableCell({ day, timeSlot, startMin, children }: { day: number; tim
   return (
     <div
       ref={setNodeRef}
-      className={`border-r border-b min-h-[40px] relative ${
-        isOver ? "bg-primary/10" : ""
-      }`}
+      className={`border-b ${isOver ? "bg-primary/10" : ""}`}
+      style={{ height: "40px" }}
       data-testid={`droppable-cell-${day}-${timeSlot}`}
-    >
-      {children}
-    </div>
+    />
   );
 }
 
@@ -527,33 +524,42 @@ export default function PlanningPage() {
           ) : (
             <div className="flex-1 overflow-auto p-4">
               <div className="inline-block min-w-full">
-                <div className="grid grid-cols-[80px_repeat(5,_minmax(150px,_1fr))] border">
-                  {/* Header Row */}
-                  <div className="border-b border-r bg-muted p-2 text-sm font-medium">Zeit</div>
-                  {weekDates.map((date, i) => (
-                    <div
-                      key={i}
-                      className="border-b border-r bg-muted p-2 text-sm font-medium text-center"
-                      data-testid={`header-day-${i}`}
-                    >
-                      <div>{DAY_LABELS[i]}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {format(date, "dd.MM.", { locale: de })}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Time Rows */}
-                  {timeSlots.map((timeMin, rowIdx) => (
-                    <div key={rowIdx} className="contents">
-                      <div className="border-r bg-muted p-2 text-xs text-muted-foreground">
+                <div className="flex border">
+                  {/* Time Column */}
+                  <div className="flex flex-col border-r bg-muted" style={{ width: "80px" }}>
+                    <div className="border-b p-2 text-sm font-medium" style={{ minHeight: "56px" }}>Zeit</div>
+                    {timeSlots.map((timeMin, rowIdx) => (
+                      <div key={rowIdx} className="border-b p-2 text-xs text-muted-foreground" style={{ minHeight: "40px" }}>
                         {formatTime(timeMin)}
                       </div>
-                      {[0, 1, 2, 3, 4].map((dayIdx) => (
-                        <DroppableCell key={dayIdx} day={dayIdx} timeSlot={rowIdx} startMin={timeMin}>
-                          {rowIdx === 0 && slotsByDay[dayIdx].map(slot => renderSlot(slot))}
-                        </DroppableCell>
-                      ))}
+                    ))}
+                  </div>
+
+                  {/* Day Columns */}
+                  {[0, 1, 2, 3, 4].map((dayIdx) => (
+                    <div key={dayIdx} className="flex-1 flex flex-col border-r min-w-[150px]">
+                      {/* Day Header */}
+                      <div
+                        className="border-b bg-muted p-2 text-sm font-medium text-center"
+                        style={{ minHeight: "56px" }}
+                        data-testid={`header-day-${dayIdx}`}
+                      >
+                        <div>{DAY_LABELS[dayIdx]}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {format(weekDates[dayIdx], "dd.MM.", { locale: de })}
+                        </div>
+                      </div>
+
+                      {/* Day Content - relative positioned container for slots */}
+                      <div className="flex-1 relative">
+                        {/* Droppable cells */}
+                        {timeSlots.map((timeMin, rowIdx) => (
+                          <DroppableCell key={rowIdx} day={dayIdx} timeSlot={rowIdx} startMin={timeMin} />
+                        ))}
+
+                        {/* Absolute positioned slots */}
+                        {slotsByDay[dayIdx].map(slot => renderSlot(slot))}
+                      </div>
                     </div>
                   ))}
                 </div>
