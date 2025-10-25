@@ -1,0 +1,67 @@
+Rewrite the planning grid to be performant and production-usable. Drag & Drop must work reliably.
+
+⚙️ CORE CHANGES
+
+GRID RENDERING
+- Default granularity: 30 minutes per row (07:00–18:00 → 22 rows total).
+- Provide a "Zoom" select: 60 / 30 / 15 / 5 minutes. Default = 30.
+- Only grid rows change with zoom; slot positions remain pixel-precise.
+
+SLOT GEOMETRY
+- rowHeight = 28px (constant)
+- minutesPerRow = zoom value (default 30)
+- startMinBase = 07:00 → 420 minutes
+- Calculate positioning:
+    topPx = ((startMin - 420) / minutesPerRow) * rowHeight
+    heightPx = (lengthMin / minutesPerRow) * rowHeight
+- Use transform/translate/height to reduce reflow.
+- Show hour lines bold, half-hour thin.
+
+DRAG & DROP (FIX REQUIRED!)
+Current bug: Dragging orders into the planning grid is not functional.
+Fix all DnD handlers:
+- From "Aufträge bereit" list → drop into a valid day column
+- Ghost preview while dragging
+- Tooltip shows live Startzeit + Endzeit + Dauer
+- Snapping during drag: see snapping rules below
+- After drop: open Popover for final adjustments
+- POST /api/timeslots automatically after confirmation
+- Immediately refresh planning grid from backend
+
+Snapping Logic:
+- UI snap depends on zoom:
+  - zoom=60 → snap=30
+  - zoom=30 → snap=15
+  - zoom=15 → snap=15
+  - zoom=5  → snap=5
+- Backend must always validate & round to 5-minute multiples (no overlap).
+
+EDITING SLOTS
+- Drag existing slot to move it.
+- Resize bottom edge to change duration.
+- PATCH /api/timeslots/:id after snap + validation.
+
+BLOCKERS
+- Right-click on empty grid space: create blocked slot
+- Same geometry + snapping rules
+- Mark visually with red background
+
+PERFORMANCE RULES
+- Use react-window if zoom < 30 minutes (row count > 40)
+- Memoize DayColumn and SlotList
+- Throttle drag-move to ~16ms
+- Avoid unnecessary re-renders
+
+TEXT (German UI)
+- Keep German terminology: Bereich, KW, Heute, Aufträge bereit, Startzeit, Dauer, Speichern, Blocker
+- Times displayed in normal hh:mm format
+
+NO SCOPE CREEP
+- Do NOT change backend schema
+- Do NOT reintroduce multiple workstations
+- Weekly Mon–Fri layout stays
+- Only show orders of selected Bereich
+- Keep existing PRISMA relations and endpoints untouched
+
+✅ Required: Confirm drag-and-drop works fully before moving on.
+✅ Required: Confirm slot geometry & zooming are correct via visual testing.

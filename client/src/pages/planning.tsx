@@ -182,6 +182,20 @@ export default function PlanningPage() {
     note: "",
   });
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [createBlockerDialog, setCreateBlockerDialog] = useState<{
+    open: boolean;
+    day: number;
+    startMin: number;
+  }>({ open: false, day: 0, startMin: 480 });
+  const [createBlockerForm, setCreateBlockerForm] = useState<{
+    startMin: number;
+    lengthMin: number;
+    note: string;
+  }>({
+    startMin: 480,
+    lengthMin: 120,
+    note: "",
+  });
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -310,6 +324,27 @@ export default function PlanningPage() {
     },
   });
 
+  // Create blocker mutation
+  const createBlockerMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest("/api/timeslots", "POST", data);
+    },
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["/api/timeslots", selectedDepartment, weekStartStr] });
+      toast({ title: "Blocker erstellt" });
+      setCreateBlockerDialog({ open: false, day: 0, startMin: 480 });
+      setCreateBlockerForm({ startMin: 480, lengthMin: 120, note: "" });
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.error || "Fehler beim Erstellen des Blockers";
+      toast({
+        title: "Fehler",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveOrderId(null);
@@ -356,6 +391,23 @@ export default function PlanningPage() {
     if (confirm("Termin wirklich löschen?")) {
       deleteSlotMutation.mutate(slotId);
     }
+  };
+
+  const handleCreateBlocker = () => {
+    if (!selectedWorkCenter) return;
+
+    const dayDate = weekDates[createBlockerDialog.day];
+    const dateStr = format(dayDate, "yyyy-MM-dd");
+
+    createBlockerMutation.mutate({
+      workCenterId: selectedWorkCenter.id,
+      date: dateStr,
+      startMin: createBlockerForm.startMin,
+      lengthMin: createBlockerForm.lengthMin,
+      orderId: null,
+      blocked: true,
+      note: createBlockerForm.note || null,
+    });
   };
 
   const handlePreviousWeek = () => {
@@ -513,6 +565,21 @@ export default function PlanningPage() {
                   Heute
                 </Button>
               </div>
+
+              {/* Blocker Creation Button */}
+              {selectedDepartment && (
+                <Button
+                  variant="default"
+                  onClick={() => {
+                    setCreateBlockerDialog({ open: true, day: 0, startMin: 480 });
+                    setCreateBlockerForm({ startMin: 480, lengthMin: 120, note: "" });
+                  }}
+                  data-testid="button-add-blocker"
+                >
+                  <Lock className="h-4 w-4 mr-2" />
+                  Blocker hinzufügen
+                </Button>
+              )}
             </div>
           </div>
 
@@ -709,6 +776,115 @@ export default function PlanningPage() {
               data-testid="button-create"
             >
               {createSlotMutation.isPending ? "Erstelle..." : "Erstellen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Blocker Dialog */}
+      <Dialog
+        open={createBlockerDialog.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCreateBlockerDialog({ open: false, day: 0, startMin: 480 });
+            setCreateBlockerForm({ startMin: 480, lengthMin: 120, note: "" });
+          }
+        }}
+      >
+        <DialogContent data-testid="dialog-create-blocker">
+          <DialogHeader>
+            <DialogTitle>Blocker hinzufügen</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="blockerDay">Tag</Label>
+              <Select
+                value={createBlockerDialog.day.toString()}
+                onValueChange={(val) => setCreateBlockerDialog({ ...createBlockerDialog, day: parseInt(val) })}
+              >
+                <SelectTrigger id="blockerDay" data-testid="select-blocker-day">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {weekDates.map((date, idx) => (
+                    <SelectItem key={idx} value={idx.toString()}>
+                      {DAY_LABELS[idx]}, {format(date, "dd.MM.yyyy", { locale: de })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="blockerStartTime">Startzeit</Label>
+              <Select
+                value={createBlockerForm.startMin.toString()}
+                onValueChange={(val) => setCreateBlockerForm({ ...createBlockerForm, startMin: parseInt(val) })}
+              >
+                <SelectTrigger id="blockerStartTime" data-testid="select-blocker-start-time">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {timeSlots.map((min) => (
+                    <SelectItem key={min} value={min.toString()}>
+                      {formatTime(min)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="blockerDuration">Dauer</Label>
+              <Select
+                value={createBlockerForm.lengthMin.toString()}
+                onValueChange={(val) => setCreateBlockerForm({ ...createBlockerForm, lengthMin: parseInt(val) })}
+              >
+                <SelectTrigger id="blockerDuration" data-testid="select-blocker-duration">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 Min</SelectItem>
+                  <SelectItem value="60">60 Min</SelectItem>
+                  <SelectItem value="90">90 Min</SelectItem>
+                  <SelectItem value="120">120 Min</SelectItem>
+                  <SelectItem value="180">180 Min</SelectItem>
+                  <SelectItem value="240">240 Min</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="blockerNote">Notiz</Label>
+              <Textarea
+                id="blockerNote"
+                value={createBlockerForm.note}
+                onChange={(e) => setCreateBlockerForm({ ...createBlockerForm, note: e.target.value })}
+                placeholder="Grund für den Blocker..."
+                rows={3}
+                data-testid="textarea-blocker-note"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCreateBlockerDialog({ open: false, day: 0, startMin: 480 });
+                setCreateBlockerForm({ startMin: 480, lengthMin: 120, note: "" });
+              }}
+              data-testid="button-cancel-blocker"
+            >
+              Abbrechen
+            </Button>
+            <Button
+              onClick={handleCreateBlocker}
+              disabled={createBlockerMutation.isPending}
+              data-testid="button-create-blocker"
+            >
+              {createBlockerMutation.isPending ? "Erstelle..." : "Blocker erstellen"}
             </Button>
           </DialogFooter>
         </DialogContent>
