@@ -76,6 +76,13 @@ export interface IStorage {
   updateTimeSlot(id: string, data: UpdateTimeSlot): Promise<TimeSlot>;
   deleteTimeSlot(id: string): Promise<void>;
   batchTimeSlots(data: BatchTimeSlot): Promise<{ created: number; updated: number; deleted: number }>;
+  
+  // TimeSlot actions
+  startTimeSlot(id: string): Promise<TimeSlot>;
+  pauseTimeSlot(id: string): Promise<TimeSlot>;
+  stopTimeSlot(id: string): Promise<TimeSlot>;
+  setTimeSlotQC(id: string, qc: 'IO' | 'NIO', note?: string | null): Promise<TimeSlot>;
+  setTimeSlotMissingParts(id: string, note: string, updateOrderWorkflow: boolean): Promise<TimeSlot>;
 }
 
 export class PrismaStorage implements IStorage {
@@ -1016,6 +1023,144 @@ export class PrismaStorage implements IStorage {
     });
 
     return { created, updated, deleted };
+  }
+
+  // ===== TimeSlot Action Methods =====
+
+  async startTimeSlot(id: string): Promise<TimeSlot> {
+    const slot = await prisma.timeSlot.findUnique({
+      where: { id },
+    });
+
+    if (!slot) {
+      throw new Error('TimeSlot nicht gefunden');
+    }
+
+    // Guard: Can only start PLANNED or PAUSED slots
+    if (slot.status !== 'PLANNED' && slot.status !== 'PAUSED') {
+      throw new Error(`TimeSlot kann nur aus Status PLANNED oder PAUSED gestartet werden (aktuell: ${slot.status})`);
+    }
+
+    // Guard: Must have an order assigned
+    if (!slot.orderId) {
+      throw new Error('TimeSlot muss einem Auftrag zugeordnet sein');
+    }
+
+    return await prisma.timeSlot.update({
+      where: { id },
+      data: {
+        status: 'RUNNING',
+        startedAt: slot.status === 'PLANNED' ? new Date() : slot.startedAt, // Preserve original start if resuming
+      },
+    });
+  }
+
+  async pauseTimeSlot(id: string): Promise<TimeSlot> {
+    const slot = await prisma.timeSlot.findUnique({
+      where: { id },
+    });
+
+    if (!slot) {
+      throw new Error('TimeSlot nicht gefunden');
+    }
+
+    // Guard: Can only pause RUNNING slots
+    if (slot.status !== 'RUNNING') {
+      throw new Error(`TimeSlot kann nur aus Status RUNNING pausiert werden (aktuell: ${slot.status})`);
+    }
+
+    return await prisma.timeSlot.update({
+      where: { id },
+      data: {
+        status: 'PAUSED',
+        stoppedAt: new Date(),
+      },
+    });
+  }
+
+  async stopTimeSlot(id: string): Promise<TimeSlot> {
+    const slot = await prisma.timeSlot.findUnique({
+      where: { id },
+    });
+
+    if (!slot) {
+      throw new Error('TimeSlot nicht gefunden');
+    }
+
+    // Guard: Can only stop RUNNING or PAUSED slots
+    if (slot.status !== 'RUNNING' && slot.status !== 'PAUSED') {
+      throw new Error(`TimeSlot kann nur aus Status RUNNING oder PAUSED beendet werden (aktuell: ${slot.status})`);
+    }
+
+    return await prisma.timeSlot.update({
+      where: { id },
+      data: {
+        status: 'DONE',
+        stoppedAt: new Date(),
+      },
+    });
+  }
+
+  async setTimeSlotQC(id: string, qc: 'IO' | 'NIO', note?: string | null): Promise<TimeSlot> {
+    const slot = await prisma.timeSlot.findUnique({
+      where: { id },
+    });
+
+    if (!slot) {
+      throw new Error('TimeSlot nicht gefunden');
+    }
+
+    // Guard: Can only set QC for DONE slots
+    if (slot.status !== 'DONE') {
+      throw new Error(`QC kann nur für abgeschlossene TimeSlots gesetzt werden (aktuell: ${slot.status})`);
+    }
+
+    return await prisma.timeSlot.update({
+      where: { id },
+      data: {
+        qc,
+        missingPartsNote: note || slot.missingPartsNote, // Preserve existing note if none provided
+      },
+    });
+  }
+
+  async setTimeSlotMissingParts(id: string, note: string, updateOrderWorkflow: boolean): Promise<TimeSlot> {
+    const slot = await prisma.timeSlot.findUnique({
+      where: { id },
+      include: {
+        order: true,
+      },
+    });
+
+    if (!slot) {
+      throw new Error('TimeSlot nicht gefunden');
+    }
+
+    // Guard: Must have an order assigned
+    if (!slot.orderId || !slot.order) {
+      throw new Error('TimeSlot muss einem Auftrag zugeordnet sein');
+    }
+
+    // Update TimeSlot with missing parts note
+    const updated = await prisma.timeSlot.update({
+      where: { id },
+      data: {
+        missingPartsNote: note,
+        status: 'BLOCKED', // Set status to BLOCKED when parts are missing
+      },
+    });
+
+    // Optionally update order workflow to WARTET_FEHLTEILE
+    if (updateOrderWorkflow) {
+      await prisma.order.update({
+        where: { id: slot.orderId },
+        data: {
+          workflow: 'WARTET_FEHLTEILE',
+        },
+      });
+    }
+
+    return updated;
   }
 }
 
