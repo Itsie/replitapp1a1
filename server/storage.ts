@@ -1,5 +1,5 @@
-import { PrismaClient, type OrderSource, type Department, type WorkflowState, type OrderPosition, type OrderAsset, Prisma } from "@prisma/client";
-import type { InsertOrder, InsertSizeTable, InsertPrintAsset, InsertOrderAsset, InsertPosition, UpdatePosition, OrderWithRelations } from "@shared/schema";
+import { PrismaClient, type OrderSource, type Department, type WorkflowState, type OrderPosition, type OrderAsset, type WorkCenter, type TimeSlot, Prisma } from "@prisma/client";
+import type { InsertOrder, InsertSizeTable, InsertPrintAsset, InsertOrderAsset, InsertPosition, UpdatePosition, OrderWithRelations, InsertWorkCenter, UpdateWorkCenter, InsertTimeSlot, UpdateTimeSlot, BatchTimeSlot } from "@shared/schema";
 
 const prisma = new PrismaClient();
 
@@ -8,6 +8,29 @@ export interface OrderFilters {
   department?: Department;
   source?: OrderSource;
   workflow?: WorkflowState;
+}
+
+export interface CalendarFilters {
+  startDate: string;
+  endDate: string;
+  workCenterId?: string;
+  department?: Department;
+}
+
+export interface WorkCenterWithSlotCount extends WorkCenter {
+  slotsTodayCount: number;
+}
+
+export interface TimeSlotWithOrder extends TimeSlot {
+  order?: {
+    id: string;
+    displayOrderNumber: string | null;
+    title: string;
+    customer: string;
+    department: Department;
+    workflow: WorkflowState;
+    dueDate: Date | null;
+  } | null;
 }
 
 export interface IStorage {
@@ -37,6 +60,22 @@ export interface IStorage {
   
   // Submit order
   submitOrder(orderId: string): Promise<OrderWithRelations>;
+  
+  // WorkCenters
+  getWorkCenters(department?: Department, active?: boolean): Promise<WorkCenterWithSlotCount[]>;
+  getWorkCenterById(id: string): Promise<WorkCenter | null>;
+  createWorkCenter(data: InsertWorkCenter): Promise<WorkCenter>;
+  updateWorkCenter(id: string, data: UpdateWorkCenter): Promise<WorkCenter>;
+  deleteWorkCenter(id: string): Promise<void>;
+  
+  // TimeSlots
+  getCalendar(filters: CalendarFilters): Promise<TimeSlotWithOrder[]>;
+  getOrderTimeSlots(orderId: string): Promise<TimeSlotWithOrder[]>;
+  getTimeSlotById(id: string): Promise<TimeSlot | null>;
+  createTimeSlot(data: InsertTimeSlot): Promise<TimeSlot>;
+  updateTimeSlot(id: string, data: UpdateTimeSlot): Promise<TimeSlot>;
+  deleteTimeSlot(id: string): Promise<void>;
+  batchTimeSlots(data: BatchTimeSlot): Promise<{ created: number; updated: number; deleted: number }>;
 }
 
 export class PrismaStorage implements IStorage {
@@ -621,6 +660,361 @@ export class PrismaStorage implements IStorage {
 
     // Recalculate order totals
     await this.recalculateOrderTotals(orderId);
+  }
+
+  // ===== WorkCenter Methods =====
+  
+  async getWorkCenters(department?: Department, active?: boolean): Promise<WorkCenterWithSlotCount[]> {
+    const where: any = {};
+    if (department) where.department = department;
+    if (active !== undefined) where.active = active;
+
+    const workCenters = await prisma.workCenter.findMany({
+      where,
+      include: {
+        timeSlots: {
+          where: {
+            date: {
+              gte: new Date(new Date().toISOString().split('T')[0]),
+              lt: new Date(new Date(Date.now() + 86400000).toISOString().split('T')[0]),
+            },
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return workCenters.map(wc => ({
+      ...wc,
+      slotsTodayCount: wc.timeSlots.length,
+      timeSlots: wc.timeSlots,
+    }));
+  }
+
+  async getWorkCenterById(id: string): Promise<WorkCenter | null> {
+    return await prisma.workCenter.findUnique({
+      where: { id },
+    });
+  }
+
+  async createWorkCenter(data: InsertWorkCenter): Promise<WorkCenter> {
+    return await prisma.workCenter.create({
+      data: {
+        name: data.name,
+        department: data.department,
+        capacityMin: data.capacityMin ?? 660,
+        active: data.active ?? true,
+      },
+    });
+  }
+
+  async updateWorkCenter(id: string, data: UpdateWorkCenter): Promise<WorkCenter> {
+    const existing = await prisma.workCenter.findUnique({ where: { id } });
+    if (!existing) {
+      throw new Error('WorkCenter not found');
+    }
+
+    return await prisma.workCenter.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteWorkCenter(id: string): Promise<void> {
+    const existing = await prisma.workCenter.findUnique({ where: { id } });
+    if (!existing) {
+      throw new Error('WorkCenter not found');
+    }
+
+    // Check for future time slots
+    const today = new Date().toISOString().split('T')[0];
+    const futureSlots = await prisma.timeSlot.count({
+      where: {
+        workCenterId: id,
+        date: { gte: new Date(today) },
+      },
+    });
+
+    if (futureSlots > 0) {
+      throw new Error('Cannot delete WorkCenter with future TimeSlots');
+    }
+
+    await prisma.workCenter.delete({ where: { id } });
+  }
+
+  // ===== TimeSlot Methods =====
+
+  private async checkTimeSlotOverlap(
+    date: string,
+    startMin: number,
+    lengthMin: number,
+    workCenterId: string,
+    excludeId?: string
+  ): Promise<boolean> {
+    const endMin = startMin + lengthMin;
+    const dateObj = new Date(date);
+
+    const where: any = {
+      workCenterId,
+      date: dateObj,
+      blocked: false,
+      NOT: excludeId ? { id: excludeId } : undefined,
+    };
+
+    const existingSlots = await prisma.timeSlot.findMany({ where });
+
+    for (const slot of existingSlots) {
+      const slotEnd = slot.startMin + slot.lengthMin;
+      // Check overlap: NOT (existingEnd <= newStart OR existingStart >= newEnd)
+      if (!(slotEnd <= startMin || slot.startMin >= endMin)) {
+        return true; // Overlap detected
+      }
+    }
+
+    return false;
+  }
+
+  private async validateTimeSlot(
+    data: InsertTimeSlot | UpdateTimeSlot,
+    existingSlot?: TimeSlot
+  ): Promise<void> {
+    // Merge with existing data for updates
+    const merged = existingSlot ? { ...existingSlot, ...data } : data;
+    
+    // Validate working hours
+    const startMin = merged.startMin!;
+    const lengthMin = merged.lengthMin!;
+    if (startMin < 420 || startMin + lengthMin > 1080) {
+      throw new Error('Time slot must be within working hours (07:00-18:00)');
+    }
+
+    // Validate orderId and department if orderId is provided
+    if (merged.orderId) {
+      const order = await prisma.order.findUnique({
+        where: { id: merged.orderId },
+      });
+      
+      if (!order) {
+        throw new Error('Order not found');
+      }
+
+      const workCenter = await prisma.workCenter.findUnique({
+        where: { id: merged.workCenterId! },
+      });
+
+      if (!workCenter) {
+        throw new Error('WorkCenter not found');
+      }
+
+      // Department guard
+      if (order.department !== workCenter.department) {
+        throw new Error('Order department must match WorkCenter department');
+      }
+
+      // Workflow guard
+      const validWorkflows = ['FUER_PROD', 'IN_PROD', 'WARTET_FEHLTEILE'];
+      if (!validWorkflows.includes(order.workflow)) {
+        throw new Error('Order must be in FUER_PROD, IN_PROD, or WARTET_FEHLTEILE workflow state');
+      }
+    }
+
+    // Check overlap
+    const hasOverlap = await this.checkTimeSlotOverlap(
+      merged.date! as unknown as string,
+      startMin,
+      lengthMin,
+      merged.workCenterId!,
+      existingSlot?.id
+    );
+
+    if (hasOverlap) {
+      throw new Error('Time slot overlaps with existing slot');
+    }
+  }
+
+  async getCalendar(filters: CalendarFilters): Promise<TimeSlotWithOrder[]> {
+    const where: any = {
+      date: {
+        gte: new Date(filters.startDate),
+        lte: new Date(filters.endDate),
+      },
+    };
+
+    if (filters.workCenterId) {
+      where.workCenterId = filters.workCenterId;
+    }
+
+    if (filters.department) {
+      where.workCenter = {
+        department: filters.department,
+      };
+    }
+
+    const slots = await prisma.timeSlot.findMany({
+      where,
+      include: {
+        order: {
+          select: {
+            id: true,
+            displayOrderNumber: true,
+            title: true,
+            customer: true,
+            department: true,
+            workflow: true,
+            dueDate: true,
+          },
+        },
+      },
+      orderBy: [
+        { date: 'asc' },
+        { startMin: 'asc' },
+      ],
+    });
+
+    return slots;
+  }
+
+  async getOrderTimeSlots(orderId: string): Promise<TimeSlotWithOrder[]> {
+    const slots = await prisma.timeSlot.findMany({
+      where: { orderId },
+      include: {
+        order: {
+          select: {
+            id: true,
+            displayOrderNumber: true,
+            title: true,
+            customer: true,
+            department: true,
+            workflow: true,
+            dueDate: true,
+          },
+        },
+      },
+      orderBy: [
+        { date: 'asc' },
+        { startMin: 'asc' },
+      ],
+    });
+
+    return slots;
+  }
+
+  async getTimeSlotById(id: string): Promise<TimeSlot | null> {
+    return await prisma.timeSlot.findUnique({
+      where: { id },
+    });
+  }
+
+  async createTimeSlot(data: InsertTimeSlot): Promise<TimeSlot> {
+    await this.validateTimeSlot(data);
+
+    return await prisma.timeSlot.create({
+      data: {
+        date: new Date(data.date),
+        startMin: data.startMin,
+        lengthMin: data.lengthMin,
+        workCenterId: data.workCenterId,
+        orderId: data.orderId || null,
+        blocked: data.blocked ?? false,
+        note: data.note || null,
+      },
+    });
+  }
+
+  async updateTimeSlot(id: string, data: UpdateTimeSlot): Promise<TimeSlot> {
+    const existing = await prisma.timeSlot.findUnique({ where: { id } });
+    if (!existing) {
+      throw new Error('TimeSlot not found');
+    }
+
+    await this.validateTimeSlot(data, existing);
+
+    const updateData: any = {};
+    if (data.date !== undefined) updateData.date = new Date(data.date);
+    if (data.startMin !== undefined) updateData.startMin = data.startMin;
+    if (data.lengthMin !== undefined) updateData.lengthMin = data.lengthMin;
+    if (data.workCenterId !== undefined) updateData.workCenterId = data.workCenterId;
+    if (data.orderId !== undefined) updateData.orderId = data.orderId || null;
+    if (data.blocked !== undefined) updateData.blocked = data.blocked;
+    if (data.note !== undefined) updateData.note = data.note || null;
+
+    return await prisma.timeSlot.update({
+      where: { id },
+      data: updateData,
+    });
+  }
+
+  async deleteTimeSlot(id: string): Promise<void> {
+    const existing = await prisma.timeSlot.findUnique({ where: { id } });
+    if (!existing) {
+      throw new Error('TimeSlot not found');
+    }
+
+    await prisma.timeSlot.delete({ where: { id } });
+  }
+
+  async batchTimeSlots(data: BatchTimeSlot): Promise<{ created: number; updated: number; deleted: number }> {
+    let created = 0;
+    let updated = 0;
+    let deleted = 0;
+
+    await prisma.$transaction(async (tx) => {
+      // Delete operations
+      if (data.delete && data.delete.length > 0) {
+        for (const id of data.delete) {
+          await tx.timeSlot.delete({ where: { id } });
+          deleted++;
+        }
+      }
+
+      // Create operations
+      if (data.create && data.create.length > 0) {
+        for (const slot of data.create) {
+          await this.validateTimeSlot(slot);
+          await tx.timeSlot.create({
+            data: {
+              date: new Date(slot.date),
+              startMin: slot.startMin,
+              lengthMin: slot.lengthMin,
+              workCenterId: slot.workCenterId,
+              orderId: slot.orderId || null,
+              blocked: slot.blocked ?? false,
+              note: slot.note || null,
+            },
+          });
+          created++;
+        }
+      }
+
+      // Update operations
+      if (data.update && data.update.length > 0) {
+        for (const { id, ...updateData } of data.update) {
+          const existing = await tx.timeSlot.findUnique({ where: { id } });
+          if (!existing) {
+            throw new Error(`TimeSlot ${id} not found`);
+          }
+
+          await this.validateTimeSlot(updateData, existing);
+
+          const dbUpdate: any = {};
+          if (updateData.date !== undefined) dbUpdate.date = new Date(updateData.date);
+          if (updateData.startMin !== undefined) dbUpdate.startMin = updateData.startMin;
+          if (updateData.lengthMin !== undefined) dbUpdate.lengthMin = updateData.lengthMin;
+          if (updateData.workCenterId !== undefined) dbUpdate.workCenterId = updateData.workCenterId;
+          if (updateData.orderId !== undefined) dbUpdate.orderId = updateData.orderId || null;
+          if (updateData.blocked !== undefined) dbUpdate.blocked = updateData.blocked;
+          if (updateData.note !== undefined) dbUpdate.note = updateData.note || null;
+
+          await tx.timeSlot.update({
+            where: { id },
+            data: dbUpdate,
+          });
+          updated++;
+        }
+      }
+    });
+
+    return { created, updated, deleted };
   }
 }
 

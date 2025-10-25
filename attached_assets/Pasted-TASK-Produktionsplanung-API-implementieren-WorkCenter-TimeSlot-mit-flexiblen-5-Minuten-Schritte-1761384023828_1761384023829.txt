@@ -1,0 +1,66 @@
+TASK: Produktionsplanung-API implementieren (WorkCenter + TimeSlot) mit flexiblen 5-Minuten-Schritten.
+
+DON'T TOUCH: Bestehende Orders/Positions/Size/Assets/Submit-Endpunkte bleiben unverändert.
+
+DB-Modelle vorhanden:
+- WorkCenter { id, name, department, capacityMin=660, active=true, timeSlots[] }
+- TimeSlot   { id, date(ISO), startMin, lengthMin, workCenterId, orderId?, blocked=false, note? }
+
+VALIDIERUNG (für POST/PATCH TimeSlot):
+- Granularität: startMin % 5 === 0, lengthMin % 5 === 0, lengthMin > 0
+- Arbeitszeiten: 07:00–18:00 → startMin >= 420 AND startMin + lengthMin <= 1080
+- Keine Überlappung: gleicher workCenterId + date + blocked=false → Intervalle [start,end) dürfen sich nicht schneiden
+- Blocked-Slots: blocked=true benötigt keine orderId, darf trotzdem nicht überlappen
+- Department-Guard: wenn orderId gesetzt → order.department == workCenter.department
+- Workflow-Guard: order.workflow ∈ ["FUER_PROD","IN_PROD","WARTET_FEHLTEILE"]
+- Fehlercodes: 404 not found, 409 overlap, 412 guard, 422 validation
+
+ENDPOINTS
+
+[WorkCenters]
+GET  /api/workcenters
+  Query: department?, active?
+  → [{ id, name, department, capacityMin, active, slotsTodayCount }]
+POST /api/workcenters
+  Body: { name, department, capacityMin?, active? } → 201
+PATCH /api/workcenters/:id
+  Body: { name?, department?, capacityMin?, active? } → 200
+DELETE /api/workcenters/:id
+  Deny if future TimeSlots exist (date >= today) → 409
+
+[Calendar / TimeSlots]
+GET  /api/calendar
+  Query: startDate (ISO, required), endDate (ISO, required), workCenterId?, department?
+  → [
+      { id, date, startMin, lengthMin, workCenterId, blocked, note,
+        order?: { id, displayOrderNumber, title, customer, department, workflow, dueDate } }
+    ]
+POST /api/timeslots
+  Body: { date, startMin, lengthMin, workCenterId, orderId?, blocked?, note? } → 201
+  Regel: wenn orderId vorhanden → blocked muss false/undefiniert sein
+PATCH /api/timeslots/:id
+  Body: { date?, startMin?, lengthMin?, workCenterId?, orderId?, blocked?, note? } → 200
+  Re-validate: 5-Minuten, Hours, Overlap, Guards
+DELETE /api/timeslots/:id
+  → 204
+
+[Order-Sicht]
+GET  /api/orders/:id/timeslots
+  → Slots für Order (sortiert)
+
+[Batch]
+POST /api/timeslots/batch
+  Body: { create?: TimeSlot[], update?: {id & fields}[], delete?: string[] }
+  Transaktion all-or-nothing; Return { created, updated, deleted }
+
+TECHNIK
+- Zod für Payloads; date als YYYY-MM-DD (UTC) normalisieren; startMin/lengthMin integer
+- Overlap-Query: NOT (existingEnd <= newStart OR existingStart >= newEnd)
+- Transaktionen im Batch
+
+TESTS
+- Blocker 08:00–10:00 → OK
+- Norm-Slot 09:00–10:00 same center → 409
+- Order mit falschem Department → 412
+- Slot 07:05–07:35 → OK (5-Minuten Raster)
+- Slot außerhalb 07–18 → 422

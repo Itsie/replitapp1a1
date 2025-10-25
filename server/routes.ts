@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertOrderSchema, updateOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertOrderAssetSchema, insertPositionSchema, updatePositionSchema } from "@shared/schema";
+import { insertOrderSchema, updateOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertOrderAssetSchema, insertPositionSchema, updatePositionSchema, insertWorkCenterSchema, updateWorkCenterSchema, insertTimeSlotSchema, updateTimeSlotSchema, batchTimeSlotSchema } from "@shared/schema";
 import { z } from "zod";
 import { Decimal } from "@prisma/client/runtime/library";
 import { upload } from "./upload";
@@ -481,6 +481,219 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error deleting position:", error);
       res.status(500).json({ error: "Failed to delete position" });
+    }
+  });
+
+  // ===== WorkCenter Routes =====
+
+  // GET /api/workcenters - List work centers
+  app.get("/api/workcenters", async (req, res) => {
+    try {
+      const department = req.query.department as any;
+      const active = req.query.active === 'true' ? true : req.query.active === 'false' ? false : undefined;
+      
+      const workCenters = await storage.getWorkCenters(department, active);
+      res.json(workCenters);
+    } catch (error) {
+      console.error("Error fetching work centers:", error);
+      res.status(500).json({ error: "Failed to fetch work centers" });
+    }
+  });
+
+  // POST /api/workcenters - Create work center
+  app.post("/api/workcenters", async (req, res) => {
+    try {
+      const validated = insertWorkCenterSchema.parse(req.body);
+      const workCenter = await storage.createWorkCenter(validated);
+      res.status(201).json(workCenter);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(422).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Error creating work center:", error);
+      res.status(500).json({ error: "Failed to create work center" });
+    }
+  });
+
+  // PATCH /api/workcenters/:id - Update work center
+  app.patch("/api/workcenters/:id", async (req, res) => {
+    try {
+      const validated = updateWorkCenterSchema.parse(req.body);
+      const workCenter = await storage.updateWorkCenter(req.params.id, validated);
+      res.json(workCenter);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(422).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error && error.message === "WorkCenter not found") {
+        return res.status(404).json({ error: "WorkCenter not found" });
+      }
+      console.error("Error updating work center:", error);
+      res.status(500).json({ error: "Failed to update work center" });
+    }
+  });
+
+  // DELETE /api/workcenters/:id - Delete work center
+  app.delete("/api/workcenters/:id", async (req, res) => {
+    try {
+      await storage.deleteWorkCenter(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === "WorkCenter not found") {
+          return res.status(404).json({ error: "WorkCenter not found" });
+        }
+        if (error.message === "Cannot delete WorkCenter with future TimeSlots") {
+          return res.status(409).json({ error: "Cannot delete WorkCenter with future TimeSlots" });
+        }
+      }
+      console.error("Error deleting work center:", error);
+      res.status(500).json({ error: "Failed to delete work center" });
+    }
+  });
+
+  // ===== TimeSlot Routes =====
+
+  // GET /api/calendar - Get time slots for calendar view
+  app.get("/api/calendar", async (req, res) => {
+    try {
+      if (!req.query.startDate || !req.query.endDate) {
+        return res.status(400).json({ error: "startDate and endDate are required" });
+      }
+
+      const filters = {
+        startDate: req.query.startDate as string,
+        endDate: req.query.endDate as string,
+        workCenterId: req.query.workCenterId as string | undefined,
+        department: req.query.department as any,
+      };
+
+      const slots = await storage.getCalendar(filters);
+      res.json(slots);
+    } catch (error) {
+      console.error("Error fetching calendar:", error);
+      res.status(500).json({ error: "Failed to fetch calendar" });
+    }
+  });
+
+  // GET /api/orders/:id/timeslots - Get time slots for an order
+  app.get("/api/orders/:id/timeslots", async (req, res) => {
+    try {
+      const slots = await storage.getOrderTimeSlots(req.params.id);
+      res.json(slots);
+    } catch (error) {
+      console.error("Error fetching order time slots:", error);
+      res.status(500).json({ error: "Failed to fetch order time slots" });
+    }
+  });
+
+  // POST /api/timeslots - Create time slot
+  app.post("/api/timeslots", async (req, res) => {
+    try {
+      const validated = insertTimeSlotSchema.parse(req.body);
+      const timeSlot = await storage.createTimeSlot(validated);
+      res.status(201).json(timeSlot);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(422).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error) {
+        if (error.message === "Order not found" || error.message === "WorkCenter not found") {
+          return res.status(404).json({ error: error.message });
+        }
+        if (error.message === "Time slot overlaps with existing slot") {
+          return res.status(409).json({ error: error.message });
+        }
+        if (
+          error.message === "Order department must match WorkCenter department" ||
+          error.message === "Order must be in FUER_PROD, IN_PROD, or WARTET_FEHLTEILE workflow state"
+        ) {
+          return res.status(412).json({ error: error.message });
+        }
+        if (error.message === "Time slot must be within working hours (07:00-18:00)") {
+          return res.status(422).json({ error: error.message });
+        }
+      }
+      console.error("Error creating time slot:", error);
+      res.status(500).json({ error: "Failed to create time slot" });
+    }
+  });
+
+  // PATCH /api/timeslots/:id - Update time slot
+  app.patch("/api/timeslots/:id", async (req, res) => {
+    try {
+      const validated = updateTimeSlotSchema.parse(req.body);
+      const timeSlot = await storage.updateTimeSlot(req.params.id, validated);
+      res.json(timeSlot);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(422).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error) {
+        if (error.message === "TimeSlot not found" || error.message === "Order not found" || error.message === "WorkCenter not found") {
+          return res.status(404).json({ error: error.message });
+        }
+        if (error.message === "Time slot overlaps with existing slot") {
+          return res.status(409).json({ error: error.message });
+        }
+        if (
+          error.message === "Order department must match WorkCenter department" ||
+          error.message === "Order must be in FUER_PROD, IN_PROD, or WARTET_FEHLTEILE workflow state"
+        ) {
+          return res.status(412).json({ error: error.message });
+        }
+        if (error.message === "Time slot must be within working hours (07:00-18:00)") {
+          return res.status(422).json({ error: error.message });
+        }
+      }
+      console.error("Error updating time slot:", error);
+      res.status(500).json({ error: "Failed to update time slot" });
+    }
+  });
+
+  // DELETE /api/timeslots/:id - Delete time slot
+  app.delete("/api/timeslots/:id", async (req, res) => {
+    try {
+      await storage.deleteTimeSlot(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      if (error instanceof Error && error.message === "TimeSlot not found") {
+        return res.status(404).json({ error: "TimeSlot not found" });
+      }
+      console.error("Error deleting time slot:", error);
+      res.status(500).json({ error: "Failed to delete time slot" });
+    }
+  });
+
+  // POST /api/timeslots/batch - Batch operations for time slots
+  app.post("/api/timeslots/batch", async (req, res) => {
+    try {
+      const validated = batchTimeSlotSchema.parse(req.body);
+      const result = await storage.batchTimeSlots(validated);
+      res.json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(422).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error) {
+        if (error.message.includes("not found")) {
+          return res.status(404).json({ error: error.message });
+        }
+        if (error.message.includes("overlaps")) {
+          return res.status(409).json({ error: error.message });
+        }
+        if (
+          error.message.includes("department") ||
+          error.message.includes("workflow state")
+        ) {
+          return res.status(412).json({ error: error.message });
+        }
+        if (error.message.includes("working hours")) {
+          return res.status(422).json({ error: error.message });
+        }
+      }
+      console.error("Error in batch operation:", error);
+      res.status(500).json({ error: "Failed to execute batch operation" });
     }
   });
 

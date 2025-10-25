@@ -188,3 +188,108 @@ export type OrderWithRelations = Order & {
   orderAssets: OrderAsset[];
   positions: OrderPosition[];
 };
+
+// ===== WorkCenter & TimeSlot Schemas =====
+
+// WorkCenter insert schema
+export const insertWorkCenterSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  department: departmentSchema,
+  capacityMin: z.number().int().positive("Capacity must be positive").default(660),
+  active: z.boolean().default(true),
+});
+
+// WorkCenter update schema
+export const updateWorkCenterSchema = z.object({
+  name: z.string().min(1, "Name is required").optional(),
+  department: departmentSchema.optional(),
+  capacityMin: z.number().int().positive("Capacity must be positive").optional(),
+  active: z.boolean().optional(),
+});
+
+// TimeSlot insert schema with validations
+export const insertTimeSlotSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
+  startMin: z.number().int().nonnegative("Start time must be non-negative"),
+  lengthMin: z.number().int().positive("Length must be positive"),
+  workCenterId: z.string().min(1, "WorkCenter ID is required"),
+  orderId: z.string().optional().nullable(),
+  blocked: z.boolean().default(false),
+  note: z.string().optional().nullable(),
+}).refine(
+  (data) => data.startMin % 5 === 0,
+  {
+    message: "Start time must be in 5-minute increments",
+    path: ["startMin"],
+  }
+).refine(
+  (data) => data.lengthMin % 5 === 0,
+  {
+    message: "Length must be in 5-minute increments",
+    path: ["lengthMin"],
+  }
+).refine(
+  (data) => data.startMin >= 420 && data.startMin + data.lengthMin <= 1080,
+  {
+    message: "Time slot must be within working hours (07:00-18:00, 420-1080 minutes)",
+    path: ["startMin"],
+  }
+).refine(
+  (data) => {
+    // If orderId is set, blocked must be false
+    if (data.orderId && data.blocked) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: "Cannot have both orderId and blocked=true",
+    path: ["blocked"],
+  }
+);
+
+// TimeSlot update schema (partial)
+export const updateTimeSlotSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format").optional(),
+  startMin: z.number().int().nonnegative("Start time must be non-negative").optional(),
+  lengthMin: z.number().int().positive("Length must be positive").optional(),
+  workCenterId: z.string().min(1, "WorkCenter ID is required").optional(),
+  orderId: z.string().optional().nullable(),
+  blocked: z.boolean().optional(),
+  note: z.string().optional().nullable(),
+}).refine(
+  (data) => !data.startMin || data.startMin % 5 === 0,
+  {
+    message: "Start time must be in 5-minute increments",
+    path: ["startMin"],
+  }
+).refine(
+  (data) => !data.lengthMin || data.lengthMin % 5 === 0,
+  {
+    message: "Length must be in 5-minute increments",
+    path: ["lengthMin"],
+  }
+);
+
+// Batch operations schema
+export const batchTimeSlotSchema = z.object({
+  create: z.array(insertTimeSlotSchema).optional(),
+  update: z.array(z.object({
+    id: z.string().min(1, "ID is required"),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format").optional(),
+    startMin: z.number().int().nonnegative("Start time must be non-negative").optional(),
+    lengthMin: z.number().int().positive("Length must be positive").optional(),
+    workCenterId: z.string().min(1, "WorkCenter ID is required").optional(),
+    orderId: z.string().optional().nullable(),
+    blocked: z.boolean().optional(),
+    note: z.string().optional().nullable(),
+  })).optional(),
+  delete: z.array(z.string().min(1, "ID is required")).optional(),
+});
+
+// Infer types
+export type InsertWorkCenter = z.infer<typeof insertWorkCenterSchema>;
+export type UpdateWorkCenter = z.infer<typeof updateWorkCenterSchema>;
+export type InsertTimeSlot = z.infer<typeof insertTimeSlotSchema>;
+export type UpdateTimeSlot = z.infer<typeof updateTimeSlotSchema>;
+export type BatchTimeSlot = z.infer<typeof batchTimeSlotSchema>;
