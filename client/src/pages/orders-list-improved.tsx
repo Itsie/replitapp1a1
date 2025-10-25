@@ -281,73 +281,73 @@ export default function OrdersList() {
   const orders = filteredOrders.slice(0, MAX_ROWS);
   const isRowLimitReached = filteredOrders.length > MAX_ROWS;
   
+  // Cell class constants for consistent alignment
+  const cellBase = "px-3 py-2 whitespace-nowrap";
+  const cellRight = `${cellBase} text-right tabular-nums`;
+  
   // Memoize columns for performance optimization
   const columns: ColumnDef<OrderWithRelations>[] = useMemo(() => [
     {
-      accessorKey: "displayOrderNumber",
-      header: "Auftragsnr.",
-      cell: ({ row }) => (
-        <div className="font-mono text-sm min-w-[120px]">
-          {row.original.displayOrderNumber || "—"}
-        </div>
-      ),
-      enableSorting: true,
-    },
-    {
       accessorKey: "title",
-      header: "Titel",
+      header: () => <div className="px-3 py-2">Titel</div>,
       cell: ({ row }) => (
-        <div className="font-medium min-w-[180px]">{row.original.title}</div>
+        <div className={`${cellBase} font-medium min-w-[16rem]`}>{row.original.title}</div>
       ),
       enableSorting: true,
     },
     {
       accessorKey: "customer",
-      header: "Kunde",
+      header: () => <div className="px-3 py-2">Kunde</div>,
       cell: ({ row }) => {
         const name = row.original.company || 
           `${row.original.contactFirstName || ''} ${row.original.contactLastName || ''}`.trim() ||
           row.original.customer;
-        return <div className="min-w-[140px]">{name}</div>;
+        return <div className={`${cellBase} min-w-[14rem]`}>{name}</div>;
       },
     },
     {
       accessorKey: "department",
-      header: "Abteilung",
+      header: () => <div className="px-3 py-2">Abteilung</div>,
       cell: ({ row }) => (
-        <Badge variant="outline">{row.original.department}</Badge>
+        <div className={cellBase}>
+          <Badge variant="outline">{row.original.department}</Badge>
+        </div>
       ),
     },
     {
       accessorKey: "source",
-      header: "Quelle",
+      header: () => <div className="px-3 py-2">Quelle</div>,
       cell: ({ row }) => {
         const sourceLabel = row.original.source === "INTERNAL" ? "Intern" : row.original.source;
         return (
-          <Badge variant={getSourceBadgeVariant(row.original.source)}>
-            {sourceLabel}
-          </Badge>
+          <div className={cellBase}>
+            <Badge variant={getSourceBadgeVariant(row.original.source)}>
+              {sourceLabel}
+            </Badge>
+          </div>
         );
       },
     },
     {
       accessorKey: "workflow",
-      header: "Status",
+      header: () => <div className="px-3 py-2">Status</div>,
       cell: ({ row }) => (
-        <Badge variant={getWorkflowBadgeVariant(row.original.workflow)}>
-          {row.original.workflow}
-        </Badge>
+        <div className={cellBase}>
+          <Badge variant={getWorkflowBadgeVariant(row.original.workflow)}>
+            {row.original.workflow}
+          </Badge>
+        </div>
       ),
       enableSorting: true,
     },
     {
       accessorKey: "dueDate",
-      header: () => <div className="text-right">Fälligkeit</div>,
+      header: () => <div className="px-3 py-2 text-right">Fälligkeit</div>,
       cell: ({ row }) => {
         const { label, variant } = getDueDateStatus(row.original.dueDate);
         return (
-          <div className="flex justify-end">
-            <Badge variant={variant} className="min-w-[100px] justify-center">
+          <div className={cellRight}>
+            <Badge variant={variant} className="min-w-[6.5rem] justify-center tabular-nums">
               {label}
             </Badge>
           </div>
@@ -357,9 +357,9 @@ export default function OrdersList() {
     },
     {
       id: "sizeTable",
-      header: "Größe",
+      header: () => <div className="px-3 py-2 text-center">Größe</div>,
       cell: ({ row }) => (
-        <div className="text-center min-w-[60px]">
+        <div className={`${cellBase} text-center`}>
           {row.original.sizeTable ? (
             <Check className="h-4 w-4 text-green-600 inline" />
           ) : (
@@ -370,11 +370,11 @@ export default function OrdersList() {
     },
     {
       id: "assets",
-      header: "Druckdaten",
+      header: () => <div className="px-3 py-2 text-center">Druckdaten</div>,
       cell: ({ row }) => {
         const requiredAssets = row.original.printAssets.filter(a => a.required);
         return (
-          <div className="text-center min-w-[80px]">
+          <div className={`${cellBase} text-center`}>
             {requiredAssets.length > 0 ? (
               <Badge variant="secondary">{requiredAssets.length}</Badge>
             ) : (
@@ -386,14 +386,14 @@ export default function OrdersList() {
     },
     {
       accessorKey: "totalGross",
-      header: "Gesamt (Brutto)",
+      header: () => <div className="px-3 py-2 text-right">Gesamt (Brutto)</div>,
       cell: ({ row }) => {
         const total = row.original.totalGross;
         if (total === null || total === undefined) {
-          return <span className="text-muted-foreground">—</span>;
+          return <div className={cellRight}>—</div>;
         }
         return (
-          <div className="text-right font-medium min-w-[100px]">
+          <div className={`${cellRight} font-medium min-w-[7.5rem]`}>
             {formatCurrency(Number(total))}
           </div>
         );
@@ -402,13 +402,15 @@ export default function OrdersList() {
     },
     {
       id: "actions",
-      header: "Aktionen",
+      header: () => <div className="px-3 py-2">Aktionen</div>,
       cell: ({ row }) => (
-        <Link href={`/orders/${row.original.id}`}>
-          <Button variant="ghost" size="icon" data-testid={`button-view-${row.original.id}`}>
-            <Eye className="h-4 w-4" />
-          </Button>
-        </Link>
+        <div className={cellBase}>
+          <Link href={`/orders/${row.original.id}`}>
+            <Button variant="ghost" size="icon" data-testid={`button-view-${row.original.id}`}>
+              <Eye className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
       ),
       enableHiding: false,
     },
@@ -759,19 +761,19 @@ export default function OrdersList() {
       {viewMode === 'table' && (
         <div className="border rounded-2xl overflow-hidden">
           <div className="relative overflow-x-auto max-h-[calc(100vh-400px)]">
-            <Table>
+            <Table className="w-full table-fixed border-collapse">
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
                       <TableHead 
                         key={header.id} 
-                        className="sticky top-0 bg-background z-10 border-b"
+                        className="sticky top-0 bg-background z-10 border-b p-0"
                       >
                         {header.isPlaceholder ? null : header.column.getCanSort() ? (
                           <button
                             type="button"
-                            className="flex items-center gap-2 font-medium hover:text-foreground transition-colors"
+                            className="w-full flex items-center gap-2 font-medium hover:text-foreground transition-colors"
                             onClick={header.column.getToggleSortingHandler()}
                             aria-label={`Sort by ${header.column.columnDef.header}`}
                             aria-sort={
@@ -807,16 +809,18 @@ export default function OrdersList() {
                   [...Array(8)].map((_, i) => (
                     <TableRow key={i}>
                       {columns.map((_, j) => (
-                        <TableCell key={j}>
-                          <Skeleton className="h-4 w-full" />
+                        <TableCell key={j} className="p-0">
+                          <div className="px-3 py-2">
+                            <Skeleton className="h-4 w-full" />
+                          </div>
                         </TableCell>
                       ))}
                     </TableRow>
                   ))
                 ) : orders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={columns.length} className="h-64 text-center">
-                      <div className="flex flex-col items-center justify-center">
+                    <TableCell colSpan={columns.length} className="h-64 text-center p-0">
+                      <div className="flex flex-col items-center justify-center px-3 py-2">
                         <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
                           <Search className="h-6 w-6 text-muted-foreground" />
                         </div>
@@ -852,7 +856,7 @@ export default function OrdersList() {
                       {row.getVisibleCells().map((cell) => (
                         <TableCell 
                           key={cell.id}
-                          className={density === 'compact' ? 'px-2 py-1' : 'px-3 py-2'}
+                          className="p-0"
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
