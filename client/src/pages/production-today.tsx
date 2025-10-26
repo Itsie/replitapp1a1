@@ -77,11 +77,11 @@ const WORKFLOW_BADGES: Record<WorkflowState, { label: string; class: string }> =
 };
 
 const SLOT_BADGE: Record<string, string> = {
-  PLANNED: "bg-slate-600 text-white",
-  RUNNING: "bg-green-600 text-white",
-  PAUSED:  "bg-yellow-600 text-white",
-  DONE:    "bg-zinc-400 text-white dark:bg-zinc-600",
-  BLOCKED: "bg-red-600 text-white",
+  PLANNED: "border-slate-500 text-slate-700 dark:text-slate-300 bg-transparent",
+  RUNNING: "bg-green-600 text-white border-green-600",
+  PAUSED:  "bg-yellow-500 text-black border-yellow-500",
+  DONE:    "border-blue-500 text-blue-700 dark:text-blue-300 bg-transparent",
+  BLOCKED: "border-red-500 text-red-700 dark:text-red-300 bg-red-900/20",
 };
 
 const SLOT_LABEL: Record<string, string> = {
@@ -116,11 +116,19 @@ function formatDuration(minutes: number): string {
 export default function ProductionToday() {
   const { toast } = useToast();
   const [selectedDepartment, setSelectedDepartment] = useState<Department | "all">("all");
-  const [hideCompleted, setHideCompleted] = useState(false);
+  const [hideCompleted, setHideCompleted] = useState(() => {
+    const stored = localStorage.getItem('production_hideCompleted');
+    return stored !== null ? stored === 'true' : true; // Default ON
+  });
   const [collapsedSlots, setCollapsedSlots] = useState<Set<string>>(new Set());
   
   // Track previous slot statuses to detect transitions
   const previousStatusesRef = useRef<Map<string, string>>(new Map());
+  
+  // Persist hideCompleted to localStorage
+  useEffect(() => {
+    localStorage.setItem('production_hideCompleted', hideCompleted.toString());
+  }, [hideCompleted]);
   
   // Problem Dialog State
   const [problemDialogOpen, setProblemDialogOpen] = useState(false);
@@ -330,30 +338,16 @@ export default function ProductionToday() {
     });
   }, [slots]);
 
-  // Filter slots
-  let filteredSlots = slots;
+  // Filter slots: only show assigned slots (orderId != null OR blocked == true)
+  let filteredSlots = slots.filter(s => s.orderId !== null || s.blocked === true);
+  
+  // Hide completed if toggle is on
   if (hideCompleted) {
     filteredSlots = filteredSlots.filter(s => s.status !== 'DONE');
   }
 
-  // Sort: RUNNING first, then PAUSED, PLANNED, BLOCKED, DONE last
-  const statusPriority: Record<string, number> = {
-    RUNNING: 1,
-    PAUSED: 2,
-    PLANNED: 3,
-    BLOCKED: 4,
-    DONE: 5,
-  };
-  
-  filteredSlots = [...filteredSlots].sort((a, b) => {
-    const aPriority = statusPriority[a.status] || 99;
-    const bPriority = statusPriority[b.status] || 99;
-    if (aPriority !== bPriority) {
-      return aPriority - bPriority;
-    }
-    // Within same status, sort by startMin
-    return a.startMin - b.startMin;
-  });
+  // Sort by startMin ascending (earliest first)
+  filteredSlots = [...filteredSlots].sort((a, b) => a.startMin - b.startMin);
 
   if (isLoading) {
     return (
@@ -406,11 +400,11 @@ export default function ProductionToday() {
       {filteredSlots.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            Keine Arbeitsschritte für heute geplant.
+            Keine zugeordneten Arbeitsschritte für heute.
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredSlots.map(slot => (
             <TimeSlotCard
               key={slot.id}
@@ -560,27 +554,25 @@ function TimeSlotCard({
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-2">
-              <Badge className={SLOT_BADGE[slot.status]} data-testid={`badge-status-${slot.status}`}>
-                {SLOT_LABEL[slot.status]}
-              </Badge>
-              
-              {slot.status === 'PAUSED' && (
-                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950 border-yellow-300 dark:border-yellow-700">
-                  Pausiert
-                </Badge>
-              )}
-
-              <span className="text-2xl font-bold">
+            {/* Prominent Time Display */}
+            <div className="mb-3">
+              <div className="text-lg font-semibold tracking-tight font-mono">
                 {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
-              </span>
-              
-              <span className="text-sm text-muted-foreground">
-                ({slot.lengthMin}min geplant)
-              </span>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                ({slot.lengthMin} min geplant)
+              </div>
             </div>
 
-            <CardTitle className="text-xl mb-1">
+            {/* Status Badge */}
+            <div className="mb-2">
+              <Badge variant="outline" className={SLOT_BADGE[slot.status]} data-testid={`badge-status-${slot.status}`}>
+                {SLOT_LABEL[slot.status]}
+              </Badge>
+            </div>
+
+            {/* Order Info */}
+            <CardTitle className="text-base mb-1">
               {slot.order ? (
                 <>
                   {slot.order.displayOrderNumber && (
@@ -590,15 +582,15 @@ function TimeSlotCard({
                   {slot.order.title}
                 </>
               ) : (
-                <span className="text-muted-foreground italic">Kein Auftrag zugeordnet</span>
+                <span className="text-muted-foreground italic">Blockiert</span>
               )}
             </CardTitle>
 
             {slot.order && (
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
                 <span>{slot.order.customer}</span>
                 <span>•</span>
-                <Badge className={WORKFLOW_BADGES[slot.order.workflow]?.class}>
+                <Badge variant="outline" className={WORKFLOW_BADGES[slot.order.workflow]?.class}>
                   {WORKFLOW_BADGES[slot.order.workflow]?.label}
                 </Badge>
               </div>
@@ -673,11 +665,12 @@ function TimeSlotCard({
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2 pt-2">
+          <div className="flex items-center justify-end gap-2 pt-2 flex-wrap">
             {slot.status === 'PLANNED' && (
               <Button
                 onClick={() => onStart(slot.id)}
                 variant="default"
+                size="sm"
                 data-testid={`button-start-${slot.id}`}
               >
                 <Play className="mr-2 h-4 w-4" />
@@ -690,6 +683,7 @@ function TimeSlotCard({
                 <Button
                   onClick={() => onPause(slot.id)}
                   variant="outline"
+                  size="sm"
                   data-testid={`button-pause-${slot.id}`}
                 >
                   <Pause className="mr-2 h-4 w-4" />
@@ -698,6 +692,7 @@ function TimeSlotCard({
                 <Button
                   onClick={() => onStop(slot.id)}
                   variant="default"
+                  size="sm"
                   data-testid={`button-stop-${slot.id}`}
                 >
                   <Square className="mr-2 h-4 w-4" />
@@ -706,6 +701,7 @@ function TimeSlotCard({
                 <Button
                   onClick={() => onProblem(slot.id)}
                   variant="destructive"
+                  size="sm"
                   data-testid={`button-problem-${slot.id}`}
                 >
                   <AlertCircle className="mr-2 h-4 w-4" />
@@ -719,6 +715,7 @@ function TimeSlotCard({
                 <Button
                   onClick={() => onStart(slot.id)}
                   variant="default"
+                  size="sm"
                   data-testid={`button-resume-${slot.id}`}
                 >
                   <Play className="mr-2 h-4 w-4" />
@@ -727,6 +724,7 @@ function TimeSlotCard({
                 <Button
                   onClick={() => onStop(slot.id)}
                   variant="outline"
+                  size="sm"
                   data-testid={`button-stop-paused-${slot.id}`}
                 >
                   <Square className="mr-2 h-4 w-4" />
@@ -735,6 +733,7 @@ function TimeSlotCard({
                 <Button
                   onClick={() => onProblem(slot.id)}
                   variant="destructive"
+                  size="sm"
                   data-testid={`button-problem-paused-${slot.id}`}
                 >
                   <AlertCircle className="mr-2 h-4 w-4" />
