@@ -395,13 +395,7 @@ export default function Lager() {
           <SheetHeader>
             <SheetTitle>{selectedPlace?.name || "Lagerplatz"}</SheetTitle>
             <SheetDescription>
-              {selectedPlace && (
-                <div className="space-y-1">
-                  <div>Kapazität: {selectedPlace.capacity ?? "Unbegrenzt"}</div>
-                  <div>Belegt: {selectedPlace.occupied}</div>
-                  {selectedPlace.free !== null && <div>Frei: {selectedPlace.free}</div>}
-                </div>
-              )}
+              {selectedPlace && `Kapazität: ${selectedPlace.capacity ?? "Unbegrenzt"} • Belegt: ${selectedPlace.occupied}${selectedPlace.free !== null ? ` • Frei: ${selectedPlace.free}` : ""}`}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6">
