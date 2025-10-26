@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { Order, SizeTable, PrintAsset, OrderAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState, StorageSlot, OrderStorage } from "@prisma/client";
+import type { Order, SizeTable, PrintAsset, OrderAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState, WarehouseGroup, WarehousePlace } from "@prisma/client";
 
 // Re-export Prisma types
-export type { Order, SizeTable, PrintAsset, OrderAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState, StorageSlot, OrderStorage };
+export type { Order, SizeTable, PrintAsset, OrderAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState, WarehouseGroup, WarehousePlace };
 
 // Enum schemas
 export const orderSourceSchema = z.enum(["JTL", "INTERNAL"]);
@@ -384,34 +384,62 @@ export type TimeSlotStatus = z.infer<typeof timeSlotStatusSchema>;
 export type TimeSlotQC = z.infer<typeof timeSlotQCSchema>;
 export type TimeSlotMissingParts = z.infer<typeof timeSlotMissingPartsSchema>;
 
-// ===== Storage Schemas =====
+// ===== Warehouse Schemas =====
 
-// StorageSlot insert schema
-export const insertStorageSlotSchema = z.object({
+// WarehouseGroup schemas
+export const insertWarehouseGroupSchema = z.object({
   name: z.string().min(1, "Name is required").max(50, "Name must be max 50 characters"),
-  capacity: z.number().int().positive("Capacity must be positive").optional().nullable(),
-  active: z.boolean().default(true),
+  description: z.string().max(200, "Description must be max 200 characters").optional().nullable(),
 });
 
-// StorageSlot update schema
-export const updateStorageSlotSchema = z.object({
+export const updateWarehouseGroupSchema = z.object({
   name: z.string().min(1, "Name is required").max(50, "Name must be max 50 characters").optional(),
-  capacity: z.number().int().positive("Capacity must be positive").optional().nullable(),
-  active: z.boolean().optional(),
+  description: z.string().max(200, "Description must be max 200 characters").optional().nullable(),
 });
 
-// OrderStorage insert schema
-export const insertOrderStorageSchema = z.object({
-  slotId: z.string().min(1, "Storage slot is required"),
-  qty: z.number().int().positive("Quantity must be positive"),
-  note: z.string().max(200, "Note must be max 200 characters").optional().nullable(),
+// WarehousePlace schemas
+export const insertWarehousePlaceSchema = z.object({
+  groupId: z.string().min(1, "Group is required"),
+  name: z.string().min(1, "Name is required").max(50, "Name must be max 50 characters"),
 });
 
-export type InsertStorageSlot = z.infer<typeof insertStorageSlotSchema>;
-export type UpdateStorageSlot = z.infer<typeof updateStorageSlotSchema>;
-export type InsertOrderStorage = z.infer<typeof insertOrderStorageSchema>;
+export const updateWarehousePlaceSchema = z.object({
+  name: z.string().min(1, "Name is required").max(50, "Name must be max 50 characters").optional(),
+  groupId: z.string().min(1, "Group is required").optional(),
+});
 
-// OrderStorage with relations for API responses
-export type OrderStorageWithRelations = OrderStorage & {
-  slot: StorageSlot;
+// Generator schema
+export const generateWarehousePlacesSchema = z.object({
+  prefix: z.string().max(20, "Prefix must be max 20 characters").default(""),
+  start: z.number().int().min(1, "Start must be >= 1"),
+  end: z.number().int().min(1, "End must be >= 1"),
+  zeroPad: z.number().int().min(0, "Zero pad must be >= 0").max(4, "Zero pad must be <= 4").default(0),
+  separator: z.string().max(5, "Separator must be max 5 characters").default(" "),
+  suffix: z.string().max(20, "Suffix must be max 20 characters").default(""),
+}).refine((data) => data.start <= data.end, {
+  message: "Start must be <= End",
+  path: ["start"],
+});
+
+// Order warehouse assignment schema
+export const assignWarehousePlaceSchema = z.object({
+  placeId: z.string().min(1, "Place ID is required").nullable(),
+});
+
+export type InsertWarehouseGroup = z.infer<typeof insertWarehouseGroupSchema>;
+export type UpdateWarehouseGroup = z.infer<typeof updateWarehouseGroupSchema>;
+export type InsertWarehousePlace = z.infer<typeof insertWarehousePlaceSchema>;
+export type UpdateWarehousePlace = z.infer<typeof updateWarehousePlaceSchema>;
+export type GenerateWarehousePlaces = z.infer<typeof generateWarehousePlacesSchema>;
+export type AssignWarehousePlace = z.infer<typeof assignWarehousePlaceSchema>;
+
+// WarehousePlace with relations for API responses
+export type WarehousePlaceWithRelations = WarehousePlace & {
+  group: WarehouseGroup;
+  occupiedByOrder?: Order | null;
+};
+
+// WarehouseGroup with relations for API responses
+export type WarehouseGroupWithRelations = WarehouseGroup & {
+  places: WarehousePlace[];
 };
