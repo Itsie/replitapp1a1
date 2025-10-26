@@ -50,22 +50,23 @@ export function getWorkflowBadgeVariant(workflow: WorkflowState): "default" | "s
 export function getWorkflowBadgeColor(workflow: WorkflowState): string {
   switch (workflow) {
     case "ENTWURF":
-    case "NEU":
       return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600";
+    case "NEU":
+      return "bg-primary text-primary-foreground border-primary";
     case "PRUEFUNG":
-      return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 border-indigo-300 dark:border-indigo-700";
+      return "bg-amber-500 text-black dark:bg-amber-600 dark:text-black border-amber-600 dark:border-amber-700";
     case "FUER_PROD":
-      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-300 dark:border-blue-700";
+      return "bg-blue-600 text-white dark:bg-blue-700 dark:text-white border-blue-700 dark:border-blue-800";
     case "IN_PROD":
-      return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 border-orange-300 dark:border-orange-700";
+      return "bg-violet-600 text-white dark:bg-violet-700 dark:text-white border-violet-700 dark:border-violet-800";
     case "WARTET_FEHLTEILE":
-      return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 border-red-300 dark:border-red-700";
+      return "bg-orange-500 text-black dark:bg-orange-600 dark:text-black border-orange-600 dark:border-orange-700";
     case "FERTIG":
-      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-green-300 dark:border-green-700";
+      return "bg-emerald-600 text-white dark:bg-emerald-700 dark:text-white border-emerald-700 dark:border-emerald-800";
     case "ZUR_ABRECHNUNG":
-      return "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300 border-green-400 dark:border-green-600";
+      return "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700";
     case "ABGERECHNET":
-      return "bg-gray-50 text-gray-700 dark:bg-gray-900 dark:text-gray-300 border-gray-400 dark:border-gray-600";
+      return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-700";
     default:
       return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600";
   }
