@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Search, User } from "lucide-react";
+import { Search, User, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,13 +9,27 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AppSidebar } from "./app-sidebar";
 import { ThemeToggle } from "./theme-toggle";
+import { useUser, setMockUser } from "@/contexts/UserContext";
+
+const DEMO_USERS = [
+  { email: 'admin@1ashirt.de', name: 'Admin User', role: 'ADMIN' },
+  { email: 'planner@1ashirt.de', name: 'Planer', role: 'PROD_PLAN' },
+  { email: 'worker@1ashirt.de', name: 'Produktionsmitarbeiter', role: 'PROD_RUN' },
+  { email: 'sales@1ashirt.de', name: 'Vertrieb', role: 'SALES_OPS' },
+  { email: 'accounting@1ashirt.de', name: 'Buchhaltung', role: 'ACCOUNTING' },
+];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
+  const { user } = useUser();
   
   // Sync search query with URL parameter
   const urlParams = new URLSearchParams(window.location.search);
@@ -38,6 +52,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       // Clear search by navigating to /orders without query params
       setLocation("/orders");
     }
+  };
+
+  const getUserInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   return (
@@ -72,16 +95,50 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Button variant="ghost" size="icon" className="relative" data-testid="button-user-menu">
                     <Avatar className="h-8 w-8">
                       <AvatarFallback>
-                        <User className="h-4 w-4" />
+                        {user ? getUserInitials(user.name) : <User className="h-4 w-4" />}
                       </AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem data-testid="menu-profile">Profil</DropdownMenuItem>
-                  <DropdownMenuItem data-testid="menu-settings">Einstellungen</DropdownMenuItem>
+                <DropdownMenuContent align="end" className="w-56">
+                  {user && (
+                    <>
+                      <DropdownMenuLabel>
+                        <div className="flex flex-col space-y-1">
+                          <p className="text-sm font-medium">{user.name}</p>
+                          <p className="text-xs text-muted-foreground">{user.email}</p>
+                          <p className="text-xs text-muted-foreground">Rolle: {user.role}</p>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger data-testid="menu-switch-user">
+                      Benutzer wechseln (Dev)
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {DEMO_USERS.map((demoUser) => (
+                        <DropdownMenuItem
+                          key={demoUser.email}
+                          onClick={() => setMockUser(demoUser.email)}
+                          data-testid={`menu-switch-${demoUser.role.toLowerCase()}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {user?.email === demoUser.email && <Check className="h-4 w-4" />}
+                            <div className="flex flex-col">
+                              <span className="text-sm">{demoUser.name}</span>
+                              <span className="text-xs text-muted-foreground">{demoUser.role}</span>
+                            </div>
+                          </div>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem data-testid="menu-logout">Abmelden</DropdownMenuItem>
+                  <DropdownMenuItem data-testid="menu-settings">Einstellungen</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </nav>

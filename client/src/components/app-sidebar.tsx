@@ -16,6 +16,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useUser, type Role } from "@/contexts/UserContext";
 import logoImage from "@assets/1a-textillogo_1761317866259.png";
 
 interface NavSection {
@@ -27,6 +28,7 @@ interface NavItem {
   title: string;
   url: string;
   icon: typeof FileText;
+  roles?: Role[]; // If undefined, visible to all roles
 }
 
 const navigationSections: NavSection[] = [
@@ -37,6 +39,7 @@ const navigationSections: NavSection[] = [
         title: "Aufträge",
         url: "/orders",
         icon: FileText,
+        // All roles can view orders
       },
     ],
   },
@@ -47,11 +50,13 @@ const navigationSections: NavSection[] = [
         title: "Planung",
         url: "/planning",
         icon: CalendarClock,
+        roles: ['ADMIN', 'PROD_PLAN'],
       },
       {
         title: "Produktion heute",
         url: "/production/today",
         icon: Activity,
+        roles: ['ADMIN', 'PROD_RUN'],
       },
     ],
   },
@@ -62,11 +67,13 @@ const navigationSections: NavSection[] = [
         title: "Abrechnung",
         url: "/billing",
         icon: Receipt,
+        roles: ['ADMIN', 'ACCOUNTING'],
       },
       {
         title: "Lager",
         url: "/warehouse",
         icon: Boxes,
+        // All roles can view warehouse
       },
     ],
   },
@@ -77,6 +84,7 @@ const navigationSections: NavSection[] = [
         title: "Einstellungen",
         url: "/settings",
         icon: Settings,
+        // All roles can access settings
       },
     ],
   },
@@ -84,6 +92,7 @@ const navigationSections: NavSection[] = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { user, hasRole } = useUser();
   const [collapsed, setCollapsed] = useState(() => {
     const saved = localStorage.getItem("nav_collapsed");
     return saved === "true";
@@ -104,6 +113,20 @@ export function AppSidebar() {
       (pathname === "/" && url === "/orders")
     );
   };
+
+  // Filter navigation based on user role
+  const canAccessItem = (item: NavItem): boolean => {
+    if (!item.roles || item.roles.length === 0) return true; // No role restriction
+    if (!user) return false; // Not logged in
+    return hasRole(...item.roles);
+  };
+
+  const filteredSections = navigationSections
+    .map(section => ({
+      ...section,
+      items: section.items.filter(canAccessItem),
+    }))
+    .filter(section => section.items.length > 0); // Remove empty sections
 
   return (
     <div
@@ -131,7 +154,7 @@ export function AppSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-2">
-        {navigationSections.map((section, sectionIndex) => (
+        {filteredSections.map((section, sectionIndex) => (
           <div key={section.label}>
             {sectionIndex > 0 && <div className="my-2 border-t" />}
             
