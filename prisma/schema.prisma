@@ -122,7 +122,7 @@ model Order {
   positions           OrderPosition[]
   timeSlots           TimeSlot[]
   invoiceQueueItem    InvoiceQueueItem?
-  orderStorage        OrderStorage[]
+  warehousePlace      WarehousePlace?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 }
@@ -240,22 +240,24 @@ model OrderSequence {
   current Int @default(999)
 }
 
-model StorageSlot {
-  id           String         @id @default(cuid())
-  name         String         @unique
-  capacity     Int?
-  active       Boolean        @default(true)
-  createdAt    DateTime       @default(now())
-  orderStorage OrderStorage[]
+model WarehouseGroup {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  places      WarehousePlace[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 }
 
-model OrderStorage {
-  id        String      @id @default(cuid())
-  orderId   String
-  order     Order       @relation(fields: [orderId], references: [id])
-  slotId    String
-  slot      StorageSlot @relation(fields: [slotId], references: [id])
-  qty       Int
-  note      String?
-  createdAt DateTime    @default(now())
+model WarehousePlace {
+  id                String          @id @default(cuid())
+  groupId           String
+  group             WarehouseGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name              String
+  occupiedByOrderId String?         @unique
+  occupiedByOrder   Order?          @relation(fields: [occupiedByOrderId], references: [id], onDelete: SetNull)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([groupId, name])
 }
