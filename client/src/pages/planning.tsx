@@ -430,6 +430,7 @@ export default function PlanningPage() {
   const weekStartStr = format(weekStart, "yyyy-MM-dd");
 
   // Calculate grid rows based on zoom
+  // Grid rows are droppable cells - last row should allow slots to extend to WORKING_HOURS_END
   const gridRows = useMemo(() => {
     const minutesPerRow = zoom;
     const rows: number[] = [];
@@ -437,6 +438,13 @@ export default function PlanningPage() {
       rows.push(min);
     }
     return rows;
+  }, [zoom]);
+
+  // Calculate total container height to accommodate slots extending to end of working hours
+  const totalDayHeight = useMemo(() => {
+    const totalMinutes = WORKING_HOURS_END - WORKING_HOURS_START;
+    const pixelsPerMinute = ROW_HEIGHT / zoom;
+    return Math.ceil(totalMinutes * pixelsPerMinute);
   }, [zoom]);
 
   // Fetch work center
@@ -908,7 +916,7 @@ export default function PlanningPage() {
                       </div>
 
                       {/* Day Content */}
-                      <div className="flex-1 relative">
+                      <div className="flex-1 relative" style={{ minHeight: `${totalDayHeight}px` }}>
                         {/* Droppable cells */}
                         {gridRows.map((timeMin, rowIdx) => (
                           <DroppableCell
