@@ -8,6 +8,7 @@ import { UserProvider, useUser } from "@/contexts/UserContext";
 import { AppLayout } from "@/components/app-layout";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
+import ProfilePage from "@/pages/profile";
 import OrdersList from "@/pages/orders-list-improved";
 import OrderNew from "@/pages/order-new";
 import OrderDetail from "@/pages/order-detail";
@@ -99,6 +100,13 @@ function Router() {
         {(params) => (
           <AppLayout>
             <ProtectedRoute component={Settings} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/profile">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={ProfilePage} {...params} />
           </AppLayout>
         )}
       </Route>
