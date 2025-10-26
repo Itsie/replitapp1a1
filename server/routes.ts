@@ -8,12 +8,210 @@ import { upload } from "./upload";
 import path from "path";
 import fs from "fs";
 import { requireAuth, requireRole } from "./auth";
+import { verifyPassword, hashPassword } from "./password";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ===== Auth Routes =====
+  
+  // POST /api/auth/login - Login with email and password
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const loginSchema = z.object({
+        email: z.string().email("Invalid email"),
+        password: z.string().min(1, "Password is required"),
+      });
+
+      const { email, password } = loginSchema.parse(req.body);
+
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      // Verify password
+      const isValid = await verifyPassword(password, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      // Create session
+      req.session.userId = user.id;
+
+      // Return user data (without password)
+      res.json({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  // POST /api/auth/logout - Logout (destroy session)
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error("Logout error:", err);
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+
+  // POST /api/auth/change-password - Change password (requires authentication)
+  app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+    try {
+      const changePasswordSchema = z.object({
+        currentPassword: z.string().min(1, "Current password is required"),
+        newPassword: z.string().min(6, "New password must be at least 6 characters"),
+      });
+
+      const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+
+      // Get current user with password
+      const user = await storage.getUserByEmail(req.user!.email);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Verify current password
+      const isValid = await verifyPassword(currentPassword, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: "Current password is incorrect" });
+      }
+
+      // Hash new password and update
+      const hashedPassword = await hashPassword(newPassword);
+      await storage.updateUser(user.id, { password: hashedPassword });
+
+      res.json({ message: "Password changed successfully" });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Change password error:", error);
+      res.status(500).json({ error: "Failed to change password" });
+    }
+  });
+
+  // ===== User Routes =====
+  
   // GET /api/me - Get current user
   app.get("/api/me", requireAuth, async (req, res) => {
     res.json(req.user);
   });
+
+  // GET /api/users - List all users (ADMIN only)
+  app.get("/api/users", requireRole('ADMIN'), async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  // POST /api/users - Create new user (ADMIN only)
+  app.post("/api/users", requireRole('ADMIN'), async (req, res) => {
+    try {
+      const createUserSchema = z.object({
+        email: z.string().email("Invalid email"),
+        name: z.string().min(1, "Name is required"),
+        password: z.string().min(6, "Password must be at least 6 characters"),
+        role: z.enum(['ADMIN', 'PROD_PLAN', 'PROD_RUN', 'SALES_OPS', 'ACCOUNTING']),
+      });
+
+      const validated = createUserSchema.parse(req.body);
+
+      // Check if email already exists
+      const existing = await storage.getUserByEmail(validated.email);
+      if (existing) {
+        return res.status(409).json({ error: "Email already exists" });
+      }
+
+      // Hash password
+      const hashedPassword = await hashPassword(validated.password);
+
+      // Create user
+      const user = await storage.createUser({
+        ...validated,
+        password: hashedPassword,
+      });
+
+      res.status(201).json(user);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Error creating user:", error);
+      res.status(500).json({ error: "Failed to create user" });
+    }
+  });
+
+  // PATCH /api/users/:id - Update user (ADMIN only)
+  app.patch("/api/users/:id", requireRole('ADMIN'), async (req, res) => {
+    try {
+      const updateUserSchema = z.object({
+        email: z.string().email("Invalid email").optional(),
+        name: z.string().min(1, "Name is required").optional(),
+        password: z.string().min(6, "Password must be at least 6 characters").optional(),
+        role: z.enum(['ADMIN', 'PROD_PLAN', 'PROD_RUN', 'SALES_OPS', 'ACCOUNTING']).optional(),
+      });
+
+      const validated = updateUserSchema.parse(req.body);
+
+      // If email is being changed, check if it's already taken
+      if (validated.email) {
+        const existing = await storage.getUserByEmail(validated.email);
+        if (existing && existing.id !== req.params.id) {
+          return res.status(409).json({ error: "Email already exists" });
+        }
+      }
+
+      // If password is being updated, hash it
+      const updateData: any = { ...validated };
+      if (validated.password) {
+        updateData.password = await hashPassword(validated.password);
+      }
+
+      // Update user
+      const user = await storage.updateUser(req.params.id, updateData);
+
+      res.json(user);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Error updating user:", error);
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
+  // DELETE /api/users/:id - Delete user (ADMIN only)
+  app.delete("/api/users/:id", requireRole('ADMIN'), async (req, res) => {
+    try {
+      // Prevent deleting own account
+      if (req.user!.id === req.params.id) {
+        return res.status(400).json({ error: "Cannot delete your own account" });
+      }
+
+      await storage.deleteUser(req.params.id);
+      res.json({ message: "User deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+  
+  // ===== Order Routes =====
   
   // GET /api/orders - List orders with filters (requires authentication)
   app.get("/api/orders", requireAuth, async (req, res) => {

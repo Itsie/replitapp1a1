@@ -1,15 +1,18 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import session from "express-session";
 import path from "path";
 import { registerRoutes } from "./routes";
 import { setupVite, log } from "./vite";
+import { sessionConfig } from "./session";
 
 const app = express();
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
+app.use(session(sessionConfig));
 
 // Serve uploaded files statically
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
