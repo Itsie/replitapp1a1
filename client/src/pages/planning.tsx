@@ -259,20 +259,6 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
   const { topPx, heightPx } = getSlotGeometry(slot.startMin, slot.lengthMin, minutesPerRow);
   const [showDelete, setShowDelete] = useState(false);
 
-  // Debug logging (temporary)
-  if (slot.startMin === 540) { // Log for 09:00 slots as example
-    const pixelsPerMinute = ROW_HEIGHT / minutesPerRow;
-    console.log('Slot geometry debug:', {
-      slotId: slot.id,
-      startMin: slot.startMin,
-      lengthMin: slot.lengthMin,
-      topPx,
-      heightPx,
-      pixelsPerMinute,
-      blocked: slot.blocked
-    });
-  }
-
   const dueDateStr = slot.order?.dueDate ? formatDueDate(slot.order.dueDate) : null;
   const isOverdue = slot.order?.dueDate ? isDueDateOverdue(slot.order.dueDate) : false;
   const isUrgent = slot.order?.dueDate ? isDueDateUrgent(slot.order.dueDate) : false;
@@ -280,7 +266,7 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
   if (slot.blocked) {
     return (
       <div
-        className="absolute left-0 right-0 bg-red-50 dark:bg-red-900/20 border-2 border-dashed border-red-300 dark:border-red-700 rounded p-2"
+        className="absolute left-0 right-0 bg-red-50 dark:bg-red-900/20 border-2 border-dashed border-red-300 dark:border-red-700 rounded p-1"
         style={{
           top: `${topPx}px`,
           height: `${heightPx}px`,
@@ -317,7 +303,7 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
 
   return (
     <div
-      className="absolute left-0 right-0 bg-card border rounded p-2 hover-elevate"
+      className="absolute left-0 right-0 bg-card border rounded p-1 hover-elevate"
       style={{
         top: `${topPx}px`,
         height: `${heightPx}px`,
