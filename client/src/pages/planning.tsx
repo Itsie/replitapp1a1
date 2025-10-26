@@ -17,7 +17,7 @@ import { DndContext, DragEndEvent, DragStartEvent, useDraggable, useDroppable, D
 import { CSS } from "@dnd-kit/utilities";
 
 type Department = "TEAMSPORT" | "TEXTILVEREDELUNG" | "STICKEREI" | "DRUCK" | "SONSTIGES";
-type ZoomLevel = 60 | 30 | 15 | 5;
+type ZoomLevel = 60 | 30 | 15;
 
 interface WorkCenter {
   id: string;
@@ -87,7 +87,7 @@ const ROW_HEIGHT = 28; // px - constant
 
 // Snap logic based on zoom (min 15 minutes)
 function getSnapMinutes(zoom: ZoomLevel): number {
-  if (zoom === 60) return 30;
+  if (zoom === 60) return 15;
   if (zoom === 30) return 15;
   return 15; // Always snap to 15 min minimum
 }
@@ -610,11 +610,14 @@ export default function PlanningPage() {
     const over = event.over;
     if (over && over.data.current?.type === "cell") {
       const { day, startMin } = over.data.current;
-      setDragOverCell({ day, startMin });
+      // Snap the preview ghost to grid
+      const snap = getSnapMinutes(zoom);
+      const snappedStartMin = snapToGrid(startMin, snap);
+      setDragOverCell({ day, startMin: snappedStartMin });
     } else {
       setDragOverCell(null);
     }
-  }, []);
+  }, [zoom]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
