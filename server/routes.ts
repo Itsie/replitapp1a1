@@ -35,15 +35,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
-      // Create session
-      req.session.userId = user.id;
+      // Regenerate session to prevent session fixation attacks
+      req.session.regenerate((err) => {
+        if (err) {
+          console.error("Session regeneration error:", err);
+          return res.status(500).json({ error: "Login failed" });
+        }
 
-      // Return user data (without password)
-      res.json({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
+        // Create session with new session ID
+        req.session.userId = user.id;
+
+        // Save session before sending response
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("Session save error:", saveErr);
+            return res.status(500).json({ error: "Login failed" });
+          }
+
+          // Return user data (without password)
+          res.json({
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+          });
+        });
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
