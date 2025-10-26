@@ -139,11 +139,6 @@ export default function ProductionToday() {
   // Get today's date in YYYY-MM-DD format
   const today = new Date().toISOString().split('T')[0];
 
-  // Fetch work centers
-  const { data: workCenters = [] } = useQuery<WorkCenterWithSlotCount[]>({
-    queryKey: ['/api/workcenters?active=true'],
-  });
-
   // Fetch today's time slots
   const { data: timeSlots = [], isLoading } = useQuery<TimeSlotWithOrder[]>({
     queryKey: [`/api/calendar?startDate=${today}&endDate=${today}`],

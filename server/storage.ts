@@ -40,6 +40,9 @@ export interface TimeSlotWithOrder extends TimeSlot {
 }
 
 export interface IStorage {
+  // Users
+  getUserByEmail(email: string): Promise<{ id: string; email: string; name: string; role: any } | null>;
+  
   // Orders
   getOrders(filters: OrderFilters): Promise<OrderWithRelations[]>;
   getOrderById(id: string): Promise<OrderWithRelations | null>;
@@ -92,6 +95,19 @@ export interface IStorage {
 }
 
 export class PrismaStorage implements IStorage {
+  // User methods
+  async getUserByEmail(email: string) {
+    return await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+      },
+    });
+  }
+  
   private async generateDisplayOrderNumber(): Promise<string> {
     const year = new Date().getFullYear();
     
