@@ -82,7 +82,7 @@ const DEPARTMENT_LABELS: Record<Department, string> = {
 
 const DAY_LABELS = ["Mo.", "Di.", "Mi.", "Do.", "Fr."];
 const WORKING_HOURS_START = 7 * 60; // 07:00 in minutes (420)
-const WORKING_HOURS_END = 18 * 60; // 18:00 in minutes (1080)
+const WORKING_HOURS_END = 20 * 60; // 20:00 in minutes (1200) - includes overtime
 const ROW_HEIGHT = 28; // px - constant
 
 // Snap logic based on zoom (min 15 minutes)
