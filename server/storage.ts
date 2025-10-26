@@ -41,7 +41,12 @@ export interface TimeSlotWithOrder extends TimeSlot {
 
 export interface IStorage {
   // Users
-  getUserByEmail(email: string): Promise<{ id: string; email: string; name: string; role: any } | null>;
+  getUserByEmail(email: string): Promise<{ id: string; email: string; name: string; role: any; password: string } | null>;
+  getUserById(id: string): Promise<{ id: string; email: string; name: string; role: any } | null>;
+  getAllUsers(): Promise<Array<{ id: string; email: string; name: string; role: any; createdAt: Date }>>;
+  createUser(data: { email: string; name: string; password: string; role: any }): Promise<{ id: string; email: string; name: string; role: any }>;
+  updateUser(id: string, data: Partial<{ email: string; name: string; password: string; role: any }>): Promise<{ id: string; email: string; name: string; role: any }>;
+  deleteUser(id: string): Promise<void>;
   
   // Orders
   getOrders(filters: OrderFilters): Promise<OrderWithRelations[]>;
@@ -104,7 +109,68 @@ export class PrismaStorage implements IStorage {
         email: true,
         name: true,
         role: true,
+        password: true,
       },
+    });
+  }
+
+  async getUserById(id: string) {
+    return await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+      },
+    });
+  }
+
+  async getAllUsers() {
+    return await prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  async createUser(data: { email: string; name: string; password: string; role: any }) {
+    const user = await prisma.user.create({
+      data,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+      },
+    });
+    return user;
+  }
+
+  async updateUser(id: string, data: Partial<{ email: string; name: string; password: string; role: any }>) {
+    const user = await prisma.user.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+      },
+    });
+    return user;
+  }
+
+  async deleteUser(id: string) {
+    await prisma.user.delete({
+      where: { id },
     });
   }
   

@@ -18,20 +18,33 @@ declare global {
 
 /**
  * Middleware to require authentication
- * For now, uses X-User-Email header (development only)
- * TODO: Replace with proper session-based auth
+ * Uses session-based auth, with dev-mode fallback to X-User-Email header
  */
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
-    // Get user email from header (mock auth)
-    const userEmail = req.headers['x-user-email'] as string;
+    let userId: string | undefined;
+
+    // Primary: Check session
+    if (req.session?.userId) {
+      userId = req.session.userId;
+    }
+    // Development fallback: X-User-Email header (for dev user switcher)
+    else if (process.env.NODE_ENV === 'development') {
+      const userEmail = req.headers['x-user-email'] as string;
+      if (userEmail) {
+        const user = await storage.getUserByEmail(userEmail);
+        if (user) {
+          userId = user.id;
+        }
+      }
+    }
     
-    if (!userEmail) {
+    if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
     // Fetch user from database
-    const user = await storage.getUserByEmail(userEmail);
+    const user = await storage.getUserById(userId);
     
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
