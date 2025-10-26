@@ -66,6 +66,12 @@ The backend exposes a RESTful API with the following key endpoints:
 - `POST /api/timeslots/:id/qc` - Set quality control result (requires DONE status)
 - `POST /api/timeslots/:id/missing-parts` - Report missing parts (requires DONE status)
 
+**Warehouse Management:**
+- `GET /api/warehouse/places` - List warehouse places with occupancy data (occupied, free capacity), supports search query parameter
+- `POST /api/warehouse/places` - Create new warehouse place with name, capacity, and active status
+- `PATCH /api/warehouse/places/:id` - Update warehouse place properties
+- `GET /api/warehouse/places/:id/contents` - Get contents (orders) stored in a specific warehouse place
+
 **Business Logic:**
 - Internal orders default to source=INTERNAL and workflow=NEU
 - JTL-sourced orders are read-only except for size/assets/location
@@ -91,17 +97,19 @@ The backend exposes a RESTful API with the following key endpoints:
 - **Migration Tool**: Drizzle Kit configured for PostgreSQL migrations
 
 **Database Schema Highlights:**
-- **User**: Authentication with roles (ADMIN, PROD_PLAN, PROD_RUN, SALES_OPS, ACCOUNTING)
+- **User**: Authentication with roles (ADMIN, PROD_PLAN, PROD_RUN, SALES_OPS, ACCOUNTING, LAGER)
 - **Order**: Core entity with workflow states, sources (JTL/INTERNAL), departments
 - **SizeTable**: JSON-based size/quantity data with flexible schemes (ALPHA/NUMERIC/CUSTOM)
 - **PrintAsset**: File metadata with required flag for production validation
 - **InvoiceQueueItem**: Billing queue for non-JTL orders
 - **WorkCenter**: Production work centers with department assignment and capacity
 - **TimeSlot**: Scheduling slots with execution tracking (status, startedAt, stoppedAt, qc, missingPartsNote)
+- **StorageSlot**: Warehouse places with name, capacity, and active status
+- **OrderStorage**: Storage bookings linking orders to warehouse places with quantity and notes
 - Additional models: JTLRow (for future implementation)
 
 **Enum Types:**
-- Role: ADMIN | PROD_PLAN | PROD_RUN | SALES_OPS | ACCOUNTING
+- Role: ADMIN | PROD_PLAN | PROD_RUN | SALES_OPS | ACCOUNTING | LAGER
 - OrderSource: JTL | INTERNAL
 - Department: TEAMSPORT | TEXTILVEREDELUNG | STICKEREI | DRUCK | SONSTIGES
 - WorkflowState: ENTWURF | NEU | PRUEFUNG | FUER_PROD | IN_PROD | WARTET_FEHLTEILE | FERTIG | ZUR_ABRECHNUNG | ABGERECHNET
@@ -124,6 +132,7 @@ The backend exposes a RESTful API with the following key endpoints:
 - **PROD_RUN**: Production execution only (start/pause/stop operations)
 - **SALES_OPS**: Orders management only (create/edit orders)
 - **ACCOUNTING**: Billing and accounting access only
+- **LAGER**: Warehouse management access only (view/create/edit warehouse places, view place contents)
 
 **Demo Credentials (password: "demo123"):**
 - admin@1ashirt.de (ADMIN)
@@ -148,6 +157,7 @@ The backend exposes a RESTful API with the following key endpoints:
   - Planning/TimeSlots: ADMIN or PROD_PLAN
   - Production execution: ADMIN or PROD_RUN
   - Work centers: ADMIN or PROD_PLAN
+  - Warehouse places: ADMIN or LAGER
   - User management: ADMIN only
 
 **Frontend Security:**
