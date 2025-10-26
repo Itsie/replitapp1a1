@@ -110,6 +110,11 @@ model Order {
   totalNet            Decimal?
   totalVat            Decimal?
   totalGross          Decimal?
+  deliveredAt         DateTime?
+  deliveredQty        Int?
+  deliveredNote       String?
+  settledAt           DateTime?
+  settledBy           String?
   sizeTable           SizeTable?
   printAssets         PrintAsset[]
   orderAssets         OrderAsset[]
