@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronLeft, ChevronRight, Lock, X, GripVertical, Calendar, Plus } from "lucide-react";
 import { format, addDays, subDays, startOfWeek, getWeek, isPast, parseISO, differenceInHours, isToday as isTodayFn } from "date-fns";
 import { de } from "date-fns/locale";
@@ -366,6 +367,7 @@ export default function PlanningPage() {
   const [zoom, setZoom] = useState<ZoomLevel>(30);
   const [dragState, setDragState] = useState<DragState>({ type: null });
   const [dragOverCell, setDragOverCell] = useState<{ day: number; startMin: number } | null>(null);
+  const [showOnlyThisWeek, setShowOnlyThisWeek] = useState(false);
   
   const [createSlotDialog, setCreateSlotDialog] = useState<{
     open: boolean;
@@ -495,12 +497,24 @@ export default function PlanningPage() {
     },
   });
 
+  // Week end date for filtering
+  const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
+
   // Filter out scheduled orders AND sort by due date
   const availableOrders = useMemo(() => {
     const scheduledOrderIds = new Set(
       timeSlotData.filter(slot => slot.orderId).map(slot => slot.orderId)
     );
-    const unscheduled = allFetchedOrders.filter(order => !scheduledOrderIds.has(order.id));
+    let unscheduled = allFetchedOrders.filter(order => !scheduledOrderIds.has(order.id));
+    
+    // Apply "only this week" filter if enabled
+    if (showOnlyThisWeek) {
+      unscheduled = unscheduled.filter(order => {
+        if (!order.dueDate) return false;
+        const dueDate = parseISO(order.dueDate);
+        return dueDate >= weekStart && dueDate <= weekEnd;
+      });
+    }
     
     // Sort by due date: earliest first, nulls last
     return unscheduled.sort((a, b) => {
@@ -509,7 +523,7 @@ export default function PlanningPage() {
       if (!b.dueDate) return -1;
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     });
-  }, [allFetchedOrders, timeSlotData]);
+  }, [allFetchedOrders, timeSlotData, showOnlyThisWeek, weekStart, weekEnd]);
 
   // Helper function to check for slot collisions
   const checkSlotCollision = useCallback((
@@ -959,13 +973,29 @@ export default function PlanningPage() {
           {/* Order Pool */}
           {selectedDepartment && (
             <div className="w-80 border-l flex flex-col overflow-hidden">
-              <div className="p-4 border-b">
-                <h2 className="font-semibold" data-testid="text-order-pool-title">
-                  Aufträge bereit
-                </h2>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {availableOrders.length} Aufträge (sortiert nach Fälligkeit)
-                </p>
+              <div className="p-4 border-b space-y-3">
+                <div>
+                  <h2 className="font-semibold" data-testid="text-order-pool-title">
+                    Aufträge bereit
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {availableOrders.length} Aufträge (sortiert nach Fälligkeit)
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="filter-this-week"
+                    checked={showOnlyThisWeek}
+                    onCheckedChange={(checked) => setShowOnlyThisWeek(checked === true)}
+                    data-testid="checkbox-filter-week"
+                  />
+                  <Label
+                    htmlFor="filter-this-week"
+                    className="text-sm cursor-pointer"
+                  >
+                    Nur fällige Woche
+                  </Label>
+                </div>
               </div>
               <div className="flex-1 overflow-auto p-4 space-y-2">
                 {availableOrders.length === 0 ? (
