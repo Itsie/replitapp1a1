@@ -1,12 +1,13 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
-import { UserProvider } from "@/contexts/UserContext";
+import { UserProvider, useUser } from "@/contexts/UserContext";
 import { AppLayout } from "@/components/app-layout";
 import NotFound from "@/pages/not-found";
+import LoginPage from "@/pages/login";
 import OrdersList from "@/pages/orders-list-improved";
 import OrderNew from "@/pages/order-new";
 import OrderDetail from "@/pages/order-detail";
@@ -16,18 +17,91 @@ import Billing from "@/pages/billing";
 import Warehouse from "@/pages/warehouse";
 import Settings from "@/pages/settings";
 
+function ProtectedRoute({ component: Component, ...rest }: any) {
+  const { user, isLoading } = useUser();
+  
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Laden...</div>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+  
+  return <Component {...rest} />;
+}
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={OrdersList} />
-      <Route path="/orders" component={OrdersList} />
-      <Route path="/orders/new" component={OrderNew} />
-      <Route path="/orders/:id" component={OrderDetail} />
-      <Route path="/planning" component={Planning} />
-      <Route path="/production/today" component={ProductionToday} />
-      <Route path="/billing" component={Billing} />
-      <Route path="/warehouse" component={Warehouse} />
-      <Route path="/settings" component={Settings} />
+      <Route path="/login" component={LoginPage} />
+      <Route path="/">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={OrdersList} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/orders">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={OrdersList} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/orders/new">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={OrderNew} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/orders/:id">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={OrderDetail} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/planning">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={Planning} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/production/today">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={ProductionToday} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/billing">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={Billing} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/warehouse">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={Warehouse} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/settings">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={Settings} {...params} />
+          </AppLayout>
+        )}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -39,9 +113,7 @@ function App() {
       <ThemeProvider defaultTheme="system" storageKey="1ashirt-ui-theme">
         <UserProvider>
           <TooltipProvider>
-            <AppLayout>
-              <Router />
-            </AppLayout>
+            <Router />
             <Toaster />
           </TooltipProvider>
         </UserProvider>

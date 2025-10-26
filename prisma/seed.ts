@@ -1,6 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = await bcrypt.genSalt(10);
+  return await bcrypt.hash(password, salt);
+}
 
 async function main() {
   console.log('Seeding database...');
@@ -11,31 +17,31 @@ async function main() {
       email: 'admin@1ashirt.de',
       name: 'Admin User',
       role: 'ADMIN' as const,
-      password: 'admin123', // In production, use bcrypt
+      plainPassword: 'demo123',
     },
     {
       email: 'planner@1ashirt.de',
       name: 'Production Planner',
       role: 'PROD_PLAN' as const,
-      password: 'planner123',
+      plainPassword: 'demo123',
     },
     {
       email: 'worker@1ashirt.de',
       name: 'Production Worker',
       role: 'PROD_RUN' as const,
-      password: 'worker123',
+      plainPassword: 'demo123',
     },
     {
       email: 'sales@1ashirt.de',
       name: 'Sales Operations',
       role: 'SALES_OPS' as const,
-      password: 'sales123',
+      plainPassword: 'demo123',
     },
     {
       email: 'accounting@1ashirt.de',
       name: 'Accounting User',
       role: 'ACCOUNTING' as const,
-      password: 'accounting123',
+      plainPassword: 'demo123',
     },
   ];
 
@@ -44,13 +50,27 @@ async function main() {
       where: { email: userData.email },
     });
 
+    const hashedPassword = await hashPassword(userData.plainPassword);
+
     if (!existingUser) {
       await prisma.user.create({
-        data: userData,
+        data: {
+          email: userData.email,
+          name: userData.name,
+          role: userData.role,
+          password: hashedPassword,
+        },
       });
-      console.log(`✓ Created user: ${userData.email} (${userData.role})`);
+      console.log(`✓ Created user: ${userData.email} (${userData.role}) with password: ${userData.plainPassword}`);
     } else {
-      console.log(`- User already exists: ${userData.email}`);
+      // Update existing user with hashed password
+      await prisma.user.update({
+        where: { email: userData.email },
+        data: {
+          password: hashedPassword,
+        },
+      });
+      console.log(`✓ Updated user password: ${userData.email} with password: ${userData.plainPassword}`);
     }
   }
 

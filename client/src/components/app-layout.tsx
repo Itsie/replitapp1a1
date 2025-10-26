@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Search, User, Check } from "lucide-react";
+import { Search, User, LogOut } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,26 +11,39 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AppSidebar } from "./app-sidebar";
 import { ThemeToggle } from "./theme-toggle";
-import { useUser, setMockUser } from "@/contexts/UserContext";
-
-const DEMO_USERS = [
-  { email: 'admin@1ashirt.de', name: 'Admin User', role: 'ADMIN' },
-  { email: 'planner@1ashirt.de', name: 'Planer', role: 'PROD_PLAN' },
-  { email: 'worker@1ashirt.de', name: 'Produktionsmitarbeiter', role: 'PROD_RUN' },
-  { email: 'sales@1ashirt.de', name: 'Vertrieb', role: 'SALES_OPS' },
-  { email: 'accounting@1ashirt.de', name: 'Buchhaltung', role: 'ACCOUNTING' },
-];
+import { useUser } from "@/contexts/UserContext";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { user } = useUser();
+  const { toast } = useToast();
+  
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/auth/logout");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      toast({
+        title: "Abgemeldet",
+        description: "Sie wurden erfolgreich abgemeldet.",
+      });
+      setLocation("/login");
+    },
+    onError: () => {
+      toast({
+        title: "Fehler",
+        description: "Abmeldung fehlgeschlagen.",
+        variant: "destructive",
+      });
+    },
+  });
   
   // Sync search query with URL parameter
   const urlParams = new URLSearchParams(window.location.search);
@@ -114,26 +128,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </>
                   )}
                   
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">Benutzer wechseln (Dev)</DropdownMenuLabel>
-                  {DEMO_USERS.map((demoUser) => (
-                    <DropdownMenuItem
-                      key={demoUser.email}
-                      onClick={() => setMockUser(demoUser.email)}
-                      data-testid={`menu-switch-${demoUser.role.toLowerCase()}`}
-                    >
-                      <div className="flex items-center gap-2 w-full">
-                        {user?.email === demoUser.email && <Check className="h-4 w-4 shrink-0" />}
-                        {user?.email !== demoUser.email && <span className="w-4 shrink-0" />}
-                        <div className="flex flex-col flex-1 min-w-0">
-                          <span className="text-sm truncate">{demoUser.name}</span>
-                          <span className="text-xs text-muted-foreground">{demoUser.role}</span>
-                        </div>
-                      </div>
-                    </DropdownMenuItem>
-                  ))}
+                  <DropdownMenuItem onClick={() => setLocation("/profile")} data-testid="menu-profile">
+                    Profil
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setLocation("/settings")} data-testid="menu-settings">
+                    Einstellungen
+                  </DropdownMenuItem>
                   
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem data-testid="menu-settings">Einstellungen</DropdownMenuItem>
+                  
+                  <DropdownMenuItem 
+                    onClick={() => logoutMutation.mutate()}
+                    disabled={logoutMutation.isPending}
+                    data-testid="menu-logout"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Abmelden</span>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </nav>

@@ -19,34 +19,17 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-// Mock user for development - set via localStorage
-function getMockUserEmail(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('mockUserEmail') || 'admin@1ashirt.de';
-}
-
-export function setMockUser(email: string) {
-  localStorage.setItem('mockUserEmail', email);
-  window.location.reload(); // Reload to apply new user
-}
-
 interface UserProviderProps {
   children: ReactNode;
 }
 
 export function UserProvider({ children }: UserProviderProps) {
-  const mockEmail = getMockUserEmail();
-  
   const { data: user, isLoading } = useQuery<User | null>({
     queryKey: ['/api/me'],
-    enabled: !!mockEmail,
     retry: false,
     queryFn: async () => {
       const res = await fetch('/api/me', {
         credentials: 'include',
-        headers: {
-          'X-User-Email': mockEmail || '',
-        },
       });
       
       if (!res.ok) {
