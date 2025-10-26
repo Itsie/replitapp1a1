@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertOrderSchema, updateOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertOrderAssetSchema, insertPositionSchema, updatePositionSchema, insertWorkCenterSchema, updateWorkCenterSchema, insertTimeSlotSchema, updateTimeSlotSchema, batchTimeSlotSchema, timeSlotQCSchema, timeSlotMissingPartsSchema, insertStorageSlotSchema, updateStorageSlotSchema, insertOrderStorageSchema } from "@shared/schema";
+import { insertOrderSchema, updateOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertOrderAssetSchema, insertPositionSchema, updatePositionSchema, insertWorkCenterSchema, updateWorkCenterSchema, insertTimeSlotSchema, updateTimeSlotSchema, batchTimeSlotSchema, timeSlotQCSchema, timeSlotMissingPartsSchema, insertWarehouseGroupSchema, updateWarehouseGroupSchema, insertWarehousePlaceSchema, updateWarehousePlaceSchema, generateWarehousePlacesSchema, assignWarehousePlaceSchema } from "@shared/schema";
 import { z } from "zod";
 import { Decimal } from "@prisma/client/runtime/library";
 import { upload } from "./upload";
@@ -1165,128 +1165,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ===== Storage Routes =====
+  // ===== Warehouse Routes =====
 
-  // GET /api/storage/slots - Get all storage slots (authenticated users)
-  app.get("/api/storage/slots", requireAuth, async (req, res) => {
+  // GET /api/warehouse/groups - Get all warehouse groups
+  app.get("/api/warehouse/groups", requireAuth, async (req, res) => {
     try {
-      const active = req.query.active === 'true' ? true : req.query.active === 'false' ? false : undefined;
-      const slots = await storage.getStorageSlots(active);
-      res.json(slots);
+      const groups = await storage.getWarehouseGroups();
+      res.json(groups);
     } catch (error) {
-      console.error("Error fetching storage slots:", error);
-      res.status(500).json({ error: "Failed to fetch storage slots" });
+      console.error("Error fetching warehouse groups:", error);
+      res.status(500).json({ error: "Failed to fetch warehouse groups" });
     }
   });
 
-  // POST /api/storage/slots - Create a new storage slot (ADMIN or PROD_PLAN only)
-  app.post("/api/storage/slots", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
+  // GET /api/warehouse/groups/:id - Get warehouse group by ID
+  app.get("/api/warehouse/groups/:id", requireAuth, async (req, res) => {
     try {
-      const validated = insertStorageSlotSchema.parse(req.body);
-      const slot = await storage.createStorageSlot(validated);
-      res.json(slot);
+      const group = await storage.getWarehouseGroupById(req.params.id);
+      if (!group) {
+        return res.status(404).json({ error: "Warehouse group not found" });
+      }
+      res.json(group);
+    } catch (error) {
+      console.error("Error fetching warehouse group:", error);
+      res.status(500).json({ error: "Failed to fetch warehouse group" });
+    }
+  });
+
+  // POST /api/warehouse/groups - Create warehouse group (ADMIN or LAGER only)
+  app.post("/api/warehouse/groups", requireRole('ADMIN', 'LAGER'), async (req, res) => {
+    try {
+      const validated = insertWarehouseGroupSchema.parse(req.body);
+      const group = await storage.createWarehouseGroup(validated);
+      res.json(group);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Validation failed", details: error.errors });
       }
-      console.error("Error creating storage slot:", error);
-      res.status(500).json({ error: "Failed to create storage slot" });
+      console.error("Error creating warehouse group:", error);
+      res.status(500).json({ error: "Failed to create warehouse group" });
     }
   });
 
-  // PATCH /api/storage/slots/:id - Update a storage slot (ADMIN or PROD_PLAN only)
-  app.patch("/api/storage/slots/:id", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
+  // PATCH /api/warehouse/groups/:id - Update warehouse group (ADMIN or LAGER only)
+  app.patch("/api/warehouse/groups/:id", requireRole('ADMIN', 'LAGER'), async (req, res) => {
     try {
-      const validated = updateStorageSlotSchema.parse(req.body);
-      const slot = await storage.updateStorageSlot(req.params.id, validated);
-      res.json(slot);
+      const validated = updateWarehouseGroupSchema.parse(req.body);
+      const group = await storage.updateWarehouseGroup(req.params.id, validated);
+      res.json(group);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Validation failed", details: error.errors });
       }
-      console.error("Error updating storage slot:", error);
-      res.status(500).json({ error: "Failed to update storage slot" });
+      console.error("Error updating warehouse group:", error);
+      res.status(500).json({ error: "Failed to update warehouse group" });
     }
   });
 
-  // GET /api/orders/:id/storage - Get storage bookings for an order (authenticated users)
-  app.get("/api/orders/:id/storage", requireAuth, async (req, res) => {
+  // DELETE /api/warehouse/groups/:id - Delete warehouse group (ADMIN or LAGER only)
+  app.delete("/api/warehouse/groups/:id", requireRole('ADMIN', 'LAGER'), async (req, res) => {
     try {
-      const storageBookings = await storage.getOrderStorage(req.params.id);
-      res.json(storageBookings);
+      await storage.deleteWarehouseGroup(req.params.id);
+      res.status(204).send();
     } catch (error) {
-      if (error instanceof Error && error.message === "Order not found") {
+      console.error("Error deleting warehouse group:", error);
+      res.status(500).json({ error: "Failed to delete warehouse group" });
+    }
+  });
+
+  // POST /api/warehouse/groups/:groupId/generate-places - Generate places (ADMIN or LAGER only)
+  app.post("/api/warehouse/groups/:groupId/generate-places", requireRole('ADMIN', 'LAGER'), async (req, res) => {
+    try {
+      const validated = generateWarehousePlacesSchema.parse(req.body);
+      const result = await storage.generateWarehousePlaces(req.params.groupId, validated);
+      res.json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error && error.message === "Warehouse group not found") {
         return res.status(404).json({ error: error.message });
       }
-      console.error("Error fetching order storage:", error);
-      res.status(500).json({ error: "Failed to fetch order storage" });
+      console.error("Error generating warehouse places:", error);
+      res.status(500).json({ error: "Failed to generate warehouse places" });
     }
   });
 
-  // POST /api/orders/:id/storage - Create a storage booking for an order (ADMIN, PROD_PLAN, or PROD_RUN)
-  app.post("/api/orders/:id/storage", requireRole('ADMIN', 'PROD_PLAN', 'PROD_RUN'), async (req, res) => {
-    try {
-      const validated = insertOrderStorageSchema.parse(req.body);
-      const storageBooking = await storage.createOrderStorage(req.params.id, validated);
-      res.json(storageBooking);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Validation failed", details: error.errors });
-      }
-      if (error instanceof Error) {
-        if (error.message === "Order not found" || error.message === "Storage slot not found") {
-          return res.status(404).json({ error: error.message });
-        }
-      }
-      console.error("Error creating order storage:", error);
-      res.status(500).json({ error: "Failed to create order storage" });
-    }
-  });
-
-  // ===== Warehouse Routes (Aliases for Storage with UI-friendly naming) =====
-
-  // GET /api/warehouse/places - Get all warehouse places with occupancy info (authenticated users)
+  // GET /api/warehouse/places - Get all warehouse places
   app.get("/api/warehouse/places", requireAuth, async (req, res) => {
     try {
-      const active = req.query.active === 'true' ? true : req.query.active === 'false' ? false : undefined;
-      const search = req.query.q as string | undefined;
-      
-      const slots = await storage.getStorageSlots(active);
-      
-      // Filter by search query if provided
-      let filteredSlots = slots;
-      if (search) {
-        const searchLower = search.toLowerCase();
-        filteredSlots = slots.filter(slot => 
-          slot.name.toLowerCase().includes(searchLower)
-        );
-      }
-      
-      // Get occupancy information for each slot
-      const slotsWithOccupancy = await Promise.all(
-        filteredSlots.map(async (slot) => {
-          const orders = await storage.getStoragePlaceContents(slot.id);
-          const occupied = orders.reduce((sum, order) => sum + order.qty, 0);
-          return {
-            ...slot,
-            occupied,
-            free: slot.capacity ? slot.capacity - occupied : null,
-          };
-        })
-      );
-      
-      res.json(slotsWithOccupancy);
+      const groupId = req.query.groupId as string | undefined;
+      const places = await storage.getWarehousePlaces(groupId);
+      res.json(places);
     } catch (error) {
       console.error("Error fetching warehouse places:", error);
       res.status(500).json({ error: "Failed to fetch warehouse places" });
     }
   });
 
-  // POST /api/warehouse/places - Create a new warehouse place (ADMIN or LAGER only)
+  // GET /api/warehouse/places/:id - Get warehouse place by ID
+  app.get("/api/warehouse/places/:id", requireAuth, async (req, res) => {
+    try {
+      const place = await storage.getWarehousePlaceById(req.params.id);
+      if (!place) {
+        return res.status(404).json({ error: "Warehouse place not found" });
+      }
+      res.json(place);
+    } catch (error) {
+      console.error("Error fetching warehouse place:", error);
+      res.status(500).json({ error: "Failed to fetch warehouse place" });
+    }
+  });
+
+  // POST /api/warehouse/places - Create warehouse place (ADMIN or LAGER only)
   app.post("/api/warehouse/places", requireRole('ADMIN', 'LAGER'), async (req, res) => {
     try {
-      const validated = insertStorageSlotSchema.parse(req.body);
-      const place = await storage.createStorageSlot(validated);
+      const validated = insertWarehousePlaceSchema.parse(req.body);
+      const place = await storage.createWarehousePlace(validated);
       res.json(place);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1297,11 +1292,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PATCH /api/warehouse/places/:id - Update a warehouse place (ADMIN or LAGER only)
+  // PATCH /api/warehouse/places/:id - Update warehouse place (ADMIN or LAGER only)
   app.patch("/api/warehouse/places/:id", requireRole('ADMIN', 'LAGER'), async (req, res) => {
     try {
-      const validated = updateStorageSlotSchema.parse(req.body);
-      const place = await storage.updateStorageSlot(req.params.id, validated);
+      const validated = updateWarehousePlaceSchema.parse(req.body);
+      const place = await storage.updateWarehousePlace(req.params.id, validated);
       res.json(place);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1312,14 +1307,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/warehouse/places/:id/contents - Get orders in a warehouse place (authenticated users)
-  app.get("/api/warehouse/places/:id/contents", requireAuth, async (req, res) => {
+  // DELETE /api/warehouse/places/:id - Delete warehouse place (ADMIN or LAGER only)
+  app.delete("/api/warehouse/places/:id", requireRole('ADMIN', 'LAGER'), async (req, res) => {
     try {
-      const contents = await storage.getStoragePlaceContents(req.params.id);
-      res.json(contents);
+      await storage.deleteWarehousePlace(req.params.id);
+      res.status(204).send();
     } catch (error) {
-      console.error("Error fetching warehouse place contents:", error);
-      res.status(500).json({ error: "Failed to fetch warehouse place contents" });
+      console.error("Error deleting warehouse place:", error);
+      res.status(500).json({ error: "Failed to delete warehouse place" });
+    }
+  });
+
+  // PATCH /api/orders/:id/warehouse-place - Assign order to warehouse place (Authenticated users)
+  app.patch("/api/orders/:id/warehouse-place", requireAuth, async (req, res) => {
+    try {
+      const validated = assignWarehousePlaceSchema.parse(req.body);
+      const order = await storage.assignOrderToWarehousePlace(req.params.id, validated.placeId);
+      res.json(order);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error) {
+        if (error.message === "Order not found" || error.message === "Warehouse place not found") {
+          return res.status(404).json({ error: error.message });
+        }
+        if (error.message === "Warehouse place is already occupied") {
+          return res.status(422).json({ error: error.message });
+        }
+      }
+      console.error("Error assigning warehouse place:", error);
+      res.status(500).json({ error: "Failed to assign warehouse place" });
+    }
+  });
+
+  // POST /api/orders/:id/release-from-missing-parts - Release order from missing parts status (ADMIN or PROD_PLAN only)
+  app.post("/api/orders/:id/release-from-missing-parts", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
+    try {
+      const order = await storage.releaseOrderFromMissingParts(req.params.id);
+      res.json(order);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === "Order not found") {
+          return res.status(404).json({ error: error.message });
+        }
+        if (error.message === "Order is not in WARTET_FEHLTEILE status") {
+          return res.status(422).json({ error: error.message });
+        }
+      }
+      console.error("Error releasing order from missing parts:", error);
+      res.status(500).json({ error: "Failed to release order from missing parts" });
     }
   });
 

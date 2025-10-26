@@ -1,5 +1,5 @@
-import { PrismaClient, type OrderSource, type Department, type WorkflowState, type OrderPosition, type OrderAsset, type WorkCenter, type TimeSlot, type StorageSlot, type OrderStorage, Prisma } from "@prisma/client";
-import type { InsertOrder, InsertSizeTable, InsertPrintAsset, InsertOrderAsset, InsertPosition, UpdatePosition, OrderWithRelations, InsertWorkCenter, UpdateWorkCenter, InsertTimeSlot, UpdateTimeSlot, BatchTimeSlot, InsertStorageSlot, UpdateStorageSlot, InsertOrderStorage, OrderStorageWithRelations } from "@shared/schema";
+import { PrismaClient, type OrderSource, type Department, type WorkflowState, type OrderPosition, type OrderAsset, type WorkCenter, type TimeSlot, type WarehouseGroup, type WarehousePlace, Prisma } from "@prisma/client";
+import type { InsertOrder, InsertSizeTable, InsertPrintAsset, InsertOrderAsset, InsertPosition, UpdatePosition, OrderWithRelations, InsertWorkCenter, UpdateWorkCenter, InsertTimeSlot, UpdateTimeSlot, BatchTimeSlot, InsertWarehouseGroup, UpdateWarehouseGroup, InsertWarehousePlace, UpdateWarehousePlace, GenerateWarehousePlaces, WarehousePlaceWithRelations, WarehouseGroupWithRelations } from "@shared/schema";
 
 const prisma = new PrismaClient();
 
@@ -103,14 +103,20 @@ export interface IStorage {
   setTimeSlotQC(id: string, qc: 'IO' | 'NIO', note?: string | null): Promise<TimeSlot>;
   setTimeSlotMissingParts(id: string, note: string, updateOrderWorkflow: boolean): Promise<TimeSlot>;
   
-  // Storage
-  getStorageSlots(active?: boolean): Promise<StorageSlot[]>;
-  getStorageSlotById(id: string): Promise<StorageSlot | null>;
-  createStorageSlot(data: InsertStorageSlot): Promise<StorageSlot>;
-  updateStorageSlot(id: string, data: UpdateStorageSlot): Promise<StorageSlot>;
-  getOrderStorage(orderId: string): Promise<OrderStorageWithRelations[]>;
-  createOrderStorage(orderId: string, data: InsertOrderStorage): Promise<OrderStorage>;
-  getStoragePlaceContents(slotId: string): Promise<Array<OrderStorage & { order: { id: string; displayOrderNumber: string | null; title: string; customer: string } }>>;
+  // Warehouse
+  getWarehouseGroups(): Promise<WarehouseGroupWithRelations[]>;
+  getWarehouseGroupById(id: string): Promise<WarehouseGroupWithRelations | null>;
+  createWarehouseGroup(data: InsertWarehouseGroup): Promise<WarehouseGroup>;
+  updateWarehouseGroup(id: string, data: UpdateWarehouseGroup): Promise<WarehouseGroup>;
+  deleteWarehouseGroup(id: string): Promise<void>;
+  getWarehousePlaces(groupId?: string): Promise<WarehousePlaceWithRelations[]>;
+  getWarehousePlaceById(id: string): Promise<WarehousePlaceWithRelations | null>;
+  createWarehousePlace(data: InsertWarehousePlace): Promise<WarehousePlace>;
+  updateWarehousePlace(id: string, data: UpdateWarehousePlace): Promise<WarehousePlace>;
+  deleteWarehousePlace(id: string): Promise<void>;
+  generateWarehousePlaces(groupId: string, data: GenerateWarehousePlaces): Promise<{ created: number; skipped: Array<{ name: string; reason: string }>; examples: string[] }>;
+  assignOrderToWarehousePlace(orderId: string, placeId: string | null): Promise<OrderWithRelations>;
+  releaseOrderFromMissingParts(orderId: string): Promise<OrderWithRelations>;
 }
 
 export class PrismaStorage implements IStorage {
@@ -1543,107 +1549,260 @@ export class PrismaStorage implements IStorage {
     return updated;
   }
 
-  // ===== Storage Methods =====
+  // ===== Warehouse Methods =====
 
-  async getStorageSlots(active?: boolean): Promise<StorageSlot[]> {
-    const where: any = {};
-    
-    if (active !== undefined) {
-      where.active = active;
-    }
-    
-    return await prisma.storageSlot.findMany({
-      where,
+  async getWarehouseGroups(): Promise<WarehouseGroupWithRelations[]> {
+    return await prisma.warehouseGroup.findMany({
+      include: {
+        places: {
+          include: {
+            occupiedByOrder: {
+              select: {
+                id: true,
+                displayOrderNumber: true,
+                title: true,
+                customer: true,
+              },
+            },
+          },
+        },
+      },
       orderBy: {
         name: 'asc',
       },
     });
   }
 
-  async getStorageSlotById(id: string): Promise<StorageSlot | null> {
-    return await prisma.storageSlot.findUnique({
+  async getWarehouseGroupById(id: string): Promise<WarehouseGroupWithRelations | null> {
+    return await prisma.warehouseGroup.findUnique({
       where: { id },
+      include: {
+        places: {
+          include: {
+            occupiedByOrder: {
+              select: {
+                id: true,
+                displayOrderNumber: true,
+                title: true,
+                customer: true,
+              },
+            },
+          },
+          orderBy: {
+            name: 'asc',
+          },
+        },
+      },
     });
   }
 
-  async createStorageSlot(data: InsertStorageSlot): Promise<StorageSlot> {
-    return await prisma.storageSlot.create({
+  async createWarehouseGroup(data: InsertWarehouseGroup): Promise<WarehouseGroup> {
+    return await prisma.warehouseGroup.create({
       data,
     });
   }
 
-  async updateStorageSlot(id: string, data: UpdateStorageSlot): Promise<StorageSlot> {
-    return await prisma.storageSlot.update({
+  async updateWarehouseGroup(id: string, data: UpdateWarehouseGroup): Promise<WarehouseGroup> {
+    return await prisma.warehouseGroup.update({
       where: { id },
       data,
     });
   }
 
-  async getOrderStorage(orderId: string): Promise<OrderStorageWithRelations[]> {
-    // Verify order exists
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-    });
-
-    if (!order) {
-      throw new Error('Order not found');
-    }
-
-    return await prisma.orderStorage.findMany({
-      where: { orderId },
-      include: {
-        slot: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+  async deleteWarehouseGroup(id: string): Promise<void> {
+    await prisma.warehouseGroup.delete({
+      where: { id },
     });
   }
 
-  async createOrderStorage(orderId: string, data: InsertOrderStorage): Promise<OrderStorage> {
-    // Verify order exists
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-    });
-
-    if (!order) {
-      throw new Error('Order not found');
+  async getWarehousePlaces(groupId?: string): Promise<WarehousePlaceWithRelations[]> {
+    const where: any = {};
+    if (groupId) {
+      where.groupId = groupId;
     }
 
-    // Verify slot exists
-    const slot = await prisma.storageSlot.findUnique({
-      where: { id: data.slotId },
-    });
-
-    if (!slot) {
-      throw new Error('Storage slot not found');
-    }
-
-    return await prisma.orderStorage.create({
-      data: {
-        orderId,
-        ...data,
-      },
-    });
-  }
-
-  async getStoragePlaceContents(slotId: string) {
-    return await prisma.orderStorage.findMany({
-      where: { slotId },
+    return await prisma.warehousePlace.findMany({
+      where,
       include: {
-        order: {
+        group: true,
+        occupiedByOrder: {
           select: {
             id: true,
             displayOrderNumber: true,
             title: true,
             customer: true,
+            workflow: true,
+            dueDate: true,
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
+      orderBy: [
+        { occupiedByOrderId: { sort: 'desc', nulls: 'last' } }, // occupied first
+        { group: { name: 'asc' } },
+        { name: 'asc' },
+      ],
+    });
+  }
+
+  async getWarehousePlaceById(id: string): Promise<WarehousePlaceWithRelations | null> {
+    return await prisma.warehousePlace.findUnique({
+      where: { id },
+      include: {
+        group: true,
+        occupiedByOrder: {
+          select: {
+            id: true,
+            displayOrderNumber: true,
+            title: true,
+            customer: true,
+            workflow: true,
+            dueDate: true,
+          },
+        },
       },
     });
+  }
+
+  async createWarehousePlace(data: InsertWarehousePlace): Promise<WarehousePlace> {
+    return await prisma.warehousePlace.create({
+      data,
+    });
+  }
+
+  async updateWarehousePlace(id: string, data: UpdateWarehousePlace): Promise<WarehousePlace> {
+    return await prisma.warehousePlace.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteWarehousePlace(id: string): Promise<void> {
+    await prisma.warehousePlace.delete({
+      where: { id },
+    });
+  }
+
+  async generateWarehousePlaces(groupId: string, data: GenerateWarehousePlaces): Promise<{ created: number; skipped: Array<{ name: string; reason: string }>; examples: string[] }> {
+    const { prefix, start, end, zeroPad, separator, suffix } = data;
+
+    // Verify group exists
+    const group = await prisma.warehouseGroup.findUnique({
+      where: { id: groupId },
+    });
+
+    if (!group) {
+      throw new Error('Warehouse group not found');
+    }
+
+    const toCreate: string[] = [];
+    const skipped: Array<{ name: string; reason: string }> = [];
+
+    // Generate place names
+    for (let i = start; i <= end; i++) {
+      const paddedNumber = i.toString().padStart(zeroPad, '0');
+      const name = `${prefix.trim()}${separator}${paddedNumber}${suffix.trim()}`.trim();
+      toCreate.push(name);
+    }
+
+    // Get existing places in this group
+    const existing = await prisma.warehousePlace.findMany({
+      where: {
+        groupId,
+        name: { in: toCreate },
+      },
+      select: { name: true },
+    });
+
+    const existingNames = new Set(existing.map(p => p.name));
+
+    // Create only non-existing places
+    let created = 0;
+    for (const name of toCreate) {
+      if (existingNames.has(name)) {
+        skipped.push({ name, reason: 'exists' });
+      } else {
+        await prisma.warehousePlace.create({
+          data: {
+            groupId,
+            name,
+          },
+        });
+        created++;
+      }
+    }
+
+    // Return summary with examples
+    const examples = toCreate.slice(0, 3).concat(toCreate.length > 3 ? toCreate.slice(-3) : []);
+    return { created, skipped, examples: [...new Set(examples)] };
+  }
+
+  async assignOrderToWarehousePlace(orderId: string, placeId: string | null): Promise<OrderWithRelations> {
+    // Verify order exists
+    const order = await this.getOrderById(orderId);
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    // If placeId is null, we're removing the assignment
+    if (placeId === null) {
+      // Find current place if any
+      const currentPlace = await prisma.warehousePlace.findUnique({
+        where: { occupiedByOrderId: orderId },
+      });
+
+      if (currentPlace) {
+        await prisma.warehousePlace.update({
+          where: { id: currentPlace.id },
+          data: { occupiedByOrderId: null },
+        });
+      }
+
+      return await this.getOrderById(orderId) as OrderWithRelations;
+    }
+
+    // Verify place exists and is free
+    const place = await prisma.warehousePlace.findUnique({
+      where: { id: placeId },
+    });
+
+    if (!place) {
+      throw new Error('Warehouse place not found');
+    }
+
+    if (place.occupiedByOrderId && place.occupiedByOrderId !== orderId) {
+      throw new Error('Warehouse place is already occupied');
+    }
+
+    // Remove any existing assignment first
+    await prisma.warehousePlace.updateMany({
+      where: { occupiedByOrderId: orderId },
+      data: { occupiedByOrderId: null },
+    });
+
+    // Assign to new place
+    await prisma.warehousePlace.update({
+      where: { id: placeId },
+      data: { occupiedByOrderId: orderId },
+    });
+
+    return await this.getOrderById(orderId) as OrderWithRelations;
+  }
+
+  async releaseOrderFromMissingParts(orderId: string): Promise<OrderWithRelations> {
+    // Verify order exists and is in WARTET_FEHLTEILE status
+    const order = await this.getOrderById(orderId);
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    if (order.workflow !== 'WARTET_FEHLTEILE') {
+      throw new Error('Order is not in WARTET_FEHLTEILE status');
+    }
+
+    // Update order workflow to FUER_PROD
+    return await this.updateOrder(orderId, {
+      workflow: 'FUER_PROD',
+    } as any);
   }
 }
 
