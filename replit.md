@@ -110,40 +110,69 @@ The backend exposes a RESTful API with the following key endpoints:
 
 ### Authentication & Authorization
 
-**Current Implementation (Development Mode):**
-- Mock authentication via `X-User-Email` header for development
-- Role-Based Access Control (RBAC) fully implemented with 5 roles:
-  - **ADMIN**: Full access to all features (orders, planning, production, accounting, warehouse, settings)
-  - **PROD_PLAN**: Planning access only (timeslots, calendar, work centers)
-  - **PROD_RUN**: Production execution only (start/pause/stop operations)
-  - **SALES_OPS**: Orders management only (create/edit orders)
-  - **ACCOUNTING**: Billing and accounting access only
-- Demo users available for each role (see prisma/seed.ts)
-- Frontend UserContext provides current user state and role checks
-- Navigation sidebar automatically filtered based on user role
+**Production-Ready Implementation:**
+- **Session-based authentication** using express-session with secure bcrypt password hashing (10 rounds)
+- **Login page** at `/login` with dark design and 1aShirt logo
+- **Profile page** at `/profile` for viewing profile and changing passwords
+- **User management** at `/users` (ADMIN only) for creating, editing, and deleting users
+- **Protected routes** automatically redirect to `/login` when not authenticated
+- **Session security**: Session regeneration on login to prevent session fixation attacks
+
+**Role-Based Access Control (RBAC):**
+- **ADMIN**: Full access to all features (orders, planning, production, accounting, warehouse, settings, user management)
+- **PROD_PLAN**: Planning access only (timeslots, calendar, work centers)
+- **PROD_RUN**: Production execution only (start/pause/stop operations)
+- **SALES_OPS**: Orders management only (create/edit orders)
+- **ACCOUNTING**: Billing and accounting access only
+
+**Demo Credentials (password: "demo123"):**
+- admin@1ashirt.de (ADMIN)
+- planner@1ashirt.de (PROD_PLAN)
+- worker@1ashirt.de (PROD_RUN)
+- sales@1ashirt.de (SALES_OPS)
+- accounting@1ashirt.de (ACCOUNTING)
 
 **Backend Security:**
 - `requireAuth` middleware: Protects all endpoints, requires authenticated user (returns 401 if missing)
 - `requireRole` middleware: Enforces role-based access for write operations (returns 403 if unauthorized)
+- **Password security**: bcrypt hashing with 10 rounds, minimum 6 characters
+- **Session configuration**:
+  - SESSION_SECRET required in production (fails fast if missing)
+  - HttpOnly cookies with SameSite=lax protection
+  - Secure cookies in production (HTTPS only)
+  - 7-day session lifetime
+  - Session regeneration on login to prevent session fixation
 - All GET endpoints require authentication
 - State-changing endpoints (POST/PUT/DELETE) require specific roles:
   - Orders CRUD: ADMIN or SALES_OPS
   - Planning/TimeSlots: ADMIN or PROD_PLAN
   - Production execution: ADMIN or PROD_RUN
   - Work centers: ADMIN or PROD_PLAN
+  - User management: ADMIN only
 
 **Frontend Security:**
 - UserContext fetches current user from `/api/me` endpoint
-- Query client automatically injects `X-User-Email` header to all API requests
-- Navigation filtering prevents unauthorized page access
-- User switcher dropdown for development testing (should be gated behind dev flag in production)
+- Protected routes redirect to `/login` if not authenticated
+- Navigation filtering prevents unauthorized page access (sidebar items filtered by role)
+- Logout functionality destroys session server-side
+- No client-side password storage or exposure
 
-**Production Requirements:**
-- Replace header-based authentication with proper session management or JWT
-- Implement password hashing (currently plaintext in seed data)
-- Remove or gate user-switcher behind environment flag
-- Consider implementing refresh token rotation
-- Add audit logging for sensitive operations
+**API Endpoints:**
+- `POST /api/auth/login` - Login with email/password
+- `POST /api/auth/logout` - Logout (destroy session)
+- `POST /api/auth/change-password` - Change password (requires current password)
+- `GET /api/me` - Get current authenticated user
+- `GET /api/users` - List all users (ADMIN only)
+- `POST /api/users` - Create new user (ADMIN only)
+- `PATCH /api/users/:id` - Update user (ADMIN only)
+- `DELETE /api/users/:id` - Delete user (ADMIN only)
+
+**Production Deployment Requirements:**
+- **REQUIRED**: Set SESSION_SECRET environment variable (generate with `openssl rand -base64 32`)
+- **RECOMMENDED**: Replace MemoryStore with persistent session store (Redis via connect-redis or PostgreSQL via connect-pg-simple)
+- **RECOMMENDED**: Configure HTTPS for secure cookie transmission
+- **RECOMMENDED**: Implement rate limiting on login endpoint to prevent brute force attacks
+- **OPTIONAL**: Add password reset via email (requires email service integration)
 
 ## External Dependencies
 
