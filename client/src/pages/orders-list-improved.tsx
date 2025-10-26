@@ -365,14 +365,30 @@ export default function OrdersList() {
     },
     {
       accessorKey: "workflow",
-      header: () => <div className="px-3 py-2 w-44">Status</div>,
-      cell: ({ row }) => (
-        <div className={`${cellBase} w-44`}>
-          <Badge variant="outline" className={getWorkflowBadgeColor(row.original.workflow)}>
-            {WORKFLOW_LABELS[row.original.workflow]}
-          </Badge>
-        </div>
-      ),
+      header: () => <div className="px-3 py-2 w-56">Status</div>,
+      cell: ({ row }) => {
+        const order = row.original;
+        let label = WORKFLOW_LABELS[order.workflow];
+        
+        // For IN_PROD, show "seit HH:MM" if there's a running time slot
+        if (order.workflow === 'IN_PROD' && order.timeSlots && order.timeSlots.length > 0) {
+          const runningSlot = order.timeSlots[0];
+          if (runningSlot.startedAt) {
+            const startTime = new Date(runningSlot.startedAt);
+            const hours = startTime.getHours().toString().padStart(2, '0');
+            const minutes = startTime.getMinutes().toString().padStart(2, '0');
+            label = `${label} (seit ${hours}:${minutes})`;
+          }
+        }
+        
+        return (
+          <div className={`${cellBase} w-56`}>
+            <Badge variant="outline" className={getWorkflowBadgeColor(order.workflow)}>
+              {label}
+            </Badge>
+          </div>
+        );
+      },
       enableSorting: true,
     },
     {
@@ -529,8 +545,19 @@ export default function OrdersList() {
     });
   };
   
+  // Memoize column list for dropdown to prevent re-renders
+  const hidableColumns = useMemo(() => {
+    return columns
+      .filter(col => col.enableHiding !== false)
+      .map(col => {
+        const id = ('accessorKey' in col && col.accessorKey) ? col.accessorKey as string : ('id' in col ? col.id as string : '');
+        const header = typeof col.header === 'string' ? col.header : id;
+        return { id, header };
+      });
+  }, [columns]);
+
   return (
-    <div className="w-full">
+    <div className="w-full max-w-[1800px]">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Aufträge</h1>
@@ -572,24 +599,20 @@ export default function OrdersList() {
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel>Sichtbare Spalten</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {table
-                .getAllColumns()
-                .filter(column => column.getCanHide())
-                .map(column => {
-                  const header = typeof column.columnDef.header === 'string' 
-                    ? column.columnDef.header 
-                    : column.id;
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                      data-testid={`menu-column-${column.id}`}
-                    >
-                      {header}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
+              {hidableColumns.map(({ id, header }) => {
+                const column = table.getColumn(id);
+                if (!column) return null;
+                return (
+                  <DropdownMenuCheckboxItem
+                    key={id}
+                    checked={column.getIsVisible()}
+                    onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                    data-testid={`menu-column-${id}`}
+                  >
+                    {header}
+                  </DropdownMenuCheckboxItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
           
