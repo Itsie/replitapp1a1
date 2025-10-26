@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -21,9 +21,9 @@ export default function LoginPage() {
       const res = await apiRequest("POST", "/api/auth/login", credentials);
       return await res.json();
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       // Invalidate user query to refetch current user
-      await queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
       toast({
         title: "Anmeldung erfolgreich",
         description: "Willkommen zurück!",
@@ -39,20 +39,21 @@ export default function LoginPage() {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
+    if (loginMutation.isPending) return;
     loginMutation.mutate({ email, password });
-  };
+  }, [email, password, loginMutation]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
       <Card className="w-full max-w-md border-slate-700 bg-slate-800/50 backdrop-blur-sm">
-        <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-xl bg-slate-900/50 p-3">
+        <CardHeader className="space-y-6 text-center">
+          <div className="mx-auto flex items-center justify-center">
             <img 
               src={logoUrl} 
               alt="1aShirt Logo" 
-              className="h-full w-full object-contain"
+              className="h-24 w-24 object-contain"
             />
           </div>
           <div>
