@@ -21,14 +21,15 @@ export default function LoginPage() {
       const res = await apiRequest("POST", "/api/auth/login", credentials);
       return await res.json();
     },
-    onSuccess: () => {
-      // Invalidate user query to refetch current user
-      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+    onSuccess: async () => {
+      // Refetch user query and wait for it to complete before navigating
+      await queryClient.refetchQueries({ queryKey: ["/api/me"] });
       toast({
         title: "Anmeldung erfolgreich",
         description: "Willkommen zurück!",
       });
-      setLocation("/");
+      // Force hard navigation to ensure page reload
+      window.location.href = "/";
     },
     onError: (error: any) => {
       toast({
