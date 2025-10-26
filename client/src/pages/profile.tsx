@@ -75,7 +75,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="container max-w-4xl py-8">
+    <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Profil</h1>
         <p className="text-muted-foreground">

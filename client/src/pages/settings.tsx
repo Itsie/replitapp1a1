@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function Settings() {
   return (
-    <>
+    <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold tracking-tight">Einstellungen</h1>
         <p className="text-muted-foreground mt-1">
@@ -20,6 +20,6 @@ export default function Settings() {
           </p>
         </CardContent>
       </Card>
-    </>
+    </div>
   );
 }

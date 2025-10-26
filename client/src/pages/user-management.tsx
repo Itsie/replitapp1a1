@@ -218,7 +218,7 @@ export default function UserManagementPage() {
   }
 
   return (
-    <div className="container max-w-6xl py-8">
+    <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Benutzerverwaltung</h1>

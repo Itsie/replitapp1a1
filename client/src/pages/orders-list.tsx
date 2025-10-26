@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { OrderWithRelations, Department, OrderSource, WorkflowState } from "@shared/schema";
 import { useDebounce } from "@/hooks/use-debounce";
+import { WORKFLOW_LABELS, getWorkflowBadgeColor } from "@shared/schema";
 
 export default function OrdersList() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -38,27 +39,14 @@ export default function OrdersList() {
   };
   
   const getSourceBadgeColor = (source: OrderSource) => {
-    return source === "JTL" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300" : "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
-  };
-  
-  const getWorkflowBadgeColor = (workflow: WorkflowState) => {
-    const colors: Record<WorkflowState, string> = {
-      ENTWURF: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
-      NEU: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-      PRUEFUNG: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
-      FUER_PROD: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-      IN_PROD: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300",
-      WARTET_FEHLTEILE: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
-      FERTIG: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-      ZUR_ABRECHNUNG: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300",
-      ABGERECHNET: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
-    };
-    return colors[workflow] || "bg-gray-100 text-gray-800";
+    return source === "JTL" 
+      ? "bg-blue-500 text-white dark:bg-blue-600 dark:text-white border-blue-600 dark:border-blue-700" 
+      : "bg-emerald-500 text-white dark:bg-emerald-600 dark:text-white border-emerald-600 dark:border-emerald-700";
   };
   
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto p-6 lg:p-8">
+      <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-semibold">Aufträge</h1>
@@ -167,7 +155,7 @@ export default function OrdersList() {
                         {order.customer}
                       </p>
                     </div>
-                    <Badge className={getSourceBadgeColor(order.source)} data-testid={`badge-source-${order.id}`}>
+                    <Badge variant="outline" className={getSourceBadgeColor(order.source)} data-testid={`badge-source-${order.id}`}>
                       {order.source}
                     </Badge>
                   </CardHeader>
@@ -176,7 +164,7 @@ export default function OrdersList() {
                       <Badge variant="outline" data-testid={`badge-department-${order.id}`}>
                         {order.department}
                       </Badge>
-                      <Badge className={getWorkflowBadgeColor(order.workflow)} data-testid={`badge-workflow-${order.id}`}>
+                      <Badge variant="outline" className={getWorkflowBadgeColor(order.workflow)} data-testid={`badge-workflow-${order.id}`}>
                         {order.workflow}
                       </Badge>
                     </div>

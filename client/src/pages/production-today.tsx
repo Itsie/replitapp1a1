@@ -26,6 +26,7 @@ import { Play, Pause, Square, AlertCircle, Clock, ChevronDown, ChevronUp } from 
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { WorkCenter, Department, WorkflowState } from "@prisma/client";
+import { WORKFLOW_LABELS, getWorkflowBadgeColor } from "@shared/schema";
 
 interface TimeSlotWithOrder {
   id: string;
@@ -63,18 +64,6 @@ interface WorkCenterWithSlotCount extends WorkCenter {
 }
 
 type ProblemReason = "FEHLTEILE" | "MASCHINE" | "SONSTIGES";
-
-const WORKFLOW_BADGES: Record<WorkflowState, { label: string; class: string }> = {
-  ENTWURF:          { label: "Entwurf",          class: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100" },
-  NEU:              { label: "Neu",              class: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100" },
-  PRUEFUNG:         { label: "Prüfung",          class: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-100" },
-  FUER_PROD:        { label: "Für Produktion",   class: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" },
-  IN_PROD:          { label: "In Produktion",    class: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100" },
-  WARTET_FEHLTEILE: { label: "Wartet Fehlteile", class: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100" },
-  FERTIG:           { label: "Fertig",           class: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" },
-  ZUR_ABRECHNUNG:   { label: "Zur Abrechnung",   class: "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100" },
-  ABGERECHNET:      { label: "Abgerechnet",      class: "bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100" },
-};
 
 const SLOT_BADGE: Record<string, string> = {
   PLANNED: "border-slate-500 text-slate-700 dark:text-slate-300 bg-transparent",
@@ -368,7 +357,7 @@ export default function ProductionToday() {
   }
 
   return (
-    <div className="container max-w-7xl py-8">
+    <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Produktion heute</h1>
         <p className="text-muted-foreground">
@@ -425,6 +414,9 @@ export default function ProductionToday() {
               onPause={handlePause}
               onStop={handleStop}
               onProblem={handleOpenProblemDialog}
+              isStarting={startMutation.isPending}
+              isPausing={pauseMutation.isPending}
+              isStopping={stopMutation.isPending}
             />
           ))}
         </div>
@@ -523,6 +515,9 @@ interface TimeSlotCardProps {
   onPause: (id: string) => void;
   onStop: (id: string) => void;
   onProblem: (id: string) => void;
+  isStarting?: boolean;
+  isPausing?: boolean;
+  isStopping?: boolean;
 }
 
 function TimeSlotCard({
@@ -533,6 +528,9 @@ function TimeSlotCard({
   onPause,
   onStop,
   onProblem,
+  isStarting = false,
+  isPausing = false,
+  isStopping = false,
 }: TimeSlotCardProps) {
   const [currentTime, setCurrentTime] = useState(Date.now());
 
@@ -600,8 +598,8 @@ function TimeSlotCard({
               <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
                 <span>{slot.order.customer}</span>
                 <span>•</span>
-                <Badge variant="outline" className={WORKFLOW_BADGES[slot.order.workflow]?.class}>
-                  {WORKFLOW_BADGES[slot.order.workflow]?.label}
+                <Badge variant="outline" className={getWorkflowBadgeColor(slot.order.workflow)}>
+                  {WORKFLOW_LABELS[slot.order.workflow]}
                 </Badge>
               </div>
             )}
@@ -681,10 +679,11 @@ function TimeSlotCard({
                 onClick={() => onStart(slot.id)}
                 variant="default"
                 size="sm"
+                disabled={isStarting}
                 data-testid={`button-start-${slot.id}`}
               >
                 <Play className="mr-2 h-4 w-4" />
-                Start
+                {isStarting ? "Wird gestartet..." : "Start"}
               </Button>
             )}
 
@@ -694,19 +693,21 @@ function TimeSlotCard({
                   onClick={() => onPause(slot.id)}
                   variant="outline"
                   size="sm"
+                  disabled={isPausing}
                   data-testid={`button-pause-${slot.id}`}
                 >
                   <Pause className="mr-2 h-4 w-4" />
-                  Pause
+                  {isPausing ? "Wird pausiert..." : "Pause"}
                 </Button>
                 <Button
                   onClick={() => onStop(slot.id)}
                   variant="default"
                   size="sm"
+                  disabled={isStopping}
                   data-testid={`button-stop-${slot.id}`}
                 >
                   <Square className="mr-2 h-4 w-4" />
-                  Beenden
+                  {isStopping ? "Wird beendet..." : "Beenden"}
                 </Button>
                 <Button
                   onClick={() => onProblem(slot.id)}
@@ -726,19 +727,21 @@ function TimeSlotCard({
                   onClick={() => onStart(slot.id)}
                   variant="default"
                   size="sm"
+                  disabled={isStarting}
                   data-testid={`button-resume-${slot.id}`}
                 >
                   <Play className="mr-2 h-4 w-4" />
-                  Fortsetzen
+                  {isStarting ? "Wird fortgesetzt..." : "Fortsetzen"}
                 </Button>
                 <Button
                   onClick={() => onStop(slot.id)}
                   variant="outline"
                   size="sm"
+                  disabled={isStopping}
                   data-testid={`button-stop-paused-${slot.id}`}
                 >
                   <Square className="mr-2 h-4 w-4" />
-                  Beenden
+                  {isStopping ? "Wird beendet..." : "Beenden"}
                 </Button>
                 <Button
                   onClick={() => onProblem(slot.id)}
