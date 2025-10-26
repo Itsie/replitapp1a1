@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Search, Check, Calendar, Eye } from "lucide-react";
+import { Search, Check, Eye } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,40 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { OrderWithRelations } from "@shared/schema";
+
+// Demo data for development when API returns empty
+const DEMO_ORDERS: Partial<OrderWithRelations>[] = [
+  {
+    id: "demo-1",
+    displayOrderNumber: "2024-001",
+    title: "Team Trikots FC Musterhausen",
+    customer: "FC Musterhausen e.V.",
+    totalGross: 1250.50,
+    deliveredAt: new Date("2025-01-15").toISOString(),
+    deliveredQty: 25,
+    workflow: "ZUR_ABRECHNUNG" as any,
+  },
+  {
+    id: "demo-2",
+    displayOrderNumber: "2024-002",
+    title: "Vereinsshirts SV Beispiel",
+    customer: "SV Beispiel",
+    totalGross: 890.00,
+    deliveredAt: new Date("2025-01-18").toISOString(),
+    deliveredQty: 18,
+    workflow: "ZUR_ABRECHNUNG" as any,
+  },
+  {
+    id: "demo-3",
+    displayOrderNumber: "2024-003",
+    title: "Firmen Polo-Shirts",
+    customer: "Musterfirma GmbH",
+    totalGross: 2100.75,
+    deliveredAt: new Date("2025-01-20").toISOString(),
+    deliveredQty: 50,
+    workflow: "ZUR_ABRECHNUNG" as any,
+  },
+];
 
 export default function Billing() {
   const [, setLocation] = useLocation();
@@ -31,9 +65,18 @@ export default function Billing() {
     return queryString ? `/api/accounting/orders?${queryString}` : "/api/accounting/orders";
   };
 
-  const { data: orders = [], isLoading } = useQuery<OrderWithRelations[]>({
+  const { data: apiOrders = [], isLoading } = useQuery<OrderWithRelations[]>({
     queryKey: [buildQueryKey()],
   });
+
+  // Use demo data in development if API returns empty
+  const orders = useMemo(() => {
+    const isDev = import.meta.env.DEV;
+    if (isDev && apiOrders.length === 0 && activeTab === "ZUR_ABRECHNUNG") {
+      return DEMO_ORDERS as OrderWithRelations[];
+    }
+    return apiOrders;
+  }, [apiOrders, activeTab]);
 
   const settleMutation = useMutation({
     mutationFn: async (orderId: string) => {
@@ -189,6 +232,7 @@ export default function Billing() {
                               variant="ghost"
                               size="sm"
                               onClick={() => setLocation(`/orders/${order.id}`)}
+                              aria-label={`Auftrag ${order.displayOrderNumber || order.id} ansehen`}
                               data-testid={`button-view-${order.id}`}
                             >
                               <Eye className="h-4 w-4 mr-2" />
@@ -198,6 +242,7 @@ export default function Billing() {
                               size="sm"
                               onClick={() => settleMutation.mutate(order.id)}
                               disabled={settleMutation.isPending}
+                              aria-label={`Auftrag ${order.displayOrderNumber || order.id} als abgerechnet markieren`}
                               data-testid={`button-settle-${order.id}`}
                             >
                               <Check className="h-4 w-4 mr-2" />
@@ -261,6 +306,7 @@ export default function Billing() {
                             variant="ghost"
                             size="sm"
                             onClick={() => setLocation(`/orders/${order.id}`)}
+                            aria-label={`Auftrag ${order.displayOrderNumber || order.id} ansehen`}
                             data-testid={`button-view-${order.id}`}
                           >
                             <Eye className="h-4 w-4 mr-2" />
