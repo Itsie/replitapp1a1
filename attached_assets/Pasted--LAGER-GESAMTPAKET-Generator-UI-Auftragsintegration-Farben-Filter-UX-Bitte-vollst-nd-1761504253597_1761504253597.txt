@@ -1,0 +1,185 @@
+/// LAGER – GESAMTPAKET: Generator, UI, Auftragsintegration, Farben, Filter & UX
+/// Bitte vollständig umsetzen, bestehende Logik ersetzen bzw. integrieren.
+/// Ohne andere Module zu beschädigen.
+
+// ---------------------------------------------
+// 1) API-ERGÄNZUNGEN
+// ---------------------------------------------
+
+Backend: Neue Endpoints implementieren:
+
+A) Lagerplatz-Generator:
+POST /api/warehouse/groups/:groupId/generate-places
+Body:
+{
+  "prefix": "Regal",
+  "start": 1,
+  "end": 55,
+  "zeroPad": 2,
+  "separator": " ",
+  "suffix": ""
+}
+
+Response Example:
+{
+  "created": 55,
+  "skipped": [ { "name": "Regal 01", "reason": "exists" } ],
+  "examples": ["Regal 01", "Regal 02", "Regal 03"]
+}
+
+Logik:
+• Start<=End validieren
+• zeroPad 0-4
+• whitespace trimmen
+• Platzname: prefix + separator + padded + suffix
+• Idempotent: Existierende pro (groupId + name) überspringen
+• Transaktion
+• Response Summary zurückgeben
+
+
+B) Zuordnung Auftrag <-> Lagerplatz:
+PATCH /api/orders/:id/warehouse-place
+Body:
+{ "placeId": string | null }
+
+Validierung:
+• Wenn placeId=belegt → Fehler
+• Entfernen setzt occupiedByOrderId null
+• Success: Order zurückgeben
+
+
+// ---------------------------------------------
+// 2) PRISMA MODELLE / DATENSTRUKTUR
+// ---------------------------------------------
+
+model WarehouseGroup {
+  id        String           @id @default(cuid())
+  name      String           @unique
+  desc      String?
+  places    WarehousePlace[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model WarehousePlace {
+  id        String   @id @default(cuid())
+  groupId   String
+  group     WarehouseGroup @relation(fields: [groupId], references: [id])
+  name      String
+  occupiedByOrderId String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, name])
+}
+
+
+// ---------------------------------------------
+// 3) FRONTEND – /lager
+// ---------------------------------------------
+
+/lager UI komplett wie folgt gestalten:
+
+3.1 Hauptansicht:
+• Tabelle: Alle Plätze, sortiert:
+  - belegt zuerst → dann Bereich → dann numerisch sortierter Name
+• Spalten:
+  Platzname | Bereich | Status (Badge) | Auftrag (mit Link) | Zuletzt aktualisiert
+• Suchfunktion:
+  Name + OrderNumber + Kunde
+• Filter:
+  Bereich (searchable)
+  Status: Alle | Frei | Belegt
+• Farben:
+  Frei:  bg-emerald-100  dark:bg-emerald-900/30  text-emerald-700 dark:text-emerald-200
+  Belegt: bg-red-100      dark:bg-red-900/30      text-red-700     dark:text-red-200
+• Row Hover: cursor + leichtes Elevate
+
+
+3.2 Bereich-Detailseite (/lager/:groupId):
+• Oben:
+  - Name + Beschreibung
+  - 3 Badges: Gesamt | Frei | Belegt
+• Tabellenansicht wie oben, vorgefiltert
+• Button „Plätze generieren“ → öffnet Generator-Dialog
+
+
+3.3 Generator-Dialog:
+Formfelder:
+Prefix, Start, End, ZeroPad, Separator, Suffix
+Preview (erste 3 + letzte 3 Einträge)
+Create → POST Endpoint
+Ergebnis-Toast: created/skipped
+
+
+// ---------------------------------------------
+// 4) FRONTEND – Auftrag > Tab „Lager“
+// ---------------------------------------------
+
+Kein Verwaltungs-UI hier! Nur Zuordnung & Anzeige.
+
+UI:
+• Select 1: Bereich (searchable)
+• Select 2: Lagerplatz (searchable + nur freie anzeigen)
+→ Backend Call s.o.
+
+• Anzeige bei bestehender Zuordnung:
+  Bereich + Platzname (fat)
+  Link: „Im Lager anzeigen“
+
+• Buttons:
+  „Speichern“ (PATCH)
+  „Entfernen“ setzt Order zurück auf „nicht eingelagert“
+
+• Wenn Platz belegt: SELECT disabled + Warntext
+
+
+// ---------------------------------------------
+// 5) BERECHTIGUNGEN
+// ---------------------------------------------
+
+Nur ROLE_ADMIN bzw. ROLE_LAGER_ADMIN darf:
+• Lagerbereich anlegen / löschen
+• LP-Generator ausführen
+• Plätze umbenennen / löschen
+
+Jeder darf:
+• Auftrag einem freien Platz zuordnen
+• Auftrag aus Lager entfernen (wenn eigenes Order-Handling erlaubt)
+
+
+// ---------------------------------------------
+// 6) PERFORMANCE & UX
+// ---------------------------------------------
+
+• Debounce Search 300ms
+• Virtuelle Liste ab >300 Einträgen
+• Skeleton Loader bei Loading
+• Nach Zuordnung direkte UI-Aktualisierung
+• Consistent Toasting
+
+// ---------------------------------------------
+// 7) TESTS
+// ---------------------------------------------
+
+Happy Paths:
+• Generator 1..55 → 55 erstellt
+• Erneut Generator → 0 erstellt, 55 skipped
+• Auftrag Zuordnung → Platz belegt
+• Entfernen → Platz wird frei
+
+Edge Cases:
+• End < Start = Validation Error
+• Duplicate Prefix/Number Kombination → skipped
+• Resize Beispiel: Regal 1 → Regal 01 beim späteren ZeroPad Change → valid
+
+
+// ---------------------------------------------
+// ✅ ZIEL / AKZEPTANZ
+// ---------------------------------------------
+
+✓ Order kann 1 Lagerplatz zugewiesen bekommen
+✓ Übersicht zeigt farblich belegt/frei
+✓ Generator erzeugt Massenplätze automatisch
+✓ Verwaltung ausschließlich unter /lager
+✓ UX 2025-tauglich statt Excel-Chaos

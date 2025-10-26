@@ -461,6 +461,72 @@ interface TimelineViewProps {
   isStopping?: boolean;
 }
 
+interface SlotWithLayout extends TimeSlotWithOrder {
+  lane: number;
+  totalLanes: number;
+}
+
+function calculateLanes(slots: TimeSlotWithOrder[]): SlotWithLayout[] {
+  if (slots.length === 0) return [];
+  
+  // Sort by start time
+  const sorted = [...slots].sort((a, b) => a.startMin - b.startMin);
+  
+  // Find overlapping clusters
+  const clusters: TimeSlotWithOrder[][] = [];
+  let currentCluster: TimeSlotWithOrder[] = [sorted[0]];
+  
+  for (let i = 1; i < sorted.length; i++) {
+    const slot = sorted[i];
+    const clusterEnd = Math.max(...currentCluster.map(s => s.startMin + s.lengthMin));
+    
+    if (slot.startMin < clusterEnd) {
+      // Overlaps with current cluster
+      currentCluster.push(slot);
+    } else {
+      // Start new cluster
+      clusters.push(currentCluster);
+      currentCluster = [slot];
+    }
+  }
+  clusters.push(currentCluster);
+  
+  // Assign lanes within each cluster
+  const result: SlotWithLayout[] = [];
+  
+  for (const cluster of clusters) {
+    const lanes: { endMin: number }[] = [];
+    
+    for (const slot of cluster) {
+      const slotEnd = slot.startMin + slot.lengthMin;
+      
+      // Find first available lane
+      let assignedLane = lanes.findIndex(lane => lane.endMin <= slot.startMin);
+      
+      if (assignedLane === -1) {
+        assignedLane = lanes.length;
+        lanes.push({ endMin: slotEnd });
+      } else {
+        lanes[assignedLane].endMin = slotEnd;
+      }
+      
+      result.push({
+        ...slot,
+        lane: assignedLane,
+        totalLanes: 0, // Will be set next
+      });
+    }
+    
+    // Set totalLanes for this cluster
+    const clusterLanes = lanes.length;
+    for (const slot of result.slice(-cluster.length)) {
+      slot.totalLanes = clusterLanes;
+    }
+  }
+  
+  return result;
+}
+
 function TimelineView({
   slots,
   collapsedSlots,
@@ -477,54 +543,109 @@ function TimelineView({
   const workEnd = 18 * 60;   // 18:00
   const timeMarkers: number[] = [];
   
+  // Time markers every 30 minutes
   for (let min = workStart; min <= workEnd; min += 30) {
     timeMarkers.push(min);
   }
 
+  // Calculate lanes for overlapping slots
+  const slotsWithLanes = calculateLanes(slots);
+
   return (
-    <div className="space-y-6">
-      {/* Day boundaries */}
-      <div className="flex items-center gap-4 text-sm text-muted-foreground border-b pb-4">
-        <div className="flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-muted-foreground" />
-          <span className="font-medium">Arbeitstag: 07:00 - 18:00</span>
+    <div className="border rounded-lg p-6 bg-card">
+      {/* Timeline header */}
+      <div className="flex items-center justify-between mb-6 pb-4 border-b">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <div className="h-3 w-1 bg-green-600 rounded" />
+            <span className="text-muted-foreground">Läuft</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <div className="h-3 w-1 bg-yellow-600 rounded" />
+            <span className="text-muted-foreground">Pausiert</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <div className="h-3 w-1 bg-red-600 rounded" />
+            <span className="text-muted-foreground">Blockiert</span>
+          </div>
         </div>
+        <span className="text-sm text-muted-foreground">Arbeitstag: 07:00 - 18:00 Uhr</span>
       </div>
 
-      {/* Timeline */}
+      {/* Timeline grid */}
       <div className="relative">
-        {/* Time markers */}
-        <div className="absolute left-0 top-0 bottom-0 w-20 border-r border-border/50">
-          {timeMarkers.map((min, idx) => (
-            <div
-              key={min}
-              className="absolute left-0 right-0 flex items-center justify-end pr-3"
-              style={{ top: `${(idx / (timeMarkers.length - 1)) * 100}%` }}
-            >
-              <span className="text-xs text-muted-foreground font-mono">
-                {formatTime(min)}
-              </span>
-            </div>
-          ))}
+        {/* Time labels on left */}
+        <div className="absolute left-0 top-0 bottom-0 w-16">
+          {timeMarkers.map((min, idx) => {
+            const isFullHour = min % 60 === 0;
+            return (
+              <div
+                key={min}
+                className="absolute left-0 right-0 flex items-center justify-end pr-2"
+                style={{ top: `${idx * 40}px` }}
+              >
+                <span className={`text-xs font-mono ${isFullHour ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+                  {formatTime(min)}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
-        {/* Slots */}
-        <div className="ml-24 space-y-2 min-h-[600px]">
-          {slots.map(slot => (
-            <TimeSlotRow
-              key={slot.id}
-              slot={slot}
-              isCollapsed={collapsedSlots.has(slot.id)}
-              onToggleCollapse={() => onToggleCollapse(slot.id)}
-              onStart={onStart}
-              onPause={onPause}
-              onStop={onStop}
-              onProblem={onProblem}
-              isStarting={isStarting}
-              isPausing={isPausing}
-              isStopping={isStopping}
-            />
-          ))}
+        {/* Grid lines - full hours darker than half hours */}
+        <div className="absolute left-16 right-0 top-0 bottom-0">
+          {timeMarkers.map((min, idx) => {
+            const isFullHour = min % 60 === 0;
+            return (
+              <div
+                key={min}
+                className={`absolute left-0 right-0 border-t ${isFullHour ? 'border-border/40' : 'border-border/20'}`}
+                style={{ top: `${idx * 40}px` }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Slots content area */}
+        <div className="ml-20 relative" style={{ minHeight: `${timeMarkers.length * 40}px` }}>
+          {slotsWithLanes.map(slot => {
+            // Calculate position based on time - 40px per 30 minutes = 80px per hour
+            const pixelsPerMinute = 80 / 60;
+            const topPosition = (slot.startMin - workStart) * pixelsPerMinute;
+            const height = Math.max(slot.lengthMin * pixelsPerMinute, 20); // Minimum 20px (~15 min) for readability
+            
+            // Calculate width and left offset for lanes
+            const laneWidth = 100 / slot.totalLanes;
+            const leftPercent = (slot.lane * laneWidth);
+            const widthPercent = laneWidth - (slot.totalLanes > 1 ? 1 : 0); // Small gap between lanes
+            
+            return (
+              <div
+                key={slot.id}
+                className="absolute pr-1"
+                style={{
+                  top: `${topPosition}px`,
+                  height: `${height}px`,
+                  left: `${leftPercent}%`,
+                  width: `${widthPercent}%`,
+                }}
+              >
+                <TimeSlotRow
+                  slot={slot}
+                  slotHeight={height}
+                  isCollapsed={collapsedSlots.has(slot.id)}
+                  onToggleCollapse={() => onToggleCollapse(slot.id)}
+                  onStart={onStart}
+                  onPause={onPause}
+                  onStop={onStop}
+                  onProblem={onProblem}
+                  isStarting={isStarting}
+                  isPausing={isPausing}
+                  isStopping={isStopping}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -533,6 +654,7 @@ function TimelineView({
 
 interface TimeSlotRowProps {
   slot: TimeSlotWithOrder;
+  slotHeight: number;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onStart: (id: string) => void;
@@ -546,6 +668,7 @@ interface TimeSlotRowProps {
 
 function TimeSlotRow({
   slot,
+  slotHeight,
   isCollapsed,
   onToggleCollapse,
   onStart,
@@ -579,152 +702,154 @@ function TimeSlotRow({
   const isPaused = slot.status === 'PAUSED';
   const isBlocked = slot.status === 'BLOCKED';
 
+  // For very short slots (< 40 px = ~30 min), use compact display
+  const isCompact = slotHeight < 40;
+
   return (
-    <Card
+    <div
       className={`
-        ${isDone ? 'opacity-70' : ''}
-        ${isRunning ? 'border-l-4 border-l-green-600' : ''}
-        ${isBlocked ? 'border-l-4 border-l-red-600' : ''}
-        ${isPaused ? 'border-l-4 border-l-yellow-600' : ''}
+        relative pl-4 py-2 pr-4 rounded-md border bg-card/50 h-full overflow-hidden flex flex-col
+        ${isDone ? 'opacity-60' : ''}
+        ${isRunning ? 'border-l-4 border-l-green-600 bg-green-50/5' : ''}
+        ${isBlocked ? 'border-l-4 border-l-red-600 bg-red-50/5' : ''}
+        ${isPaused ? 'border-l-4 border-l-yellow-600 bg-yellow-50/5' : ''}
+        ${isCompact && !isDone ? 'cursor-pointer hover-elevate' : ''}
       `}
+      onClick={isCompact && !isDone ? () => setShowActions(!showActions) : undefined}
       data-testid={`card-slot-${slot.id}`}
     >
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              {/* Time */}
-              <span className="text-sm font-mono text-muted-foreground">
-                {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
-              </span>
-              
-              {/* Duration indicator */}
-              <span className="text-xs text-muted-foreground">
-                ({formatDuration(slot.lengthMin)})
-              </span>
-
-              {/* Status indicator - subtle */}
-              {isRunning && (
-                <Badge variant="secondary" className="text-xs">
-                  Läuft
-                </Badge>
-              )}
-              {isPaused && (
-                <Badge variant="secondary" className="text-xs">
-                  Pausiert
-                </Badge>
-              )}
-              {isDone && (
-                <Badge variant="secondary" className="text-xs">
-                  Fertig
-                </Badge>
-              )}
-            </div>
-
-            {/* Order info */}
-            <CardTitle className="text-base font-medium mb-1">
-              {slot.order ? (
-                <span>
-                  {slot.order.displayOrderNumber && (
-                    <span className="text-muted-foreground">{slot.order.displayOrderNumber} · </span>
-                  )}
-                  {slot.order.title}
+      <div className="flex items-start justify-between gap-2 flex-shrink-0">
+        <div className="flex-1 min-w-0">
+          {!isCompact ? (
+            <>
+              {/* Normal display for taller slots */}
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-sm font-mono font-semibold tracking-tight">
+                  {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
                 </span>
-              ) : (
-                <span className="text-muted-foreground italic">Blockiert</span>
-              )}
-            </CardTitle>
-
-            {slot.order && (
-              <div className="text-sm text-muted-foreground">
-                {slot.order.customer}
-              </div>
-            )}
-
-            {/* Work center - subtle */}
-            <div className="text-xs text-muted-foreground mt-2">
-              {slot.workCenter.name}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Live timer for running slots */}
-            {isRunning && (
-              <div className="flex items-center gap-2 px-2 py-1 rounded bg-muted">
-                <Clock className="h-3 w-3" />
-                <span className="font-mono text-sm font-medium">
-                  {formatDuration(elapsedMin)}
+                <span className="text-xs text-muted-foreground">
+                  {formatDuration(slot.lengthMin)}
                 </span>
               </div>
-            )}
 
-            {/* Action menu toggle */}
-            {!isDone && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowActions(!showActions)}
-                data-testid={`button-actions-${slot.id}`}
-              >
-                {showActions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </Button>
-            )}
+              <div className="text-sm font-medium mb-0.5 truncate">
+                {slot.order ? (
+                  <>
+                    {slot.order.displayOrderNumber && (
+                      <span className="text-muted-foreground text-xs">{slot.order.displayOrderNumber} · </span>
+                    )}
+                    <span>{slot.order.title}</span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground italic">Blockiert</span>
+                )}
+              </div>
 
-            {isDone && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onToggleCollapse}
-                data-testid={`button-toggle-${slot.id}`}
-              >
-                {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-              </Button>
-            )}
-          </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                {slot.order && (
+                  <>
+                    <span className="truncate">{slot.order.customer}</span>
+                    <span>•</span>
+                  </>
+                )}
+                <span className="truncate">{slot.workCenter.name}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Compact display for short slots */}
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-mono font-semibold">
+                  {formatTime(slot.startMin)}
+                </span>
+                <span className="text-xs font-medium truncate">
+                  {slot.order ? slot.order.title : 'Blockiert'}
+                </span>
+                {!isDone && showActions && (
+                  <span className="text-xs text-muted-foreground ml-auto">(Klicken zum Schließen)</span>
+                )}
+              </div>
+            </>
+          )}
         </div>
-      </CardHeader>
 
-      {/* Expanded content */}
-      {((!isDone && showActions) || (isDone && !isCollapsed)) && (
-        <CardContent className="space-y-3 pt-0">
-          {/* Additional info */}
-          {slot.note && (
-            <div className="text-sm text-muted-foreground">
-              <span className="font-medium">Notiz:</span> {slot.note}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Live timer for running slots */}
+          {isRunning && !isCompact && (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-mono bg-background/50 border">
+              <Clock className="h-3 w-3 text-muted-foreground" />
+              <span className="font-medium text-xs">{formatDuration(elapsedMin)}</span>
             </div>
           )}
 
-          {slot.missingPartsNote && (
-            <div className="p-2 rounded bg-muted text-sm">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 mt-0.5 text-destructive" />
+          {/* Expand/collapse - only for non-compact slots */}
+          {!isCompact && !isDone && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowActions(!showActions)}
+              data-testid={`button-actions-${slot.id}`}
+              className="h-7 w-7 p-0"
+            >
+              {showActions ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </Button>
+          )}
+
+          {!isCompact && isDone && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleCollapse}
+              data-testid={`button-toggle-${slot.id}`}
+              className="h-7 w-7 p-0"
+            >
+              {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded details - for non-compact slots OR compact slots with showActions */}
+      {((!isDone && showActions) || (isDone && !isCollapsed)) && (
+        <div className={`mt-2 pt-2 border-t space-y-1.5 flex-shrink-0 ${isCompact ? 'text-xs' : 'text-xs'}`}>
+          {!isCompact && slot.note && (
+            <div>
+              <span className="text-muted-foreground">Notiz:</span> {slot.note}
+            </div>
+          )}
+
+          {!isCompact && slot.missingPartsNote && (
+            <div className="p-1.5 rounded bg-destructive/10 border border-destructive/20">
+              <div className="flex items-start gap-1.5">
+                <AlertCircle className="h-3.5 w-3.5 mt-0.5 text-destructive flex-shrink-0" />
                 <div>
-                  <div className="font-medium mb-0.5">Problem:</div>
+                  <div className="font-medium text-destructive mb-0.5">Problem:</div>
                   <div className="text-muted-foreground">{slot.missingPartsNote}</div>
                 </div>
               </div>
             </div>
           )}
 
-          {isDone && slot.actualDurationMin !== null && (
-            <div className="text-sm text-muted-foreground">
-              <span className="font-medium">Tatsächliche Dauer:</span> {formatDuration(slot.actualDurationMin)}
+          {!isCompact && isDone && slot.actualDurationMin !== null && (
+            <div>
+              <span className="text-muted-foreground">Tatsächlich:</span>{' '}
+              <span className="font-medium">{formatDuration(slot.actualDurationMin)}</span>
             </div>
           )}
 
-          {/* Action buttons - only when expanded */}
+          {/* Action buttons - compact or full size */}
           {!isDone && (
-            <div className="flex items-center gap-2 pt-2">
+            <div className={`flex items-center gap-1.5 pt-1 flex-wrap ${isCompact ? 'justify-center' : ''}`}>
               {slot.status === 'PLANNED' && (
                 <Button
                   onClick={() => onStart(slot.id)}
-                  variant="default"
                   size="sm"
                   disabled={isStarting}
                   data-testid={`button-start-${slot.id}`}
+                  className="h-7 text-xs"
                 >
-                  <Play className="mr-2 h-4 w-4" />
-                  {isStarting ? "Wird gestartet..." : "Starten"}
+                  <Play className="mr-1 h-3 w-3" />
+                  {isStarting ? "Startet..." : "Starten"}
                 </Button>
               )}
 
@@ -736,9 +861,10 @@ function TimeSlotRow({
                     size="sm"
                     disabled={isPausing}
                     data-testid={`button-pause-${slot.id}`}
+                    className="h-7 text-xs"
                   >
-                    <Pause className="mr-2 h-4 w-4" />
-                    {isPausing ? "Wird pausiert..." : "Pausieren"}
+                    <Pause className="mr-1 h-3 w-3" />
+                    {isPausing ? "Pausiert..." : "Pause"}
                   </Button>
                   <Button
                     onClick={() => onStop(slot.id)}
@@ -746,17 +872,19 @@ function TimeSlotRow({
                     size="sm"
                     disabled={isStopping}
                     data-testid={`button-stop-${slot.id}`}
+                    className="h-7 text-xs"
                   >
-                    <Square className="mr-2 h-4 w-4" />
-                    {isStopping ? "Wird beendet..." : "Beenden"}
+                    <Square className="mr-1 h-3 w-3" />
+                    {isStopping ? "Stoppt..." : "Stop"}
                   </Button>
                   <Button
                     onClick={() => onProblem(slot.id)}
                     variant="outline"
                     size="sm"
                     data-testid={`button-problem-${slot.id}`}
+                    className="h-7 text-xs"
                   >
-                    <AlertCircle className="mr-2 h-4 w-4" />
+                    <AlertCircle className="mr-1 h-3 w-3" />
                     Problem
                   </Button>
                 </>
@@ -766,13 +894,13 @@ function TimeSlotRow({
                 <>
                   <Button
                     onClick={() => onStart(slot.id)}
-                    variant="default"
                     size="sm"
                     disabled={isStarting}
                     data-testid={`button-resume-${slot.id}`}
+                    className="h-7 text-xs"
                   >
-                    <Play className="mr-2 h-4 w-4" />
-                    {isStarting ? "Wird fortgesetzt..." : "Fortsetzen"}
+                    <Play className="mr-1 h-3 w-3" />
+                    {isStarting ? "Fortsetzt..." : "Weiter"}
                   </Button>
                   <Button
                     onClick={() => onStop(slot.id)}
@@ -780,25 +908,27 @@ function TimeSlotRow({
                     size="sm"
                     disabled={isStopping}
                     data-testid={`button-stop-paused-${slot.id}`}
+                    className="h-7 text-xs"
                   >
-                    <Square className="mr-2 h-4 w-4" />
-                    {isStopping ? "Wird beendet..." : "Beenden"}
+                    <Square className="mr-1 h-3 w-3" />
+                    {isStopping ? "Stoppt..." : "Stop"}
                   </Button>
                   <Button
                     onClick={() => onProblem(slot.id)}
                     variant="outline"
                     size="sm"
                     data-testid={`button-problem-paused-${slot.id}`}
+                    className="h-7 text-xs"
                   >
-                    <AlertCircle className="mr-2 h-4 w-4" />
+                    <AlertCircle className="mr-1 h-3 w-3" />
                     Problem
                   </Button>
                 </>
               )}
             </div>
           )}
-        </CardContent>
+        </div>
       )}
-    </Card>
+    </div>
   );
 }
