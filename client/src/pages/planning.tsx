@@ -896,7 +896,7 @@ export default function PlanningPage() {
             </div>
           ) : (
             <div className="flex-1 overflow-auto" ref={gridContainerRef}>
-              <div className="inline-block min-w-full">
+              <div className="min-w-full">
                 <div className="flex border">
                   {/* Time Column */}
                   <div className="flex flex-col border-r bg-muted sticky left-0 z-10" style={{ width: "80px" }}>
