@@ -202,7 +202,7 @@ export default function OrderDetail() {
     
     // Handle dueDate properly: convert YYYY-MM-DD to ISO datetime string
     if (editForm.dueDate !== getCurrentDueDateStr) {
-      if (editForm.dueDate) {
+      if (editForm.dueDate && editForm.dueDate.trim()) {
         // Create date at noon UTC to avoid timezone issues
         const date = new Date(editForm.dueDate + 'T12:00:00.000Z');
         updateData.dueDate = date.toISOString();
