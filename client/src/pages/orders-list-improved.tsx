@@ -557,7 +557,7 @@ export default function OrdersList() {
   }, [columns]);
 
   return (
-    <div className="w-full max-w-[1800px]">
+    <div className="w-full px-4 md:px-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Aufträge</h1>
