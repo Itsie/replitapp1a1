@@ -1,0 +1,74 @@
+PLANNING FIX 2: Events (Aufträge) exakt wie Blocker positionieren
+
+Symptom
+- Blocker 07:00–08:00 sitzt exakt im Raster.
+- Auftrag 09:00–10:00 (60 Min) wird zu weit unten gerendert.
+
+Ziel
+- Auftragskarten benutzen IDENTISCHES Geometrie-Modell wie Blocker:
+  - gleicher offsetParent (.dayBody)
+  - gleiche Minuten→Pixel-Umrechnung
+  - kein zusätzliches transform/Wrapper-Offset
+  - gleiche Rundung auf das Grid (15/30/60)
+
+To do (bitte genau so):
+
+1) CSS angleichen
+- Für Auftragskarten (z.B. .planningItem.event oder .calendarEvent):
+  .calendarEvent {
+    position: absolute;
+    left: 0; right: 0;
+    transform: translateY(0);  /* falls vorhanden: entfernen */
+    margin: 0;                 /* keine extra Abstände */
+  }
+- Sicherstellen: .dayBody { position: relative; padding:0; margin:0; }
+- Keine inneren Wrapper mit transform/relative, die den Bezugspunkt verschieben.
+
+2) Eine gemeinsame Geometrie-Funktion benutzen
+- Wiederverwende die Funktion, die ihr für Blocker nutzt (aktuell ok laut Notizen),
+  z.B.:
+
+  const ROW_HEIGHT_PX      = 20;      // wie im Code bereits
+  const WORKING_HOURS_START = 420;    // 07:00 (in Minuten)
+  const MINUTES_PER_ROW     = currentZoomMinutes; // 15/30/60
+  const pxPerMinute         = ROW_HEIGHT_PX / MINUTES_PER_ROW;
+
+  function getGeometry(startMin, lengthMin) {
+    const relMin = startMin - WORKING_HOURS_START;
+    const topPx = relMin * pxPerMinute;
+    const heightPx = Math.max(1, lengthMin * pxPerMinute);
+    return { topPx, heightPx };
+  }
+
+- Für jeden Auftrag:
+  - startMin als Minuten seit Mitternacht der LOKALEN Startzeit berechnen:
+    const d = new Date(order.startDateTime);
+    const startMin = d.getHours() * 60 + d.getMinutes(); // NICHT UTC
+  - lengthMin aus order.lengthMin oder (end-start)
+  - const { topPx, heightPx } = getGeometry(startMin, lengthMin)
+  - eventEl.style.top = `${topPx}px`;
+  - eventEl.style.height = `${heightPx}px`;
+
+3) Gleiche Rundung wie beim Drag
+- Beim Drop: auf Grid runden
+  const rounded = Math.round((startMin - WORKING_HOURS_START) / GRID_MIN) * GRID_MIN + WORKING_HOURS_START;
+  // GRID_MIN = 15 oder 30 (entspricht Zoom)
+- Beim Render nur zeigen, nicht erneut runden (sonst Drift).
+
+4) Offset-Fallen ausschalten
+- Entferne jegliche translateY/transform auf dem Event-Element oder Eltern.
+- Prüfe, dass eventEl.offsetParent === .dayBody der jeweiligen Spalte ist.
+- Keine zusätzliche Kopfzeilen-Höhe addieren: top bezieht sich auf .dayBody (unterhalb Header).
+
+5) Timezone/DST-Absicherung
+- Sicherstellen, dass startDateTime bereits lokal ist oder zu lokaler Zeit konvertiert wird (kein UTC-Shift).
+- Testfälle: 07:00–08:00 top=0…rowHeight, 09:00–10:00 top exakt auf 09:00-Linie.
+
+6) Debug (temporär)
+- Für Events die „Soll-Linie“ rendern (1px horizontal) bei startMin.
+- Console.log für ein Beispiel-Event: {startMin, lengthMin, topPx, heightPx, pxPerMinute}.
+
+Akzeptanzkriterien
+- Auftrag 09:00–10:00 deckt exakt die Zelle 09:00–10:00 ab (ohne Gap).
+- Bei Zoom 15/30/60 bleibt die Position korrekt.
+- Drag&Drop setzt Events sauber auf das Grid, Render weicht nicht ab.

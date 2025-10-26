@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -259,6 +259,20 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
   const { topPx, heightPx } = getSlotGeometry(slot.startMin, slot.lengthMin, minutesPerRow);
   const [showDelete, setShowDelete] = useState(false);
 
+  // Debug logging (temporary)
+  if (slot.startMin === 540) { // Log for 09:00 slots as example
+    const pixelsPerMinute = ROW_HEIGHT / minutesPerRow;
+    console.log('Slot geometry debug:', {
+      slotId: slot.id,
+      startMin: slot.startMin,
+      lengthMin: slot.lengthMin,
+      topPx,
+      heightPx,
+      pixelsPerMinute,
+      blocked: slot.blocked
+    });
+  }
+
   const dueDateStr = slot.order?.dueDate ? formatDueDate(slot.order.dueDate) : null;
   const isOverdue = slot.order?.dueDate ? isDueDateOverdue(slot.order.dueDate) : false;
   const isUrgent = slot.order?.dueDate ? isDueDateUrgent(slot.order.dueDate) : false;
@@ -266,7 +280,7 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
   if (slot.blocked) {
     return (
       <div
-        className="absolute left-0 right-0 bg-red-50 dark:bg-red-900/20 border-2 border-dashed border-red-300 dark:border-red-700 rounded p-2 m-1"
+        className="absolute left-0 right-0 bg-red-50 dark:bg-red-900/20 border-2 border-dashed border-red-300 dark:border-red-700 rounded p-2"
         style={{
           top: `${topPx}px`,
           height: `${heightPx}px`,
@@ -303,7 +317,7 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
 
   return (
     <div
-      className="absolute left-0 right-0 bg-card border rounded p-2 m-1 hover-elevate"
+      className="absolute left-0 right-0 bg-card border rounded p-2 hover-elevate"
       style={{
         top: `${topPx}px`,
         height: `${heightPx}px`,
@@ -919,7 +933,7 @@ export default function PlanningPage() {
                         {/* Drag preview ghost */}
                         {dragOverCell && dragOverCell.day === dayIdx && dragState.type === "order" && (
                           <div
-                            className="absolute left-0 right-0 bg-primary/20 border border-primary border-dashed rounded m-1 pointer-events-none"
+                            className="absolute left-0 right-0 bg-primary/20 border border-primary border-dashed rounded pointer-events-none"
                             style={{
                               top: `${getSlotGeometry(dragOverCell.startMin, 60, zoom).topPx}px`,
                               height: `${getSlotGeometry(dragOverCell.startMin, 60, zoom).heightPx}px`,
@@ -978,6 +992,9 @@ export default function PlanningPage() {
         <DialogContent data-testid="dialog-create-slot">
           <DialogHeader>
             <DialogTitle>Neuen Termin erstellen</DialogTitle>
+            <DialogDescription>
+              Planen Sie einen Produktionstermin für den ausgewählten Auftrag.
+            </DialogDescription>
           </DialogHeader>
           
           {createSlotDialog.order && (
@@ -1084,6 +1101,9 @@ export default function PlanningPage() {
         <DialogContent data-testid="dialog-create-blocker">
           <DialogHeader>
             <DialogTitle>Blocker erstellen</DialogTitle>
+            <DialogDescription>
+              Erstellen Sie einen Blocker, um einen Zeitraum zu sperren.
+            </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
