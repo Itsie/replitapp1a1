@@ -259,9 +259,6 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
   const { topPx, heightPx } = getSlotGeometry(slot.startMin, slot.lengthMin, minutesPerRow);
   const [showDelete, setShowDelete] = useState(false);
 
-  // Debug: Log every slot position
-  console.log(`Slot ${slot.id.slice(-6)}: ${formatTime(slot.startMin)}-${formatTime(slot.startMin + slot.lengthMin)} → top=${topPx}px, height=${heightPx}px, blocked=${slot.blocked}`);
-
   const dueDateStr = slot.order?.dueDate ? formatDueDate(slot.order.dueDate) : null;
   const isOverdue = slot.order?.dueDate ? isDueDateOverdue(slot.order.dueDate) : false;
   const isUrgent = slot.order?.dueDate ? isDueDateUrgent(slot.order.dueDate) : false;
@@ -882,11 +879,13 @@ export default function PlanningPage() {
                   {/* Time Column */}
                   <div className="flex flex-col border-r bg-muted sticky left-0 z-10" style={{ width: "80px" }}>
                     <div className="border-b p-2 text-sm font-medium" style={{ minHeight: "56px" }}>Zeit</div>
-                    {gridRows.map((timeMin, idx) => (
-                      <div key={idx} className="border-b p-2 text-xs text-muted-foreground" style={{ height: `${ROW_HEIGHT}px` }}>
-                        {formatTime(timeMin)}
-                      </div>
-                    ))}
+                    <div className="relative" style={{ minHeight: `${totalDayHeight}px` }}>
+                      {gridRows.map((timeMin, idx) => (
+                        <div key={idx} className="border-b p-2 text-xs text-muted-foreground" style={{ height: `${ROW_HEIGHT}px` }}>
+                          {formatTime(timeMin)}
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Day Columns */}
