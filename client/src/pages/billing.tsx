@@ -21,8 +21,18 @@ export default function Billing() {
   const [dueFrom, setDueFrom] = useState("");
   const [dueTo, setDueTo] = useState("");
 
+  const buildQueryKey = () => {
+    const params = new URLSearchParams();
+    if (activeTab) params.append("status", activeTab);
+    if (searchQuery) params.append("q", searchQuery);
+    if (dueFrom) params.append("dueFrom", dueFrom);
+    if (dueTo) params.append("dueTo", dueTo);
+    const queryString = params.toString();
+    return queryString ? `/api/accounting/orders?${queryString}` : "/api/accounting/orders";
+  };
+
   const { data: orders = [], isLoading } = useQuery<OrderWithRelations[]>({
-    queryKey: ["/api/accounting/orders", { status: activeTab, q: searchQuery, dueFrom, dueTo }],
+    queryKey: [buildQueryKey()],
   });
 
   const settleMutation = useMutation({
@@ -34,8 +44,13 @@ export default function Billing() {
       }
       return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/accounting/orders"] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/accounting/orders');
+        }
+      });
       toast({
         title: "Als abgerechnet markiert",
         description: "Der Auftrag wurde erfolgreich als abgerechnet markiert.",
