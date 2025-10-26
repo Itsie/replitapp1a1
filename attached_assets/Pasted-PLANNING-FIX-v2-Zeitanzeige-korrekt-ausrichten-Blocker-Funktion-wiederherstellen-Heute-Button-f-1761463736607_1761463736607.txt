@@ -1,0 +1,64 @@
+PLANNING FIX v2: Zeitanzeige korrekt ausrichten, Blocker-Funktion wiederherstellen, „Heute“-Button fixen, Fälligkeit sichtbar + sortierbar
+
+Ziel
+1) Zeitslots exakt am Raster rendern (Startzeit/Dauer korrekt).
+2) Blocker (Bereichssperren) wieder aktiv: anlegen, anzeigen, kollisionssicher.
+3) „Heute“-Button sinnvoll: springt zur aktuellen Kalenderwoche und scrollt zur aktuellen Zeit.
+4) Fälligkeit (Liefertermin) auf Auftragskarten rechts anzeigen und Liste standardmäßig nach Fälligkeit sortieren (früh → spät).
+
+Scope & Regeln
+- Kein Redesign, nur Funktion/Korrektur.
+- Nutze vorhandene Modelle/Endpunkte (Bereiche/Slots; blocked=true).
+- Zoom 15/30/60 min bleibt, Raster/Labels/Event-Höhen passen sich konsistent an.
+- Drag & Drop darf NICHT kaputtgehen.
+
+A) Zeitanzeige & Positionierung
+- minutesFromStart = hour*60 + minute
+- topPx = minutesFromStart * pixelsPerMinute
+- heightPx = lengthMin * pixelsPerMinute
+- pixelsPerMinute = rowHeight / zoomMinutes (bei 30 Min: 1 Rasterzeile = 30 Min)
+- Time-axis-Labels und Horizontallinien exakt aufs Raster; 07:00 als Start; keine Off-by-one/scroll-Shift.
+
+B) Drag & Drop (rechts → Kalender)
+- Drop-Target highlighten; Startzeit auf Raster runden (min 15 Min).
+- Default-Dauer 60 Min, wenn nicht anders bestimmt.
+- Persistenz via POST/PATCH /api/timeslots; UI optimistisch updaten.
+- Event-Card: OrderNr, Titel, Kunde, Zeitspanne, Dauer.
+
+C) Blocker-Funktion
+- Button „Blocker hinzufügen“: Modal mit Bereich, Datum, Startzeit, Dauer, Notiz.
+- POST /api/timeslots { blocked:true, areaId, date, startMin, lengthMin, note }
+- Optik: klar unterscheidbar (z. B. gestrichelt/grau), nicht über Order-Events draggbar.
+- Kollisionen verhindern; Drop in Blockerzeit ablehnen.
+- Edit/Löschen via Kontextmenü (PATCH/DELETE).
+
+D) „Heute“-Button (fixen)
+- Klick setzt Kalender auf aktuelle Kalenderwoche (heutiges Datum).
+- Zusätzlich: vertikales Auto-Scroll auf die aktuelle Zeit (z. B. 5–10% oberhalb im Viewport).
+- Wenn aktuelle Woche schon sichtbar: nur scrollen.
+- Keine Navigation-Glitches, kein Doppelsprung.
+
+E) Fälligkeit (Liefertermin) in Auftragsliste rechts
+- Auftragskarte rechts zeigt Due Date als Badge/Label (z. B. „Fälligkeit: 25.10.“).
+- Farbhinweise: überfällig = rot, ≤48h = orange, sonst neutral.
+- Standard-Sortierung der Liste: aufsteigend nach Due Date (null/ohne Fälligkeit ans Ende).
+- Sekundärsortierung: optional nach Priorität oder Workflow, aber NICHT statt Due Date.
+- Beim Drag Tooltip ebenfalls Due Date anzeigen.
+
+F) Performance & Tests
+- rAF für Repositionierung, will-change: transform für Events.
+- Tests:
+  - Zoom-Wechsel: Raster/Linien/Events bleiben deckungsgleich.
+  - Drag von rechts → Kalender: Start/Dauer stimmen, Kollisionen korrekt.
+  - Blocker anlegen/ändern/löschen persistiert & blockiert Drops.
+  - „Heute“-Button springt zuverlässig zur aktuellen KW und scrollt zur aktuellen Uhrzeit.
+  - Auftragsliste rechts ist nach Fälligkeit sortiert; farbige Badges korrekt (überfällig/48h/normal).
+
+Akzeptanzkriterien
+- Event 07:00–08:00 liegt exakt zwischen 07:00- und 08:00-Linie.
+- Zoom 30 Min = 1 Zeile = 30 Min; bei 60 Min doppelte Zeilenhöhe, bei 15 Min halb.
+- Blocker sichtbar/bedienbar; Drops in Blockerzeiten verhindern.
+- „Heute“ springt zur richtigen Woche und scrollt zur aktuellen Zeit.
+- Aufträge rechts zeigen Fälligkeit und sind nach Fälligkeit sortiert.
+
+Bitte umsetzen und kurz notieren, welche Helper (Min↔Px, ScrollToNow, Sortierung) angepasst/neu sind.

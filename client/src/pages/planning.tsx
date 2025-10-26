@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, memo } from "react";
+import { useState, useMemo, useCallback, memo, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,13 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronLeft, ChevronRight, Lock, X, GripVertical, Calendar } from "lucide-react";
-import { format, addDays, subDays, startOfWeek, getWeek, isPast, parseISO } from "date-fns";
+import { Input } from "@/components/ui/input";
+import { ChevronLeft, ChevronRight, Lock, X, GripVertical, Calendar, Plus } from "lucide-react";
+import { format, addDays, subDays, startOfWeek, getWeek, isPast, parseISO, differenceInHours, isToday as isTodayFn } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { DndContext, DragEndEvent, DragStartEvent, DragMoveEvent, useDraggable, useDroppable, DragOverlay, useSensor, useSensors, PointerSensor, DragOverEvent } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragStartEvent, useDraggable, useDroppable, DragOverlay, useSensor, useSensors, PointerSensor, DragOverEvent } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
 type Department = "TEAMSPORT" | "TEXTILVEREDELUNG" | "STICKEREI" | "DRUCK" | "SONSTIGES";
@@ -85,11 +85,11 @@ const WORKING_HOURS_START = 7 * 60; // 07:00 in minutes (420)
 const WORKING_HOURS_END = 18 * 60; // 18:00 in minutes (1080)
 const ROW_HEIGHT = 28; // px - constant
 
-// Snap logic based on zoom
+// Snap logic based on zoom (min 15 minutes)
 function getSnapMinutes(zoom: ZoomLevel): number {
   if (zoom === 60) return 30;
   if (zoom === 30) return 15;
-  return zoom; // 15 or 5
+  return 15; // Always snap to 15 min minimum
 }
 
 // Round to nearest snap interval
@@ -121,6 +121,18 @@ function isDueDateOverdue(dueDate: string | null): boolean {
   }
 }
 
+// Check if due date is within 48 hours
+function isDueDateUrgent(dueDate: string | null): boolean {
+  if (!dueDate) return false;
+  try {
+    const due = parseISO(dueDate);
+    const hoursUntil = differenceInHours(due, new Date());
+    return hoursUntil > 0 && hoursUntil <= 48;
+  } catch {
+    return false;
+  }
+}
+
 function getDepartmentColor(dept: Department): string {
   const colors: Record<Department, string> = {
     TEAMSPORT: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
@@ -132,11 +144,18 @@ function getDepartmentColor(dept: Department): string {
   return colors[dept] || colors.SONSTIGES;
 }
 
-// Calculate slot geometry
+// Calculate slot geometry - CORRECTED for exact positioning
 function getSlotGeometry(startMin: number, lengthMin: number, minutesPerRow: number) {
-  const topPx = ((startMin - WORKING_HOURS_START) / minutesPerRow) * ROW_HEIGHT;
-  const heightPx = (lengthMin / minutesPerRow) * ROW_HEIGHT;
+  const pixelsPerMinute = ROW_HEIGHT / minutesPerRow;
+  const topPx = (startMin - WORKING_HOURS_START) * pixelsPerMinute;
+  const heightPx = lengthMin * pixelsPerMinute;
   return { topPx, heightPx };
+}
+
+// Get current time in minutes from midnight
+function getCurrentTimeMinutes(): number {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
 }
 
 // Draggable Order Card with Due Date Badge
@@ -153,6 +172,7 @@ const DraggableOrderCard = memo(({ order }: { order: Order }) => {
 
   const dueDateStr = formatDueDate(order.dueDate);
   const isOverdue = isDueDateOverdue(order.dueDate);
+  const isUrgent = isDueDateUrgent(order.dueDate);
 
   return (
     <div
@@ -174,16 +194,6 @@ const DraggableOrderCard = memo(({ order }: { order: Order }) => {
               <Badge variant="outline" className={getDepartmentColor(order.department)}>
                 {DEPARTMENT_LABELS[order.department]}
               </Badge>
-              {dueDateStr && (
-                <Badge 
-                  variant={isOverdue ? "destructive" : "outline"}
-                  className="text-xs flex items-center gap-1"
-                  title={`Fälligkeitsdatum: ${order.dueDate}`}
-                >
-                  <Calendar className="h-3 w-3" />
-                  {dueDateStr}
-                </Badge>
-              )}
             </div>
             <p className="text-sm text-muted-foreground truncate mt-1">
               {order.title}
@@ -191,6 +201,18 @@ const DraggableOrderCard = memo(({ order }: { order: Order }) => {
             <p className="text-xs text-muted-foreground truncate">
               {order.customer}
             </p>
+            {dueDateStr && (
+              <div className="mt-2">
+                <Badge 
+                  variant={isOverdue ? "destructive" : isUrgent ? "default" : "outline"}
+                  className="text-xs flex items-center gap-1"
+                  title={`Fälligkeitsdatum: ${order.dueDate}`}
+                >
+                  <Calendar className="h-3 w-3" />
+                  Fällig: {dueDateStr}
+                </Badge>
+              </div>
+            )}
           </div>
         </div>
       </Card>
@@ -239,15 +261,17 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
 
   const dueDateStr = slot.order?.dueDate ? formatDueDate(slot.order.dueDate) : null;
   const isOverdue = slot.order?.dueDate ? isDueDateOverdue(slot.order.dueDate) : false;
+  const isUrgent = slot.order?.dueDate ? isDueDateUrgent(slot.order.dueDate) : false;
 
   if (slot.blocked) {
     return (
       <div
-        className="absolute left-0 right-0 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded p-2 m-1"
+        className="absolute left-0 right-0 bg-red-50 dark:bg-red-900/20 border-2 border-dashed border-red-300 dark:border-red-700 rounded p-2 m-1"
         style={{
           transform: `translateY(${topPx}px)`,
           height: `${heightPx}px`,
           minHeight: "24px",
+          willChange: "transform",
         }}
         onMouseEnter={() => setShowDelete(true)}
         onMouseLeave={() => setShowDelete(false)}
@@ -255,8 +279,8 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 text-xs min-w-0 flex-1">
-            <Lock className="h-3 w-3 flex-shrink-0" />
-            <span className="truncate font-medium">Blocker</span>
+            <Lock className="h-3 w-3 flex-shrink-0 text-red-600 dark:text-red-400" />
+            <span className="truncate font-medium text-red-600 dark:text-red-400">Blocker</span>
           </div>
           {showDelete && (
             <Button
@@ -270,7 +294,7 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
             </Button>
           )}
         </div>
-        {slot.note && <p className="text-xs mt-1 truncate">{slot.note}</p>}
+        {slot.note && <p className="text-xs mt-1 truncate text-red-600 dark:text-red-400">{slot.note}</p>}
         <p className="text-xs text-muted-foreground mt-1">
           {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
         </p>
@@ -285,6 +309,7 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
         transform: `translateY(${topPx}px)`,
         height: `${heightPx}px`,
         minHeight: "24px",
+        willChange: "transform",
       }}
       onMouseEnter={() => setShowDelete(true)}
       onMouseLeave={() => setShowDelete(false)}
@@ -298,7 +323,7 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
             </span>
             {dueDateStr && (
               <Badge 
-                variant={isOverdue ? "destructive" : "outline"}
+                variant={isOverdue ? "destructive" : isUrgent ? "default" : "outline"}
                 className="text-xs px-1 py-0 flex items-center gap-1"
                 title={`Fälligkeitsdatum: ${slot.order?.dueDate}`}
               >
@@ -356,7 +381,25 @@ export default function PlanningPage() {
     note: "",
   });
 
+  // Blocker dialog
+  const [blockerDialog, setBlockerDialog] = useState<{
+    open: boolean;
+    day: number;
+    startMin: number;
+  }>({ open: false, day: 0, startMin: 420 });
+
+  const [blockerForm, setBlockerForm] = useState<{
+    startMin: number;
+    lengthMin: number;
+    note: string;
+  }>({
+    startMin: 420,
+    lengthMin: 60,
+    note: "",
+  });
+
   const { toast } = useToast();
+  const gridContainerRef = useRef<HTMLDivElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -441,13 +484,47 @@ export default function PlanningPage() {
     },
   });
 
-  // Filter out scheduled orders
+  // Filter out scheduled orders AND sort by due date
   const availableOrders = useMemo(() => {
     const scheduledOrderIds = new Set(
       timeSlotData.filter(slot => slot.orderId).map(slot => slot.orderId)
     );
-    return allFetchedOrders.filter(order => !scheduledOrderIds.has(order.id));
+    const unscheduled = allFetchedOrders.filter(order => !scheduledOrderIds.has(order.id));
+    
+    // Sort by due date: earliest first, nulls last
+    return unscheduled.sort((a, b) => {
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    });
   }, [allFetchedOrders, timeSlotData]);
+
+  // Helper function to check for slot collisions
+  const checkSlotCollision = useCallback((
+    date: string,
+    startMin: number,
+    lengthMin: number,
+    excludeSlotId?: string
+  ): { hasCollision: boolean; collidingSlot?: TimeSlot } => {
+    const endMin = startMin + lengthMin;
+    
+    const conflictingSlot = timeSlotData.find(slot => {
+      if (excludeSlotId && slot.id === excludeSlotId) return false;
+      if (format(new Date(slot.date), "yyyy-MM-dd") !== date) return false;
+      
+      const slotEndMin = slot.startMin + slot.lengthMin;
+      
+      // Check for overlap: (start1 < end2) && (start2 < end1)
+      const overlaps = (startMin < slotEndMin) && (slot.startMin < endMin);
+      return overlaps;
+    });
+    
+    return {
+      hasCollision: !!conflictingSlot,
+      collidingSlot: conflictingSlot,
+    };
+  }, [timeSlotData]);
 
   // Create slot mutation
   const createSlotMutation = useMutation({
@@ -466,6 +543,26 @@ export default function PlanningPage() {
       toast({
         title: "Fehler",
         description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Create blocker mutation
+  const createBlockerMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest("POST", "/api/timeslots", data);
+    },
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["/api/timeslots", selectedDepartment, weekStartStr] });
+      toast({ title: "Blocker erstellt" });
+      setBlockerDialog({ open: false, day: 0, startMin: 420 });
+      setBlockerForm({ startMin: 420, lengthMin: 60, note: "" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Fehler",
+        description: error.message || "Fehler beim Erstellen des Blockers",
         variant: "destructive",
       });
     },
@@ -522,7 +619,7 @@ export default function PlanningPage() {
       const order = activeData.order as Order;
       const { day, startMin, minutesPerRow } = overData;
       
-      // Snap to grid
+      // Snap to grid (minimum 15 minutes)
       const snap = getSnapMinutes(zoom);
       const snappedStartMin = snapToGrid(startMin, snap);
       
@@ -537,6 +634,27 @@ export default function PlanningPage() {
     const dayDate = weekDates[createSlotDialog.day];
     const dateStr = format(dayDate, "yyyy-MM-dd");
 
+    // Check for collisions
+    const { hasCollision, collidingSlot } = checkSlotCollision(
+      dateStr,
+      createSlotForm.startMin,
+      createSlotForm.lengthMin
+    );
+
+    if (hasCollision) {
+      const slotType = collidingSlot?.blocked ? "Blocker" : "Termin";
+      const timeRange = collidingSlot 
+        ? `${formatTime(collidingSlot.startMin)} - ${formatTime(collidingSlot.startMin + collidingSlot.lengthMin)}`
+        : "";
+      
+      toast({
+        title: "Zeitkonflikt",
+        description: `Es existiert bereits ein ${slotType} zur Zeit ${timeRange}. Bitte wählen Sie eine andere Zeit.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     createSlotMutation.mutate({
       workCenterId: selectedWorkCenter.id,
       date: dateStr,
@@ -546,7 +664,45 @@ export default function PlanningPage() {
       blocked: false,
       note: createSlotForm.note || null,
     });
-  }, [createSlotDialog, createSlotForm, selectedWorkCenter, weekDates, createSlotMutation]);
+  }, [createSlotDialog, createSlotForm, selectedWorkCenter, weekDates, createSlotMutation, checkSlotCollision, toast]);
+
+  const handleCreateBlocker = useCallback(() => {
+    if (!selectedWorkCenter) return;
+
+    const dayDate = weekDates[blockerDialog.day];
+    const dateStr = format(dayDate, "yyyy-MM-dd");
+
+    // Check for collisions
+    const { hasCollision, collidingSlot } = checkSlotCollision(
+      dateStr,
+      blockerForm.startMin,
+      blockerForm.lengthMin
+    );
+
+    if (hasCollision) {
+      const slotType = collidingSlot?.blocked ? "Blocker" : "Termin";
+      const timeRange = collidingSlot 
+        ? `${formatTime(collidingSlot.startMin)} - ${formatTime(collidingSlot.startMin + collidingSlot.lengthMin)}`
+        : "";
+      
+      toast({
+        title: "Zeitkonflikt",
+        description: `Es existiert bereits ein ${slotType} zur Zeit ${timeRange}. Blocker kann nicht erstellt werden.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createBlockerMutation.mutate({
+      workCenterId: selectedWorkCenter.id,
+      date: dateStr,
+      startMin: blockerForm.startMin,
+      lengthMin: blockerForm.lengthMin,
+      orderId: null,
+      blocked: true,
+      note: blockerForm.note || null,
+    });
+  }, [blockerDialog, blockerForm, selectedWorkCenter, weekDates, createBlockerMutation, checkSlotCollision, toast]);
 
   const handleDeleteSlot = useCallback((slotId: string) => {
     if (confirm("Termin wirklich löschen?")) {
@@ -557,7 +713,30 @@ export default function PlanningPage() {
   // Week navigation
   const handlePreviousWeek = () => setWeekStart(prev => subDays(prev, 7));
   const handleNextWeek = () => setWeekStart(prev => addDays(prev, 7));
-  const handleToday = () => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  
+  // Heute button: jump to current week AND scroll to current time
+  const handleToday = useCallback(() => {
+    const now = new Date();
+    const currentWeek = startOfWeek(now, { weekStartsOn: 1 });
+    setWeekStart(currentWeek);
+    
+    // Scroll to current time after a short delay (to allow week change to render)
+    setTimeout(() => {
+      if (!gridContainerRef.current) return;
+      
+      const currentTimeMin = getCurrentTimeMinutes();
+      
+      // Only scroll if within working hours
+      if (currentTimeMin >= WORKING_HOURS_START && currentTimeMin <= WORKING_HOURS_END) {
+        const pixelsPerMinute = ROW_HEIGHT / zoom;
+        const scrollToPosition = (currentTimeMin - WORKING_HOURS_START) * pixelsPerMinute;
+        
+        // Scroll to position with some offset (10% from top of viewport)
+        const offset = gridContainerRef.current.clientHeight * 0.1;
+        gridContainerRef.current.scrollTop = Math.max(0, scrollToPosition - offset);
+      }
+    }, 100);
+  }, [zoom]);
 
   // Group slots by day
   const slotsByDay = useMemo(() => {
@@ -583,7 +762,7 @@ export default function PlanningPage() {
     >
       <div className="h-screen flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between gap-4 p-4 border-b">
+        <div className="flex items-center justify-between gap-4 p-4 border-b flex-wrap">
           <h1 className="text-2xl font-semibold" data-testid="text-page-title">
             Produktionsplanung
           </h1>
@@ -625,7 +804,6 @@ export default function PlanningPage() {
                     <SelectItem value="60">60 Min</SelectItem>
                     <SelectItem value="30">30 Min</SelectItem>
                     <SelectItem value="15">15 Min</SelectItem>
-                    <SelectItem value="5">5 Min</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -635,6 +813,23 @@ export default function PlanningPage() {
               <Badge variant="outline" data-testid="badge-capacity">
                 Kapazität: {selectedWorkCenter.concurrentCapacity} parallel
               </Badge>
+            )}
+
+            {/* Add Blocker Button */}
+            {selectedDepartment && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const today = weekDates.findIndex(d => isTodayFn(d));
+                  setBlockerDialog({ open: true, day: today >= 0 ? today : 0, startMin: 420 });
+                  setBlockerForm({ startMin: 420, lengthMin: 60, note: "" });
+                }}
+                data-testid="button-add-blocker"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Blocker
+              </Button>
             )}
 
             {/* Week Navigation */}
@@ -672,11 +867,11 @@ export default function PlanningPage() {
               Bitte wählen Sie einen Bereich aus
             </div>
           ) : (
-            <div className="flex-1 overflow-auto p-4">
+            <div className="flex-1 overflow-auto p-4" ref={gridContainerRef}>
               <div className="inline-block min-w-full">
                 <div className="flex border">
                   {/* Time Column */}
-                  <div className="flex flex-col border-r bg-muted" style={{ width: "80px" }}>
+                  <div className="flex flex-col border-r bg-muted sticky left-0 z-10" style={{ width: "80px" }}>
                     <div className="border-b p-2 text-sm font-medium" style={{ minHeight: "56px" }}>Zeit</div>
                     {gridRows.map((timeMin, idx) => (
                       <div key={idx} className="border-b p-2 text-xs text-muted-foreground" style={{ height: `${ROW_HEIGHT}px` }}>
@@ -753,7 +948,7 @@ export default function PlanningPage() {
                   Aufträge bereit
                 </h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {availableOrders.length} Aufträge
+                  {availableOrders.length} Aufträge (sortiert nach Fälligkeit)
                 </p>
               </div>
               <div className="flex-1 overflow-auto p-4 space-y-2">
@@ -878,16 +1073,130 @@ export default function PlanningPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Create Blocker Dialog */}
+      <Dialog
+        open={blockerDialog.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBlockerDialog({ open: false, day: 0, startMin: 420 });
+            setBlockerForm({ startMin: 420, lengthMin: 60, note: "" });
+          }
+        }}
+      >
+        <DialogContent data-testid="dialog-create-blocker">
+          <DialogHeader>
+            <DialogTitle>Blocker erstellen</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="blockerDay">Tag</Label>
+              <Select
+                value={blockerDialog.day.toString()}
+                onValueChange={(val) => setBlockerDialog({ ...blockerDialog, day: parseInt(val) })}
+              >
+                <SelectTrigger id="blockerDay" data-testid="select-blocker-day">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {weekDates.map((date, idx) => (
+                    <SelectItem key={idx} value={idx.toString()}>
+                      {DAY_LABELS[idx]}, {format(date, "dd.MM.yyyy", { locale: de })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="blockerStartTime">Startzeit</Label>
+              <Select
+                value={blockerForm.startMin.toString()}
+                onValueChange={(val) => setBlockerForm({ ...blockerForm, startMin: parseInt(val) })}
+              >
+                <SelectTrigger id="blockerStartTime" data-testid="select-blocker-start-time">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {gridRows.map((min) => (
+                    <SelectItem key={min} value={min.toString()}>
+                      {formatTime(min)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="blockerDuration">Dauer</Label>
+              <Select
+                value={blockerForm.lengthMin.toString()}
+                onValueChange={(val) => setBlockerForm({ ...blockerForm, lengthMin: parseInt(val) })}
+              >
+                <SelectTrigger id="blockerDuration" data-testid="select-blocker-duration">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 Min</SelectItem>
+                  <SelectItem value="60">60 Min</SelectItem>
+                  <SelectItem value="90">90 Min</SelectItem>
+                  <SelectItem value="120">120 Min</SelectItem>
+                  <SelectItem value="180">180 Min</SelectItem>
+                  <SelectItem value="240">240 Min</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="blockerNote">Grund / Notiz</Label>
+              <Textarea
+                id="blockerNote"
+                value={blockerForm.note}
+                onChange={(e) => setBlockerForm({ ...blockerForm, note: e.target.value })}
+                placeholder="z.B. Wartung, Meeting, etc."
+                rows={2}
+                data-testid="textarea-blocker-note"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBlockerDialog({ open: false, day: 0, startMin: 420 });
+                setBlockerForm({ startMin: 420, lengthMin: 60, note: "" });
+              }}
+              data-testid="button-blocker-cancel"
+            >
+              Abbrechen
+            </Button>
+            <Button
+              onClick={handleCreateBlocker}
+              disabled={createBlockerMutation.isPending}
+              data-testid="button-blocker-create"
+            >
+              {createBlockerMutation.isPending ? "Erstelle..." : "Erstellen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Drag Overlay */}
       <DragOverlay>
         {dragState.type === "order" && dragState.order && (
-          <div className="bg-card border rounded-md p-3 shadow-lg opacity-90">
+          <div className="bg-card border rounded-md p-3 shadow-lg opacity-90 max-w-xs">
             <div className="text-sm font-medium">
               {dragState.order.displayOrderNumber || dragState.order.id}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
               {dragState.order.title}
             </div>
+            {dragState.order.dueDate && (
+              <div className="text-xs text-muted-foreground mt-1">
+                Fällig: {formatDueDate(dragState.order.dueDate)}
+              </div>
+            )}
             {dragOverCell && (
               <div className="text-xs text-primary mt-2 font-medium">
                 📍 {formatTime(dragOverCell.startMin)} - {formatTime(dragOverCell.startMin + 60)} (60 Min)
