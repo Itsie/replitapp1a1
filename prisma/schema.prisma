@@ -60,6 +60,7 @@ enum Role {
   PROD_RUN
   SALES_OPS
   ACCOUNTING
+  LAGER
 }
 
 model User {
