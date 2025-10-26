@@ -110,6 +110,7 @@ export interface IStorage {
   updateStorageSlot(id: string, data: UpdateStorageSlot): Promise<StorageSlot>;
   getOrderStorage(orderId: string): Promise<OrderStorageWithRelations[]>;
   createOrderStorage(orderId: string, data: InsertOrderStorage): Promise<OrderStorage>;
+  getStoragePlaceContents(slotId: string): Promise<Array<OrderStorage & { order: { id: string; displayOrderNumber: string | null; title: string; customer: string } }>>;
 }
 
 export class PrismaStorage implements IStorage {
@@ -1591,6 +1592,25 @@ export class PrismaStorage implements IStorage {
       data: {
         orderId,
         ...data,
+      },
+    });
+  }
+
+  async getStoragePlaceContents(slotId: string) {
+    return await prisma.orderStorage.findMany({
+      where: { slotId },
+      include: {
+        order: {
+          select: {
+            id: true,
+            displayOrderNumber: true,
+            title: true,
+            customer: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
       },
     });
   }

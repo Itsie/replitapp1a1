@@ -1224,6 +1224,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== Warehouse Routes (Aliases for Storage with UI-friendly naming) =====
+
+  // GET /api/warehouse/places - Get all warehouse places with occupancy info (authenticated users)
+  app.get("/api/warehouse/places", requireAuth, async (req, res) => {
+    try {
+      const active = req.query.active === 'true' ? true : req.query.active === 'false' ? false : undefined;
+      const search = req.query.q as string | undefined;
+      
+      const slots = await storage.getStorageSlots(active);
+      
+      // Filter by search query if provided
+      let filteredSlots = slots;
+      if (search) {
+        const searchLower = search.toLowerCase();
+        filteredSlots = slots.filter(slot => 
+          slot.name.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      // Get occupancy information for each slot
+      const slotsWithOccupancy = await Promise.all(
+        filteredSlots.map(async (slot) => {
+          const orders = await storage.getStoragePlaceContents(slot.id);
+          const occupied = orders.reduce((sum, order) => sum + order.qty, 0);
+          return {
+            ...slot,
+            occupied,
+            free: slot.capacity ? slot.capacity - occupied : null,
+          };
+        })
+      );
+      
+      res.json(slotsWithOccupancy);
+    } catch (error) {
+      console.error("Error fetching warehouse places:", error);
+      res.status(500).json({ error: "Failed to fetch warehouse places" });
+    }
+  });
+
+  // POST /api/warehouse/places - Create a new warehouse place (ADMIN or LAGER only)
+  app.post("/api/warehouse/places", requireRole('ADMIN', 'LAGER'), async (req, res) => {
+    try {
+      const validated = insertStorageSlotSchema.parse(req.body);
+      const place = await storage.createStorageSlot(validated);
+      res.json(place);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Error creating warehouse place:", error);
+      res.status(500).json({ error: "Failed to create warehouse place" });
+    }
+  });
+
+  // PATCH /api/warehouse/places/:id - Update a warehouse place (ADMIN or LAGER only)
+  app.patch("/api/warehouse/places/:id", requireRole('ADMIN', 'LAGER'), async (req, res) => {
+    try {
+      const validated = updateStorageSlotSchema.parse(req.body);
+      const place = await storage.updateStorageSlot(req.params.id, validated);
+      res.json(place);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Error updating warehouse place:", error);
+      res.status(500).json({ error: "Failed to update warehouse place" });
+    }
+  });
+
+  // GET /api/warehouse/places/:id/contents - Get orders in a warehouse place (authenticated users)
+  app.get("/api/warehouse/places/:id/contents", requireAuth, async (req, res) => {
+    try {
+      const contents = await storage.getStoragePlaceContents(req.params.id);
+      res.json(contents);
+    } catch (error) {
+      console.error("Error fetching warehouse place contents:", error);
+      res.status(500).json({ error: "Failed to fetch warehouse place contents" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
