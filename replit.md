@@ -91,7 +91,7 @@ The backend exposes a RESTful API with the following key endpoints:
 - **Migration Tool**: Drizzle Kit configured for PostgreSQL migrations
 
 **Database Schema Highlights:**
-- **User**: Authentication with roles (ADMIN, DISPO, PRODUKTION, LAGER, ABRECHNUNG)
+- **User**: Authentication with roles (ADMIN, PROD_PLAN, PROD_RUN, SALES_OPS, ACCOUNTING)
 - **Order**: Core entity with workflow states, sources (JTL/INTERNAL), departments
 - **SizeTable**: JSON-based size/quantity data with flexible schemes (ALPHA/NUMERIC/CUSTOM)
 - **PrintAsset**: File metadata with required flag for production validation
@@ -101,6 +101,7 @@ The backend exposes a RESTful API with the following key endpoints:
 - Additional models: JTLRow (for future implementation)
 
 **Enum Types:**
+- Role: ADMIN | PROD_PLAN | PROD_RUN | SALES_OPS | ACCOUNTING
 - OrderSource: JTL | INTERNAL
 - Department: TEAMSPORT | TEXTILVEREDELUNG | STICKEREI | DRUCK | SONSTIGES
 - WorkflowState: ENTWURF | NEU | PRUEFUNG | FUER_PROD | IN_PROD | WARTET_FEHLTEILE | FERTIG | ZUR_ABRECHNUNG | ABGERECHNET
@@ -109,15 +110,40 @@ The backend exposes a RESTful API with the following key endpoints:
 
 ### Authentication & Authorization
 
-**Current Implementation:**
-- JWT tokens stored in HttpOnly cookies for session management
-- Role-based access control (planned, not fully implemented in current code)
-- Simple authentication mechanism suitable for internal enterprise use
+**Current Implementation (Development Mode):**
+- Mock authentication via `X-User-Email` header for development
+- Role-Based Access Control (RBAC) fully implemented with 5 roles:
+  - **ADMIN**: Full access to all features (orders, planning, production, accounting, warehouse, settings)
+  - **PROD_PLAN**: Planning access only (timeslots, calendar, work centers)
+  - **PROD_RUN**: Production execution only (start/pause/stop operations)
+  - **SALES_OPS**: Orders management only (create/edit orders)
+  - **ACCOUNTING**: Billing and accounting access only
+- Demo users available for each role (see prisma/seed.ts)
+- Frontend UserContext provides current user state and role checks
+- Navigation sidebar automatically filtered based on user role
 
-**Planned Security Features:**
-- Backend role validation for protected endpoints
-- Department-based data access restrictions
-- Production-only vs admin-level permissions
+**Backend Security:**
+- `requireAuth` middleware: Protects all endpoints, requires authenticated user (returns 401 if missing)
+- `requireRole` middleware: Enforces role-based access for write operations (returns 403 if unauthorized)
+- All GET endpoints require authentication
+- State-changing endpoints (POST/PUT/DELETE) require specific roles:
+  - Orders CRUD: ADMIN or SALES_OPS
+  - Planning/TimeSlots: ADMIN or PROD_PLAN
+  - Production execution: ADMIN or PROD_RUN
+  - Work centers: ADMIN or PROD_PLAN
+
+**Frontend Security:**
+- UserContext fetches current user from `/api/me` endpoint
+- Query client automatically injects `X-User-Email` header to all API requests
+- Navigation filtering prevents unauthorized page access
+- User switcher dropdown for development testing (should be gated behind dev flag in production)
+
+**Production Requirements:**
+- Replace header-based authentication with proper session management or JWT
+- Implement password hashing (currently plaintext in seed data)
+- Remove or gate user-switcher behind environment flag
+- Consider implementing refresh token rotation
+- Add audit logging for sensitive operations
 
 ## External Dependencies
 
