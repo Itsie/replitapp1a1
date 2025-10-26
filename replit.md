@@ -34,6 +34,17 @@ The application follows a "Design System-Inspired" approach prioritizing product
 - Modal dialogs for data entry (size tables, print assets)
 - Real-time cache synchronization using `refetchQueries` for immediate UI updates after mutations
 
+**Production View Design (Date: October 2025):**
+The production execution view uses a vertical timeline layout optimized for clarity and ease of use:
+- **Timeline Structure**: Vertical 07:00-18:00 day view with proportional positioning (1.33px per minute, 20px minimum height)
+- **Time Markers**: 30-minute grid markers with visual hierarchy (darker lines for full hours, lighter for half hours)
+- **Color Design**: Clean neutral palette with single left-border accent showing status (green=running, yellow=paused, red=blocked)
+- **Overlap Handling**: Per-cluster lane calculation - isolated slots use full width, overlapping slots split into separate lanes
+- **Compact Mode**: Slots shorter than 30 minutes (~40px) display in compact format; click entire slot to toggle action controls
+- **Action Controls**: Collapsed by default to reduce visual clutter; expand on click to access start/pause/stop operations
+- **Live Tracking**: Running slots show elapsed time with real-time counter
+- This design prioritizes clean visual structure, making gaps in schedule immediately obvious and duration accurately represented
+
 ### Backend Architecture
 
 **Technology Stack:**
