@@ -1745,44 +1745,50 @@ export class PrismaStorage implements IStorage {
 
     // If placeId is null, we're removing the assignment
     if (placeId === null) {
-      // Find current place if any
-      const currentPlace = await prisma.warehousePlace.findUnique({
-        where: { occupiedByOrderId: orderId },
-      });
-
-      if (currentPlace) {
-        await prisma.warehousePlace.update({
-          where: { id: currentPlace.id },
-          data: { occupiedByOrderId: null },
+      await prisma.$transaction(async (tx) => {
+        // Find and clear current assignment
+        const currentPlace = await tx.warehousePlace.findFirst({
+          where: { occupiedByOrderId: orderId },
         });
-      }
+
+        if (currentPlace) {
+          await tx.warehousePlace.update({
+            where: { id: currentPlace.id },
+            data: { occupiedByOrderId: null },
+          });
+        }
+      });
 
       return await this.getOrderById(orderId) as OrderWithRelations;
     }
 
-    // Verify place exists and is free
-    const place = await prisma.warehousePlace.findUnique({
-      where: { id: placeId },
-    });
+    // Use transaction to ensure atomic assignment
+    await prisma.$transaction(async (tx) => {
+      // Verify place exists and is free (with row lock)
+      const place = await tx.warehousePlace.findUnique({
+        where: { id: placeId },
+      });
 
-    if (!place) {
-      throw new Error('Warehouse place not found');
-    }
+      if (!place) {
+        throw new Error('Warehouse place not found');
+      }
 
-    if (place.occupiedByOrderId && place.occupiedByOrderId !== orderId) {
-      throw new Error('Warehouse place is already occupied');
-    }
+      // Check if place is occupied by a different order
+      if (place.occupiedByOrderId && place.occupiedByOrderId !== orderId) {
+        throw new Error('Warehouse place is already occupied');
+      }
 
-    // Remove any existing assignment first
-    await prisma.warehousePlace.updateMany({
-      where: { occupiedByOrderId: orderId },
-      data: { occupiedByOrderId: null },
-    });
+      // Clear any existing assignment for this order
+      await tx.warehousePlace.updateMany({
+        where: { occupiedByOrderId: orderId },
+        data: { occupiedByOrderId: null },
+      });
 
-    // Assign to new place
-    await prisma.warehousePlace.update({
-      where: { id: placeId },
-      data: { occupiedByOrderId: orderId },
+      // Assign order to the new place
+      await tx.warehousePlace.update({
+        where: { id: placeId },
+        data: { occupiedByOrderId: orderId },
+      });
     });
 
     return await this.getOrderById(orderId) as OrderWithRelations;

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Check, AlertTriangle, Copy, Plus, ExternalLink, Pencil, Trash2, Save, X, Download, Upload, FileIcon, Link as LinkIcon, Calendar, Trash, Eye, FileText } from "lucide-react";
+import { ArrowLeft, Check, AlertTriangle, Copy, Plus, ExternalLink, Pencil, Trash2, Save, X, Download, Upload, FileIcon, Link as LinkIcon, Calendar, Trash, Eye, FileText, Edit, Building2, XCircle, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import type { OrderWithRelations, SizeTableResponse, SizeTableRow, OrderAsset, OrderStorageWithRelations, StorageSlot } from "@shared/schema";
+import type { OrderWithRelations, SizeTableResponse, SizeTableRow, OrderAsset, WarehouseGroupWithRelations, WarehousePlaceWithRelations } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SizeTableEditor } from "@/components/size-table-editor";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -1855,73 +1855,123 @@ function OrderEditDialog({ order, isOpen, onClose, onSave, editForm, setEditForm
 
 function StorageTab({ orderId }: { orderId: string }) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [slotId, setSlotId] = useState("");
-  const [qty, setQty] = useState("");
-  const [note, setNote] = useState("");
+  const [selectedPlaceId, setSelectedPlaceId] = useState("");
+  const [selectedGroupId, setSelectedGroupId] = useState("");
 
-  const { data: storageBookings, isLoading: bookingsLoading } = useQuery<OrderStorageWithRelations[]>({
-    queryKey: [`/api/orders/${orderId}/storage`],
+  // Fetch order to get current warehouse assignment
+  const { data: order, isLoading: orderLoading } = useQuery<OrderWithRelations>({
+    queryKey: [`/api/orders/${orderId}`],
   });
 
-  const { data: slots, isLoading: slotsLoading } = useQuery<StorageSlot[]>({
-    queryKey: ['/api/storage/slots'],
+  // Fetch warehouse groups
+  const { data: groups, isLoading: groupsLoading } = useQuery<WarehouseGroupWithRelations[]>({
+    queryKey: ["/api/warehouse/groups"],
   });
 
-  const activeSlots = slots?.filter(s => s.active) || [];
+  // Fetch places for selected group
+  const { data: places = [], isLoading: placesLoading } = useQuery<WarehousePlaceWithRelations[]>({
+    queryKey: ["/api/warehouse/places", selectedGroupId],
+    queryFn: async () => {
+      if (!selectedGroupId) return [];
+      const res = await fetch(`/api/warehouse/places?groupId=${selectedGroupId}`);
+      if (!res.ok) throw new Error("Failed to fetch places");
+      return res.json();
+    },
+    enabled: !!selectedGroupId,
+  });
 
-  const createBookingMutation = useMutation({
-    mutationFn: async (data: { slotId: string; qty: number; note?: string }) => {
-      const res = await apiRequest("POST", `/api/orders/${orderId}/storage`, data);
+  // Get free places from selected group
+  const freePlaces = places.filter(p => p.occupiedByOrderId === null);
+
+  // Assign mutation
+  const assignMutation = useMutation({
+    mutationFn: async (placeId: string) => {
+      const res = await apiRequest("PATCH", `/api/orders/${orderId}/warehouse-place`, {
+        placeId,
+      });
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to create booking");
+        const error = await res.json();
+        throw new Error(error.error || "Failed to assign place");
       }
-      return await res.json();
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}/storage`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/places"] });
       toast({
-        title: "Buchung erstellt",
-        description: "Die Lagerbuchung wurde erfolgreich erstellt.",
+        title: "Lagerplatz zugewiesen",
+        description: "Der Auftrag wurde erfolgreich einem Lagerplatz zugewiesen.",
       });
       setDialogOpen(false);
-      setSlotId("");
-      setQty("");
-      setNote("");
+      setSelectedGroupId("");
+      setSelectedPlaceId("");
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: "Fehler",
-        description: error.message || "Buchung konnte nicht erstellt werden.",
+        description: error.message,
         variant: "destructive",
       });
     },
   });
 
-  const handleCreate = () => {
-    if (!slotId || !qty) {
+  // Unassign mutation
+  const unassignMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", `/api/orders/${orderId}/warehouse-place`, {
+        placeId: null,
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to unassign place");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/places"] });
+      toast({
+        title: "Zuordnung entfernt",
+        description: "Die Lagerplatz-Zuordnung wurde entfernt.",
+      });
+    },
+    onError: (error: Error) => {
       toast({
         title: "Fehler",
-        description: "Bitte füllen Sie alle Pflichtfelder aus.",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleAssign = () => {
+    if (!selectedPlaceId) {
+      toast({
+        title: "Fehler",
+        description: "Bitte wählen Sie einen Lagerplatz aus.",
         variant: "destructive",
       });
       return;
     }
-
-    createBookingMutation.mutate({
-      slotId,
-      qty: parseInt(qty),
-      note: note || undefined,
-    });
+    assignMutation.mutate(selectedPlaceId);
   };
 
-  if (bookingsLoading || slotsLoading) {
+  const handleUnassign = () => {
+    unassignMutation.mutate();
+  };
+
+  // Find current warehouse assignment
+  const currentWarehousePlace = groups?.flatMap(g => g.places).find(p => p.occupiedByOrderId === orderId);
+
+  if (orderLoading || groupsLoading) {
     return (
       <Card className="rounded-2xl">
         <CardContent className="p-12">
           <div className="space-y-4">
-            <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-full" />
           </div>
@@ -1934,129 +1984,162 @@ function StorageTab({ orderId }: { orderId: string }) {
     <div className="space-y-4">
       <Card className="rounded-2xl">
         <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0">
-          <CardTitle>Lagerbuchungen</CardTitle>
-          <Button
-            onClick={() => setDialogOpen(true)}
-            data-testid="button-add-storage"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Neue Buchung
-          </Button>
+          <CardTitle>Lagerplatz-Zuordnung</CardTitle>
+          {currentWarehousePlace ? (
+            <Button
+              variant="outline"
+              onClick={() => setDialogOpen(true)}
+              data-testid="button-change-warehouse"
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Ändern
+            </Button>
+          ) : (
+            <Button
+              onClick={() => setDialogOpen(true)}
+              data-testid="button-assign-warehouse"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Lagerplatz zuweisen
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
-          {!storageBookings || storageBookings.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground" data-testid="text-no-storage">
-              Keine Lagerbuchungen vorhanden.
+          {currentWarehousePlace ? (
+            <div className="space-y-4">
+              <div className="bg-muted/50 rounded-lg p-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Bereich</span>
+                    <Badge variant="secondary">{currentWarehousePlace.group.name}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Lagerplatz</span>
+                    <span className="font-medium">{currentWarehousePlace.name}</span>
+                  </div>
+                  {currentWarehousePlace.group.description && (
+                    <div className="pt-2 text-xs text-muted-foreground border-t">
+                      {currentWarehousePlace.group.description}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLocation(`/lager/${currentWarehousePlace.groupId}`)}
+                  data-testid="button-view-warehouse-group"
+                >
+                  <Building2 className="h-4 w-4 mr-2" />
+                  Bereich ansehen
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleUnassign}
+                  disabled={unassignMutation.isPending}
+                  data-testid="button-remove-warehouse"
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Zuordnung entfernen
+                </Button>
+              </div>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Lagerplatz</TableHead>
-                  <TableHead className="text-right">Menge</TableHead>
-                  <TableHead>Hinweis</TableHead>
-                  <TableHead className="text-right">Erstellt am</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {storageBookings.map((booking) => (
-                  <TableRow key={booking.id} data-testid={`storage-booking-${booking.id}`}>
-                    <TableCell className="font-medium" data-testid={`text-slot-${booking.id}`}>
-                      {booking.slot.name}
-                    </TableCell>
-                    <TableCell className="text-right" data-testid={`text-qty-${booking.id}`}>
-                      {booking.qty}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground" data-testid={`text-note-${booking.id}`}>
-                      {booking.note || "—"}
-                    </TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground" data-testid={`text-created-${booking.id}`}>
-                      {new Date(booking.createdAt).toLocaleString("de-DE", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="text-center py-8 text-muted-foreground" data-testid="text-no-warehouse">
+              <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p>Kein Lagerplatz zugewiesen</p>
+              <p className="text-sm mt-1">Weisen Sie einen freien Lagerplatz zu</p>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Add Storage Dialog */}
+      {/* Assignment Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent data-testid="dialog-add-storage">
+        <DialogContent data-testid="dialog-assign-warehouse">
           <DialogHeader>
-            <DialogTitle>Neue Lagerbuchung</DialogTitle>
+            <DialogTitle>Lagerplatz zuweisen</DialogTitle>
             <DialogDescription>
-              Erfassen Sie eine neue Lagerbuchung für diesen Auftrag.
+              Wählen Sie einen Bereich und einen freien Lagerplatz aus
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="slotId">Lagerplatz</Label>
-              <Select value={slotId} onValueChange={setSlotId}>
-                <SelectTrigger id="slotId" data-testid="select-slot">
-                  <SelectValue placeholder="Lagerplatz auswählen" />
+              <Label htmlFor="groupId">Lagerbereich</Label>
+              <Select 
+                value={selectedGroupId} 
+                onValueChange={(value) => {
+                  setSelectedGroupId(value);
+                  setSelectedPlaceId("");
+                }}
+              >
+                <SelectTrigger id="groupId" data-testid="select-group">
+                  <SelectValue placeholder="Bereich auswählen" />
                 </SelectTrigger>
                 <SelectContent>
-                  {activeSlots.length === 0 ? (
+                  {!groups || groups.length === 0 ? (
                     <SelectItem value="_none" disabled>
-                      Keine aktiven Lagerplätze
+                      Keine Bereiche vorhanden
                     </SelectItem>
                   ) : (
-                    activeSlots.map((slot) => (
-                      <SelectItem key={slot.id} value={slot.id} data-testid={`slot-option-${slot.id}`}>
-                        {slot.name}
-                        {slot.capacity && ` (Kapazität: ${slot.capacity})`}
+                    groups.map((group) => (
+                      <SelectItem key={group.id} value={group.id} data-testid={`group-option-${group.id}`}>
+                        {group.name}
+                        {group.description && ` - ${group.description}`}
                       </SelectItem>
                     ))
                   )}
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label htmlFor="qty">Menge</Label>
-              <Input
-                id="qty"
-                type="number"
-                min="1"
-                value={qty}
-                onChange={(e) => setQty(e.target.value)}
-                placeholder="z.B. 50"
-                data-testid="input-qty"
-              />
-            </div>
-            <div>
-              <Label htmlFor="note">Hinweis (optional)</Label>
-              <Textarea
-                id="note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="z.B. Karton 1-3"
-                rows={3}
-                data-testid="input-note"
-              />
-            </div>
+            {selectedGroupId && (
+              <div>
+                <Label htmlFor="placeId">Lagerplatz</Label>
+                {placesLoading ? (
+                  <Skeleton className="h-10 w-full" />
+                ) : (
+                  <Select value={selectedPlaceId} onValueChange={setSelectedPlaceId}>
+                    <SelectTrigger id="placeId" data-testid="select-place">
+                      <SelectValue placeholder="Lagerplatz auswählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {freePlaces.length === 0 ? (
+                        <SelectItem value="_none" disabled>
+                          Keine freien Lagerplätze
+                        </SelectItem>
+                      ) : (
+                        freePlaces.map((place) => (
+                          <SelectItem key={place.id} value={place.id} data-testid={`place-option-${place.id}`}>
+                            {place.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setDialogOpen(false)}
-              data-testid="button-cancel-storage"
+              onClick={() => {
+                setDialogOpen(false);
+                setSelectedGroupId("");
+                setSelectedPlaceId("");
+              }}
+              data-testid="button-cancel-warehouse"
             >
               Abbrechen
             </Button>
             <Button
-              onClick={handleCreate}
-              disabled={createBookingMutation.isPending}
-              data-testid="button-save-storage"
+              onClick={handleAssign}
+              disabled={!selectedPlaceId || assignMutation.isPending}
+              data-testid="button-save-warehouse"
             >
-              {createBookingMutation.isPending ? "Wird erstellt..." : "Erstellen"}
+              {assignMutation.isPending ? "Wird zugewiesen..." : "Zuweisen"}
             </Button>
           </DialogFooter>
         </DialogContent>

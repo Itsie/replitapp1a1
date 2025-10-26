@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Plus, Eye, Edit, Power } from "lucide-react";
+import { Plus, Package, Building2, Edit, Trash2, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -15,93 +15,72 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
-interface WarehousePlace {
+interface WarehouseGroup {
   id: string;
   name: string;
-  capacity: number | null;
-  active: boolean;
-  occupied: number;
-  free: number | null;
+  description: string | null;
+  places: WarehousePlace[];
 }
 
-interface PlaceContents {
+interface WarehousePlace {
   id: string;
-  qty: number;
-  note: string | null;
-  order: {
+  groupId: string;
+  name: string;
+  occupiedByOrderId: string | null;
+  occupiedByOrder: {
     id: string;
     displayOrderNumber: string | null;
     title: string;
     customer: string;
-  };
+  } | null;
 }
 
 export default function Lager() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [editingPlace, setEditingPlace] = useState<WarehousePlace | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<WarehouseGroup | null>(null);
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   
   // Form state
   const [formName, setFormName] = useState("");
-  const [formCapacity, setFormCapacity] = useState("");
-  const [formActive, setFormActive] = useState(true);
+  const [formDescription, setFormDescription] = useState("");
 
-  // Fetch places
-  const { data: places = [], isLoading } = useQuery<WarehousePlace[]>({
-    queryKey: ["/api/warehouse/places", searchQuery],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (searchQuery) params.append("q", searchQuery);
-      const url = `/api/warehouse/places${params.toString() ? `?${params.toString()}` : ""}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch places");
-      return res.json();
-    },
+  // Fetch groups with places
+  const { data: groups = [], isLoading } = useQuery<WarehouseGroup[]>({
+    queryKey: ["/api/warehouse/groups"],
   });
 
-  // Fetch place contents for side panel
-  const { data: placeContents = [] } = useQuery<PlaceContents[]>({
-    queryKey: ["/api/warehouse/places", selectedPlaceId, "contents"],
-    queryFn: async () => {
-      if (!selectedPlaceId) return [];
-      const res = await fetch(`/api/warehouse/places/${selectedPlaceId}/contents`);
-      if (!res.ok) throw new Error("Failed to fetch place contents");
-      return res.json();
-    },
-    enabled: !!selectedPlaceId,
-  });
-
-  // Create place mutation
+  // Create group mutation
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; capacity: number | null; active: boolean }) => {
-      const res = await apiRequest("POST", "/api/warehouse/places", data);
+    mutationFn: async (data: { name: string; description: string | null }) => {
+      const res = await apiRequest("POST", "/api/warehouse/groups", data);
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || "Failed to create place");
+        throw new Error(error.error || "Failed to create group");
       }
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/places"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/groups"] });
       toast({
-        title: "Lagerplatz erstellt",
-        description: "Der Lagerplatz wurde erfolgreich erstellt.",
+        title: "Bereich erstellt",
+        description: "Der Lagerbereich wurde erfolgreich erstellt.",
       });
       setAddDialogOpen(false);
       resetForm();
@@ -115,21 +94,21 @@ export default function Lager() {
     },
   });
 
-  // Update place mutation
+  // Update group mutation
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<{ name: string; capacity: number | null; active: boolean }> }) => {
-      const res = await apiRequest("PATCH", `/api/warehouse/places/${id}`, data);
+    mutationFn: async ({ id, data }: { id: string; data: { name: string; description: string | null } }) => {
+      const res = await apiRequest("PATCH", `/api/warehouse/groups/${id}`, data);
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || "Failed to update place");
+        throw new Error(error.error || "Failed to update group");
       }
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/places"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/groups"] });
       toast({
-        title: "Lagerplatz aktualisiert",
-        description: "Der Lagerplatz wurde erfolgreich aktualisiert.",
+        title: "Bereich aktualisiert",
+        description: "Der Lagerbereich wurde erfolgreich aktualisiert.",
       });
       setEditDialogOpen(false);
       resetForm();
@@ -143,11 +122,37 @@ export default function Lager() {
     },
   });
 
+  // Delete group mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/warehouse/groups/${id}`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to delete group");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/groups"] });
+      toast({
+        title: "Bereich gelöscht",
+        description: "Der Lagerbereich wurde erfolgreich gelöscht.",
+      });
+      setDeleteDialogOpen(false);
+      setDeletingGroupId(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Fehler",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const resetForm = () => {
     setFormName("");
-    setFormCapacity("");
-    setFormActive(true);
-    setEditingPlace(null);
+    setFormDescription("");
+    setEditingGroup(null);
   };
 
   const handleAddClick = () => {
@@ -155,169 +160,187 @@ export default function Lager() {
     setAddDialogOpen(true);
   };
 
-  const handleEditClick = (place: WarehousePlace) => {
-    setEditingPlace(place);
-    setFormName(place.name);
-    setFormCapacity(place.capacity?.toString() || "");
-    setFormActive(place.active);
+  const handleEditClick = (group: WarehouseGroup) => {
+    setEditingGroup(group);
+    setFormName(group.name);
+    setFormDescription(group.description || "");
     setEditDialogOpen(true);
   };
 
-  const handleAddSubmit = () => {
-    const capacity = formCapacity ? parseInt(formCapacity, 10) : null;
-    createMutation.mutate({ name: formName, capacity, active: formActive });
+  const handleDeleteClick = (groupId: string) => {
+    setDeletingGroupId(groupId);
+    setDeleteDialogOpen(true);
   };
 
-  const handleEditSubmit = () => {
-    if (!editingPlace) return;
-    const capacity = formCapacity ? parseInt(formCapacity, 10) : null;
-    updateMutation.mutate({
-      id: editingPlace.id,
-      data: { name: formName, capacity, active: formActive },
+  const handleAddSubmit = () => {
+    createMutation.mutate({
+      name: formName,
+      description: formDescription || null,
     });
   };
 
-  const selectedPlace = places.find(p => p.id === selectedPlaceId);
+  const handleEditSubmit = () => {
+    if (!editingGroup) return;
+    updateMutation.mutate({
+      id: editingGroup.id,
+      data: {
+        name: formName,
+        description: formDescription || null,
+      },
+    });
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deletingGroupId) return;
+    deleteMutation.mutate(deletingGroupId);
+  };
+
+  const calculateStats = (places: WarehousePlace[]) => {
+    const total = places.length;
+    const occupied = places.filter(p => p.occupiedByOrderId !== null).length;
+    const free = total - occupied;
+    return { total, occupied, free };
+  };
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight">Lager</h1>
+          <p className="text-muted-foreground mt-1">Lagerverwaltung nach Bereichen</p>
+        </div>
+        <div className="text-muted-foreground">Lade Bereiche...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight" data-testid="text-lager-title">Lager</h1>
-        <p className="text-muted-foreground mt-1">
-          Lagerverwaltung und Bestandsübersicht
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight" data-testid="text-lager-title">Lager</h1>
+            <p className="text-muted-foreground mt-1">Lagerverwaltung nach Bereichen</p>
+          </div>
+          <Button onClick={handleAddClick} data-testid="button-add-group">
+            <Plus className="h-4 w-4 mr-2" />
+            Bereich hinzufügen
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Lagerplätze</CardTitle>
-            <Button onClick={handleAddClick} size="sm" data-testid="button-add-place">
-              <Plus className="h-4 w-4 mr-2" />
-              Lagerplatz hinzufügen
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {/* Search */}
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Suche nach Lagerplatz..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-                data-testid="input-search-place"
-              />
+      {groups.length === 0 ? (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center text-muted-foreground" data-testid="text-no-groups">
+              <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>Noch keine Lagerbereiche angelegt</p>
+              <p className="text-sm mt-2">Erstellen Sie einen Bereich, um Lagerplätze zu verwalten</p>
             </div>
-          </div>
-
-          {/* Table */}
-          {isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
-          ) : places.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground" data-testid="text-no-places">
-              {searchQuery ? "Keine Lagerplätze gefunden" : "Noch keine Lagerplätze angelegt"}
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Platz</TableHead>
-                  <TableHead>Kapazität</TableHead>
-                  <TableHead>Belegt</TableHead>
-                  <TableHead>Frei</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Aktionen</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {places.map((place) => (
-                  <TableRow key={place.id} data-testid={`row-place-${place.id}`}>
-                    <TableCell className="font-medium">{place.name}</TableCell>
-                    <TableCell>{place.capacity ?? "—"}</TableCell>
-                    <TableCell>{place.occupied}</TableCell>
-                    <TableCell>{place.free ?? "—"}</TableCell>
-                    <TableCell>
-                      <span className={`text-sm ${place.active ? "text-green-600 dark:text-green-400" : "text-gray-400"}`}>
-                        {place.active ? "Aktiv" : "Inaktiv"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex gap-2 justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedPlaceId(place.id)}
-                          data-testid={`button-view-${place.id}`}
-                          aria-label={`Inhalt von ${place.name} ansehen`}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Inhalt
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditClick(place)}
-                          data-testid={`button-edit-${place.id}`}
-                          aria-label={`${place.name} bearbeiten`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {groups.map((group) => {
+            const stats = calculateStats(group.places);
+            return (
+              <Card
+                key={group.id}
+                className="hover-elevate active-elevate-2 cursor-pointer"
+                onClick={() => setLocation(`/lager/${group.id}`)}
+                data-testid={`card-group-${group.id}`}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Building2 className="h-5 w-5 flex-shrink-0" />
+                        <span className="truncate">{group.name}</span>
+                      </CardTitle>
+                      {group.description && (
+                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                          {group.description}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Plätze gesamt</span>
+                      <Badge variant="secondary">{stats.total}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Belegt</span>
+                      <Badge variant={stats.occupied > 0 ? "default" : "secondary"}>
+                        {stats.occupied}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Frei</span>
+                      <Badge variant={stats.free > 0 ? "outline" : "secondary"}>
+                        {stats.free}
+                      </Badge>
+                    </div>
+                    <div className="pt-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditClick(group)}
+                        className="flex-1"
+                        data-testid={`button-edit-group-${group.id}`}
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
+                        Bearbeiten
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteClick(group.id)}
+                        data-testid={`button-delete-group-${group.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Add Dialog */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent data-testid="dialog-add-place">
+        <DialogContent data-testid="dialog-add-group">
           <DialogHeader>
-            <DialogTitle>Lagerplatz hinzufügen</DialogTitle>
+            <DialogTitle>Bereich hinzufügen</DialogTitle>
             <DialogDescription>
-              Erstellen Sie einen neuen Lagerplatz mit optionaler Kapazität.
+              Erstellen Sie einen neuen Lagerbereich für organisierte Plätze
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Platzname</Label>
+              <Label htmlFor="name">Bereichsname *</Label>
               <Input
                 id="name"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="z.B. Verkauf-1"
-                data-testid="input-place-name"
+                placeholder="z.B. Verkauf, Produktion, Versand"
+                data-testid="input-group-name"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="capacity">Kapazität (optional)</Label>
+              <Label htmlFor="description">Beschreibung (optional)</Label>
               <Input
-                id="capacity"
-                type="number"
-                value={formCapacity}
-                onChange={(e) => setFormCapacity(e.target.value)}
-                placeholder="z.B. 100"
-                data-testid="input-place-capacity"
+                id="description"
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                placeholder="z.B. Fertige Aufträge zur Abholung"
+                data-testid="input-group-description"
               />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="active"
-                checked={formActive}
-                onCheckedChange={setFormActive}
-                data-testid="switch-place-active"
-              />
-              <Label htmlFor="active">Aktiv</Label>
             </div>
           </div>
           <DialogFooter>
@@ -327,9 +350,9 @@ export default function Lager() {
             <Button
               onClick={handleAddSubmit}
               disabled={!formName || createMutation.isPending}
-              data-testid="button-submit-add"
+              data-testid="button-submit-add-group"
             >
-              Hinzufügen
+              Erstellen
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -337,41 +360,31 @@ export default function Lager() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent data-testid="dialog-edit-place">
+        <DialogContent data-testid="dialog-edit-group">
           <DialogHeader>
-            <DialogTitle>Lagerplatz bearbeiten</DialogTitle>
+            <DialogTitle>Bereich bearbeiten</DialogTitle>
             <DialogDescription>
-              Bearbeiten Sie die Eigenschaften des Lagerplatzes.
+              Aktualisieren Sie die Eigenschaften des Lagerbereichs
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="edit-name">Platzname</Label>
+              <Label htmlFor="edit-name">Bereichsname *</Label>
               <Input
                 id="edit-name"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                data-testid="input-edit-place-name"
+                data-testid="input-edit-group-name"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="edit-capacity">Kapazität (optional)</Label>
+              <Label htmlFor="edit-description">Beschreibung (optional)</Label>
               <Input
-                id="edit-capacity"
-                type="number"
-                value={formCapacity}
-                onChange={(e) => setFormCapacity(e.target.value)}
-                data-testid="input-edit-place-capacity"
+                id="edit-description"
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                data-testid="input-edit-group-description"
               />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="edit-active"
-                checked={formActive}
-                onCheckedChange={setFormActive}
-                data-testid="switch-edit-place-active"
-              />
-              <Label htmlFor="edit-active">Aktiv</Label>
             </div>
           </div>
           <DialogFooter>
@@ -381,7 +394,7 @@ export default function Lager() {
             <Button
               onClick={handleEditSubmit}
               disabled={!formName || updateMutation.isPending}
-              data-testid="button-submit-edit"
+              data-testid="button-submit-edit-group"
             >
               Speichern
             </Button>
@@ -389,53 +402,27 @@ export default function Lager() {
         </DialogContent>
       </Dialog>
 
-      {/* Side Panel for Place Contents */}
-      <Sheet open={!!selectedPlaceId} onOpenChange={(open) => !open && setSelectedPlaceId(null)}>
-        <SheetContent data-testid="sheet-place-contents">
-          <SheetHeader>
-            <SheetTitle>{selectedPlace?.name || "Lagerplatz"}</SheetTitle>
-            <SheetDescription>
-              {selectedPlace && `Kapazität: ${selectedPlace.capacity ?? "Unbegrenzt"} • Belegt: ${selectedPlace.occupied}${selectedPlace.free !== null ? ` • Frei: ${selectedPlace.free}` : ""}`}
-            </SheetDescription>
-          </SheetHeader>
-          <div className="mt-6">
-            {placeContents.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground" data-testid="text-no-contents">
-                Keine Aufträge in diesem Lagerplatz
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {placeContents.map((content) => (
-                  <Card key={content.id} className="p-4" data-testid={`content-${content.id}`}>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-sm">
-                          {content.order.displayOrderNumber || content.order.id.substring(0, 8)}
-                        </span>
-                        <span className="text-sm text-muted-foreground">{content.qty} Stk.</span>
-                      </div>
-                      <div className="font-medium">{content.order.title}</div>
-                      <div className="text-sm text-muted-foreground">{content.order.customer}</div>
-                      {content.note && (
-                        <div className="text-sm text-muted-foreground italic">{content.note}</div>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLocation(`/orders/${content.order.id}`)}
-                        className="w-full"
-                        data-testid={`button-view-order-${content.order.id}`}
-                      >
-                        Auftrag öffnen
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent data-testid="dialog-delete-group">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Bereich löschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Diese Aktion kann nicht rückgängig gemacht werden. Alle Lagerplätze in diesem Bereich werden ebenfalls gelöscht.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={deleteMutation.isPending}
+              data-testid="button-confirm-delete-group"
+            >
+              Löschen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

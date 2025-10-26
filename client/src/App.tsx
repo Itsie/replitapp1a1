@@ -18,6 +18,7 @@ import ProductionToday from "@/pages/production-today";
 import MissingPartsPage from "@/pages/missing-parts";
 import Billing from "@/pages/billing";
 import Lager from "@/pages/lager";
+import LagerDetail from "@/pages/lager-detail";
 import Settings from "@/pages/settings";
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
@@ -102,6 +103,13 @@ function Router() {
         {(params) => (
           <AppLayout>
             <ProtectedRoute component={Lager} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/lager/:id">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={LagerDetail} {...params} />
           </AppLayout>
         )}
       </Route>
