@@ -259,6 +259,9 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
   const { topPx, heightPx } = getSlotGeometry(slot.startMin, slot.lengthMin, minutesPerRow);
   const [showDelete, setShowDelete] = useState(false);
 
+  // Debug: Log every slot position
+  console.log(`Slot ${slot.id.slice(-6)}: ${formatTime(slot.startMin)}-${formatTime(slot.startMin + slot.lengthMin)} → top=${topPx}px, height=${heightPx}px, blocked=${slot.blocked}`);
+
   const dueDateStr = slot.order?.dueDate ? formatDueDate(slot.order.dueDate) : null;
   const isOverdue = slot.order?.dueDate ? isDueDateOverdue(slot.order.dueDate) : false;
   const isUrgent = slot.order?.dueDate ? isDueDateUrgent(slot.order.dueDate) : false;
