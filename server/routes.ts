@@ -710,14 +710,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const deliverSchema = z.object({
         deliveredAt: z.string().datetime(),
         deliveredQty: z.number().int().positive().optional(),
-        note: z.string().optional(),
+        deliveredNote: z.string().optional(),
       });
 
       const validated = deliverSchema.parse(req.body);
       const order = await storage.deliverOrder(req.params.id, {
         deliveredAt: new Date(validated.deliveredAt),
         deliveredQty: validated.deliveredQty,
-        deliveredNote: validated.note,
+        deliveredNote: validated.deliveredNote,
       });
 
       res.json(order);

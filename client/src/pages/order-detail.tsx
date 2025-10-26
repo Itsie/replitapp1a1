@@ -33,6 +33,9 @@ export default function OrderDetail() {
   const [sizeDialogOpen, setSizeDialogOpen] = useState(false);
   const [assetDialogOpen, setAssetDialogOpen] = useState(false);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
+  const [deliverDialogOpen, setDeliverDialogOpen] = useState(false);
+  const [deliverQty, setDeliverQty] = useState("");
+  const [deliverNote, setDeliverNote] = useState("");
   const [activeTab, setActiveTab] = useState("details");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -106,6 +109,39 @@ export default function OrderDetail() {
           variant: "destructive",
         });
       }
+    },
+  });
+
+  const deliverMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/orders/${orderId}/deliver`, {
+        deliveredAt: new Date().toISOString(),
+        deliveredQty: deliverQty ? parseInt(deliverQty) : undefined,
+        deliveredNote: deliverNote || undefined,
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Delivery failed");
+      }
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      toast({
+        title: "Auftrag ausgegeben",
+        description: "Der Auftrag wurde zur Abrechnung weitergeleitet.",
+      });
+      setDeliverDialogOpen(false);
+      setDeliverQty("");
+      setDeliverNote("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Fehler",
+        description: error.message || "Ausgabe fehlgeschlagen.",
+        variant: "destructive",
+      });
     },
   });
   
@@ -342,6 +378,17 @@ export default function OrderDetail() {
                     </TooltipContent>
                   )}
                 </Tooltip>
+              )}
+
+              {/* Deliver Button - Only for FERTIG or FUER_PROD orders */}
+              {(order.workflow === "FERTIG" || order.workflow === "FUER_PROD") && (
+                <Button
+                  onClick={() => setDeliverDialogOpen(true)}
+                  data-testid="button-deliver"
+                >
+                  <Check className="h-4 w-4 mr-2" />
+                  Ausgegeben
+                </Button>
               )}
             </div>
           </div>
@@ -606,6 +653,57 @@ export default function OrderDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={deliverDialogOpen} onOpenChange={setDeliverDialogOpen}>
+        <DialogContent data-testid="dialog-deliver">
+          <DialogHeader>
+            <DialogTitle>Auftrag ausgeben</DialogTitle>
+            <DialogDescription>
+              Markieren Sie den Auftrag als ausgegeben. Der Workflow wird zu "Zur Abrechnung" geändert.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="deliverQty">Ausgegebene Menge (optional)</Label>
+              <Input
+                id="deliverQty"
+                type="number"
+                value={deliverQty}
+                onChange={(e) => setDeliverQty(e.target.value)}
+                placeholder="z.B. 50"
+                data-testid="input-deliver-qty"
+              />
+            </div>
+            <div>
+              <Label htmlFor="deliverNote">Notiz (optional)</Label>
+              <Textarea
+                id="deliverNote"
+                value={deliverNote}
+                onChange={(e) => setDeliverNote(e.target.value)}
+                placeholder="Zusätzliche Anmerkungen zur Ausgabe..."
+                rows={3}
+                data-testid="input-deliver-note"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeliverDialogOpen(false)}
+              data-testid="button-cancel-deliver"
+            >
+              Abbrechen
+            </Button>
+            <Button
+              onClick={() => deliverMutation.mutate()}
+              disabled={deliverMutation.isPending}
+              data-testid="button-confirm-deliver"
+            >
+              {deliverMutation.isPending ? "Wird ausgegeben..." : "Ausgeben"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
