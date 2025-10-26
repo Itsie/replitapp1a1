@@ -7,6 +7,7 @@ import {
   Receipt,
   Boxes,
   Settings,
+  Users,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -80,6 +81,12 @@ const navigationSections: NavSection[] = [
   {
     label: "System",
     items: [
+      {
+        title: "Benutzerverwaltung",
+        url: "/users",
+        icon: Users,
+        roles: ['ADMIN'], // Only admin can access user management
+      },
       {
         title: "Einstellungen",
         url: "/settings",

@@ -9,6 +9,7 @@ import { AppLayout } from "@/components/app-layout";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import ProfilePage from "@/pages/profile";
+import UserManagementPage from "@/pages/user-management";
 import OrdersList from "@/pages/orders-list-improved";
 import OrderNew from "@/pages/order-new";
 import OrderDetail from "@/pages/order-detail";
@@ -107,6 +108,13 @@ function Router() {
         {(params) => (
           <AppLayout>
             <ProtectedRoute component={ProfilePage} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/users">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={UserManagementPage} {...params} />
           </AppLayout>
         )}
       </Route>
