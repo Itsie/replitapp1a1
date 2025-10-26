@@ -75,6 +75,11 @@ export interface IStorage {
   // Submit order
   submitOrder(orderId: string): Promise<OrderWithRelations>;
   
+  // Accounting
+  deliverOrder(orderId: string, data: { deliveredAt: Date; deliveredQty?: number; deliveredNote?: string }): Promise<OrderWithRelations>;
+  getAccountingOrders(filters: { status?: 'ZUR_ABRECHNUNG' | 'ABGERECHNET'; q?: string; dueFrom?: string; dueTo?: string }): Promise<OrderWithRelations[]>;
+  settleOrder(orderId: string, userId: string): Promise<OrderWithRelations>;
+  
   // WorkCenters
   getWorkCenters(department?: Department, active?: boolean): Promise<WorkCenterWithSlotCount[]>;
   getWorkCenterById(id: string): Promise<WorkCenter | null>;
@@ -575,6 +580,133 @@ export class PrismaStorage implements IStorage {
       },
     });
     
+    return updated;
+  }
+
+  async deliverOrder(orderId: string, data: { deliveredAt: Date; deliveredQty?: number; deliveredNote?: string }): Promise<OrderWithRelations> {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        timeSlots: {
+          where: {
+            status: {
+              in: ['PLANNED', 'RUNNING', 'PAUSED'],
+            },
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    // Check if order is in FERTIG or FUER_PROD status
+    if (order.workflow !== 'FERTIG' && order.workflow !== 'FUER_PROD') {
+      throw new Error('Order must be FERTIG or FUER_PROD to be delivered');
+    }
+
+    // Check if there are no open time slots
+    if (order.timeSlots.length > 0) {
+      throw new Error('Cannot deliver order with open time slots (PLANNED/RUNNING/PAUSED)');
+    }
+
+    const updated = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        deliveredAt: data.deliveredAt,
+        deliveredQty: data.deliveredQty,
+        deliveredNote: data.deliveredNote,
+        workflow: 'ZUR_ABRECHNUNG',
+      },
+      include: {
+        sizeTable: true,
+        printAssets: true,
+        orderAssets: true,
+        positions: true,
+      },
+    });
+
+    return updated;
+  }
+
+  async getAccountingOrders(filters: { status?: 'ZUR_ABRECHNUNG' | 'ABGERECHNET'; q?: string; dueFrom?: string; dueTo?: string }): Promise<OrderWithRelations[]> {
+    const where: any = {};
+
+    // Status filter
+    if (filters.status) {
+      where.workflow = filters.status;
+    } else {
+      // Default: show both ZUR_ABRECHNUNG and ABGERECHNET
+      where.workflow = {
+        in: ['ZUR_ABRECHNUNG', 'ABGERECHNET'],
+      };
+    }
+
+    // Search filter
+    if (filters.q) {
+      where.OR = [
+        { displayOrderNumber: { contains: filters.q } },
+        { title: { contains: filters.q } },
+        { customer: { contains: filters.q } },
+        { customerEmail: { contains: filters.q } },
+      ];
+    }
+
+    // Due date filters
+    if (filters.dueFrom || filters.dueTo) {
+      where.dueDate = {};
+      if (filters.dueFrom) {
+        where.dueDate.gte = new Date(filters.dueFrom);
+      }
+      if (filters.dueTo) {
+        where.dueDate.lte = new Date(filters.dueTo);
+      }
+    }
+
+    return await prisma.order.findMany({
+      where,
+      include: {
+        sizeTable: true,
+        printAssets: true,
+        orderAssets: true,
+        positions: true,
+      },
+      orderBy: [
+        { deliveredAt: 'desc' },
+        { createdAt: 'desc' },
+      ],
+    });
+  }
+
+  async settleOrder(orderId: string, userId: string): Promise<OrderWithRelations> {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    if (order.workflow !== 'ZUR_ABRECHNUNG') {
+      throw new Error('Order must be in ZUR_ABRECHNUNG status');
+    }
+
+    const updated = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        settledAt: new Date(),
+        settledBy: userId,
+        workflow: 'ABGERECHNET',
+      },
+      include: {
+        sizeTable: true,
+        printAssets: true,
+        orderAssets: true,
+        positions: true,
+      },
+    });
+
     return updated;
   }
 

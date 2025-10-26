@@ -704,6 +704,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/orders/:id/deliver - Mark order as delivered (ADMIN or PROD_PLAN only)
+  app.post("/api/orders/:id/deliver", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
+    try {
+      const deliverSchema = z.object({
+        deliveredAt: z.string().datetime(),
+        deliveredQty: z.number().int().positive().optional(),
+        note: z.string().optional(),
+      });
+
+      const validated = deliverSchema.parse(req.body);
+      const order = await storage.deliverOrder(req.params.id, {
+        deliveredAt: new Date(validated.deliveredAt),
+        deliveredQty: validated.deliveredQty,
+        deliveredNote: validated.note,
+      });
+
+      res.json(order);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error) {
+        if (error.message === "Order not found") {
+          return res.status(404).json({ error: "Order not found" });
+        }
+        if (error.message.includes("Order must be FERTIG or FUER_PROD")) {
+          return res.status(412).json({ error: error.message });
+        }
+        if (error.message.includes("open time slots")) {
+          return res.status(412).json({ error: error.message });
+        }
+      }
+      console.error("Error delivering order:", error);
+      res.status(500).json({ error: "Failed to deliver order" });
+    }
+  });
+
+  // ===== Accounting Routes =====
+
+  // GET /api/accounting/orders - Get orders for accounting (ACCOUNTING or ADMIN only)
+  app.get("/api/accounting/orders", requireRole('ADMIN', 'ACCOUNTING'), async (req, res) => {
+    try {
+      const filters = {
+        status: req.query.status as 'ZUR_ABRECHNUNG' | 'ABGERECHNET' | undefined,
+        q: req.query.q as string | undefined,
+        dueFrom: req.query.dueFrom as string | undefined,
+        dueTo: req.query.dueTo as string | undefined,
+      };
+
+      const orders = await storage.getAccountingOrders(filters);
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching accounting orders:", error);
+      res.status(500).json({ error: "Failed to fetch accounting orders" });
+    }
+  });
+
+  // POST /api/accounting/orders/:id/settle - Mark order as settled (ACCOUNTING or ADMIN only)
+  app.post("/api/accounting/orders/:id/settle", requireRole('ADMIN', 'ACCOUNTING'), async (req, res) => {
+    try {
+      const order = await storage.settleOrder(req.params.id, req.user!.id);
+      res.json(order);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === "Order not found") {
+          return res.status(404).json({ error: "Order not found" });
+        }
+        if (error.message === "Order must be in ZUR_ABRECHNUNG status") {
+          return res.status(412).json({ error: error.message });
+        }
+      }
+      console.error("Error settling order:", error);
+      res.status(500).json({ error: "Failed to settle order" });
+    }
+  });
+
   // ===== WorkCenter Routes =====
 
   // GET /api/workcenters - List work centers (requires authentication)
