@@ -116,18 +116,28 @@ function formatDuration(minutes: number): string {
 export default function ProductionToday() {
   const { toast } = useToast();
   const [selectedDepartment, setSelectedDepartment] = useState<Department | "all">("all");
-  const [hideCompleted, setHideCompleted] = useState(() => {
-    const stored = localStorage.getItem('production_hideCompleted');
-    return stored !== null ? stored === 'true' : true; // Default ON
-  });
+  const [hideCompleted, setHideCompleted] = useState(true); // Default ON
   const [collapsedSlots, setCollapsedSlots] = useState<Set<string>>(new Set());
   
   // Track previous slot statuses to detect transitions
   const previousStatusesRef = useRef<Map<string, string>>(new Map());
   
-  // Persist hideCompleted to localStorage
+  // Load and persist hideCompleted from/to localStorage
   useEffect(() => {
-    localStorage.setItem('production_hideCompleted', hideCompleted.toString());
+    // Load from localStorage on mount
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('production_hideCompleted');
+      if (stored !== null) {
+        setHideCompleted(stored === 'true');
+      }
+    }
+  }, []);
+  
+  useEffect(() => {
+    // Persist to localStorage on change
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('production_hideCompleted', hideCompleted.toString());
+    }
   }, [hideCompleted]);
   
   // Problem Dialog State
