@@ -54,7 +54,7 @@ export default function LoginPage() {
             <img 
               src={logoUrl} 
               alt="1aShirt Logo" 
-              className="h-24 w-24 object-contain"
+              className="h-48 w-48 object-contain"
             />
           </div>
           <div>
