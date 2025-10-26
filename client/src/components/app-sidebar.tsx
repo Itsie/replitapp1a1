@@ -72,9 +72,9 @@ const navigationSections: NavSection[] = [
       },
       {
         title: "Lager",
-        url: "/warehouse",
+        url: "/lager",
         icon: Boxes,
-        roles: ['ADMIN'], // Only admin for now
+        roles: ['ADMIN', 'LAGER'], // Admin and warehouse role
       },
     ],
   },

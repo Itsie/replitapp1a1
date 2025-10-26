@@ -16,7 +16,7 @@ import OrderDetail from "@/pages/order-detail";
 import Planning from "@/pages/planning";
 import ProductionToday from "@/pages/production-today";
 import Billing from "@/pages/billing";
-import Warehouse from "@/pages/warehouse";
+import Lager from "@/pages/lager";
 import Settings from "@/pages/settings";
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
@@ -90,10 +90,10 @@ function Router() {
           </AppLayout>
         )}
       </Route>
-      <Route path="/warehouse">
+      <Route path="/lager">
         {(params) => (
           <AppLayout>
-            <ProtectedRoute component={Warehouse} {...params} />
+            <ProtectedRoute component={Lager} {...params} />
           </AppLayout>
         )}
       </Route>
