@@ -133,12 +133,16 @@ export default function ProductionToday() {
   today.setHours(0, 0, 0, 0);
 
   // Fetch today's time slots
+  const endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+  const queryParams = new URLSearchParams({
+    startDate: today.toISOString(),
+    endDate: endDate.toISOString(),
+    ...(selectedDepartment !== "all" && { department: selectedDepartment }),
+  });
+  
   const { data: slots = [], isLoading } = useQuery<TimeSlotWithOrder[]>({
-    queryKey: ["/api/calendar", {
-      startDate: today.toISOString(),
-      endDate: new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString(),
-      ...(selectedDepartment !== "all" && { department: selectedDepartment })
-    }],
+    queryKey: [`/api/calendar?${queryParams.toString()}`],
+    refetchInterval: 5000, // Refetch every 5 seconds for live timer updates
   });
 
   // Fetch work centers for department filter
@@ -155,7 +159,7 @@ export default function ProductionToday() {
       await apiRequest("POST", `/api/timeslots/${slotId}/start`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/calendar"] });
+      queryClient.refetchQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
       toast({
         title: "Gestartet",
         description: "Arbeitsschritt wurde gestartet.",
@@ -176,7 +180,7 @@ export default function ProductionToday() {
       await apiRequest("POST", `/api/timeslots/${slotId}/pause`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/calendar"] });
+      queryClient.refetchQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
       toast({
         title: "Pausiert",
         description: "Arbeitsschritt wurde pausiert.",
@@ -197,7 +201,7 @@ export default function ProductionToday() {
       await apiRequest("POST", `/api/timeslots/${slotId}/stop`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/calendar"] });
+      queryClient.refetchQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
       toast({
         title: "Beendet",
         description: "Arbeitsschritt wurde beendet. Dauer wurde gespeichert.",
@@ -221,7 +225,7 @@ export default function ProductionToday() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/calendar"] });
+      queryClient.refetchQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
       setProblemDialogOpen(false);
       setProblemSlotId(null);
       setProblemNote("");

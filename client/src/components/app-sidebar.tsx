@@ -55,7 +55,7 @@ const navigationSections: NavSection[] = [
       },
       {
         title: "Produktion",
-        url: "/production/today",
+        url: "/production-today",
         icon: Activity,
         roles: ['ADMIN', 'PROD_RUN'],
       },

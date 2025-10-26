@@ -76,7 +76,7 @@ function Router() {
           </AppLayout>
         )}
       </Route>
-      <Route path="/production/today">
+      <Route path="/production-today">
         {(params) => (
           <AppLayout>
             <ProtectedRoute component={ProductionToday} {...params} />
