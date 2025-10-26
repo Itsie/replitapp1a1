@@ -1,5 +1,5 @@
-import { PrismaClient, type OrderSource, type Department, type WorkflowState, type OrderPosition, type OrderAsset, type WorkCenter, type TimeSlot, Prisma } from "@prisma/client";
-import type { InsertOrder, InsertSizeTable, InsertPrintAsset, InsertOrderAsset, InsertPosition, UpdatePosition, OrderWithRelations, InsertWorkCenter, UpdateWorkCenter, InsertTimeSlot, UpdateTimeSlot, BatchTimeSlot } from "@shared/schema";
+import { PrismaClient, type OrderSource, type Department, type WorkflowState, type OrderPosition, type OrderAsset, type WorkCenter, type TimeSlot, type StorageSlot, type OrderStorage, Prisma } from "@prisma/client";
+import type { InsertOrder, InsertSizeTable, InsertPrintAsset, InsertOrderAsset, InsertPosition, UpdatePosition, OrderWithRelations, InsertWorkCenter, UpdateWorkCenter, InsertTimeSlot, UpdateTimeSlot, BatchTimeSlot, InsertStorageSlot, UpdateStorageSlot, InsertOrderStorage, OrderStorageWithRelations } from "@shared/schema";
 
 const prisma = new PrismaClient();
 
@@ -102,6 +102,14 @@ export interface IStorage {
   stopTimeSlot(id: string): Promise<TimeSlot>;
   setTimeSlotQC(id: string, qc: 'IO' | 'NIO', note?: string | null): Promise<TimeSlot>;
   setTimeSlotMissingParts(id: string, note: string, updateOrderWorkflow: boolean): Promise<TimeSlot>;
+  
+  // Storage
+  getStorageSlots(active?: boolean): Promise<StorageSlot[]>;
+  getStorageSlotById(id: string): Promise<StorageSlot | null>;
+  createStorageSlot(data: InsertStorageSlot): Promise<StorageSlot>;
+  updateStorageSlot(id: string, data: UpdateStorageSlot): Promise<StorageSlot>;
+  getOrderStorage(orderId: string): Promise<OrderStorageWithRelations[]>;
+  createOrderStorage(orderId: string, data: InsertOrderStorage): Promise<OrderStorage>;
 }
 
 export class PrismaStorage implements IStorage {
@@ -1501,6 +1509,90 @@ export class PrismaStorage implements IStorage {
     }
 
     return updated;
+  }
+
+  // ===== Storage Methods =====
+
+  async getStorageSlots(active?: boolean): Promise<StorageSlot[]> {
+    const where: any = {};
+    
+    if (active !== undefined) {
+      where.active = active;
+    }
+    
+    return await prisma.storageSlot.findMany({
+      where,
+      orderBy: {
+        name: 'asc',
+      },
+    });
+  }
+
+  async getStorageSlotById(id: string): Promise<StorageSlot | null> {
+    return await prisma.storageSlot.findUnique({
+      where: { id },
+    });
+  }
+
+  async createStorageSlot(data: InsertStorageSlot): Promise<StorageSlot> {
+    return await prisma.storageSlot.create({
+      data,
+    });
+  }
+
+  async updateStorageSlot(id: string, data: UpdateStorageSlot): Promise<StorageSlot> {
+    return await prisma.storageSlot.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async getOrderStorage(orderId: string): Promise<OrderStorageWithRelations[]> {
+    // Verify order exists
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    return await prisma.orderStorage.findMany({
+      where: { orderId },
+      include: {
+        slot: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  async createOrderStorage(orderId: string, data: InsertOrderStorage): Promise<OrderStorage> {
+    // Verify order exists
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    // Verify slot exists
+    const slot = await prisma.storageSlot.findUnique({
+      where: { id: data.slotId },
+    });
+
+    if (!slot) {
+      throw new Error('Storage slot not found');
+    }
+
+    return await prisma.orderStorage.create({
+      data: {
+        orderId,
+        ...data,
+      },
+    });
   }
 }
 

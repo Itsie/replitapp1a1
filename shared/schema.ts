@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { Order, SizeTable, PrintAsset, OrderAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState } from "@prisma/client";
+import type { Order, SizeTable, PrintAsset, OrderAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState, StorageSlot, OrderStorage } from "@prisma/client";
 
 // Re-export Prisma types
-export type { Order, SizeTable, PrintAsset, OrderAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState };
+export type { Order, SizeTable, PrintAsset, OrderAsset, OrderPosition, OrderSource, Department, WorkflowState, QCState, StorageSlot, OrderStorage };
 
 // Enum schemas
 export const orderSourceSchema = z.enum(["JTL", "INTERNAL"]);
@@ -382,3 +382,35 @@ export type BatchTimeSlot = z.infer<typeof batchTimeSlotSchema>;
 export type TimeSlotStatus = z.infer<typeof timeSlotStatusSchema>;
 export type TimeSlotQC = z.infer<typeof timeSlotQCSchema>;
 export type TimeSlotMissingParts = z.infer<typeof timeSlotMissingPartsSchema>;
+
+// ===== Storage Schemas =====
+
+// StorageSlot insert schema
+export const insertStorageSlotSchema = z.object({
+  name: z.string().min(1, "Name is required").max(50, "Name must be max 50 characters"),
+  capacity: z.number().int().positive("Capacity must be positive").optional().nullable(),
+  active: z.boolean().default(true),
+});
+
+// StorageSlot update schema
+export const updateStorageSlotSchema = z.object({
+  name: z.string().min(1, "Name is required").max(50, "Name must be max 50 characters").optional(),
+  capacity: z.number().int().positive("Capacity must be positive").optional().nullable(),
+  active: z.boolean().optional(),
+});
+
+// OrderStorage insert schema
+export const insertOrderStorageSchema = z.object({
+  slotId: z.string().min(1, "Storage slot is required"),
+  qty: z.number().int().positive("Quantity must be positive"),
+  note: z.string().max(200, "Note must be max 200 characters").optional().nullable(),
+});
+
+export type InsertStorageSlot = z.infer<typeof insertStorageSlotSchema>;
+export type UpdateStorageSlot = z.infer<typeof updateStorageSlotSchema>;
+export type InsertOrderStorage = z.infer<typeof insertOrderStorageSchema>;
+
+// OrderStorage with relations for API responses
+export type OrderStorageWithRelations = OrderStorage & {
+  slot: StorageSlot;
+};
