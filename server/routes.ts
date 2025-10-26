@@ -7,8 +7,14 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { upload } from "./upload";
 import path from "path";
 import fs from "fs";
+import { requireAuth, requireRole } from "./auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // GET /api/me - Get current user
+  app.get("/api/me", requireAuth, async (req, res) => {
+    res.json(req.user);
+  });
+  
   // GET /api/orders - List orders with filters
   app.get("/api/orders", async (req, res) => {
     try {
@@ -43,8 +49,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // POST /api/orders - Create new INTERNAL order
-  app.post("/api/orders", async (req, res) => {
+  // POST /api/orders - Create new INTERNAL order (ADMIN or SALES_OPS only)
+  app.post("/api/orders", requireRole('ADMIN', 'SALES_OPS'), async (req, res) => {
     try {
       const validated = insertOrderSchema.parse(req.body);
       const order = await storage.createOrder(validated);
@@ -58,8 +64,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // PATCH /api/orders/:id - Update order fields
-  app.patch("/api/orders/:id", async (req, res) => {
+  // PATCH /api/orders/:id - Update order fields (ADMIN or SALES_OPS only)
+  app.patch("/api/orders/:id", requireRole('ADMIN', 'SALES_OPS'), async (req, res) => {
     try {
       const validated = updateOrderSchema.parse(req.body);
       const order = await storage.updateOrder(req.params.id, validated);
@@ -500,8 +506,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/workcenters - Create work center
-  app.post("/api/workcenters", async (req, res) => {
+  // POST /api/workcenters - Create work center (ADMIN or PROD_PLAN only)
+  app.post("/api/workcenters", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
     try {
       const validated = insertWorkCenterSchema.parse(req.body);
       const workCenter = await storage.createWorkCenter(validated);
@@ -515,8 +521,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PATCH /api/workcenters/:id - Update work center
-  app.patch("/api/workcenters/:id", async (req, res) => {
+  // PATCH /api/workcenters/:id - Update work center (ADMIN or PROD_PLAN only)
+  app.patch("/api/workcenters/:id", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
     try {
       const validated = updateWorkCenterSchema.parse(req.body);
       const workCenter = await storage.updateWorkCenter(req.params.id, validated);
@@ -533,8 +539,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // DELETE /api/workcenters/:id - Delete work center
-  app.delete("/api/workcenters/:id", async (req, res) => {
+  // DELETE /api/workcenters/:id - Delete work center (ADMIN or PROD_PLAN only)
+  app.delete("/api/workcenters/:id", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
     try {
       await storage.deleteWorkCenter(req.params.id);
       res.status(204).send();
@@ -620,8 +626,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/timeslots - Create time slot
-  app.post("/api/timeslots", async (req, res) => {
+  // POST /api/timeslots - Create time slot (ADMIN or PROD_PLAN only)
+  app.post("/api/timeslots", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
     try {
       const validated = insertTimeSlotSchema.parse(req.body);
       const timeSlot = await storage.createTimeSlot(validated);
@@ -656,8 +662,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PATCH /api/timeslots/:id - Update time slot
-  app.patch("/api/timeslots/:id", async (req, res) => {
+  // PATCH /api/timeslots/:id - Update time slot (ADMIN or PROD_PLAN only)
+  app.patch("/api/timeslots/:id", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
     try {
       const validated = updateTimeSlotSchema.parse(req.body);
       const timeSlot = await storage.updateTimeSlot(req.params.id, validated);
@@ -692,8 +698,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // DELETE /api/timeslots/:id - Delete time slot
-  app.delete("/api/timeslots/:id", async (req, res) => {
+  // DELETE /api/timeslots/:id - Delete time slot (ADMIN or PROD_PLAN only)
+  app.delete("/api/timeslots/:id", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
     try {
       await storage.deleteTimeSlot(req.params.id);
       res.status(204).send();
@@ -706,8 +712,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/timeslots/batch - Batch operations for time slots
-  app.post("/api/timeslots/batch", async (req, res) => {
+  // POST /api/timeslots/batch - Batch operations for time slots (ADMIN or PROD_PLAN only)
+  app.post("/api/timeslots/batch", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
     try {
       const validated = batchTimeSlotSchema.parse(req.body);
       const result = await storage.batchTimeSlots(validated);
@@ -738,10 +744,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ===== TimeSlot Action Routes =====
+  // ===== TimeSlot Action Routes (ADMIN or PROD_RUN only) =====
 
-  // POST /api/timeslots/:id/start - Start a time slot
-  app.post("/api/timeslots/:id/start", async (req, res) => {
+  // POST /api/timeslots/:id/start - Start a time slot (ADMIN or PROD_RUN only)
+  app.post("/api/timeslots/:id/start", requireRole('ADMIN', 'PROD_RUN'), async (req, res) => {
     try {
       const timeSlot = await storage.startTimeSlot(req.params.id);
       res.json(timeSlot);
@@ -762,8 +768,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/timeslots/:id/pause - Pause a time slot
-  app.post("/api/timeslots/:id/pause", async (req, res) => {
+  // POST /api/timeslots/:id/pause - Pause a time slot (ADMIN or PROD_RUN only)
+  app.post("/api/timeslots/:id/pause", requireRole('ADMIN', 'PROD_RUN'), async (req, res) => {
     try {
       const timeSlot = await storage.pauseTimeSlot(req.params.id);
       res.json(timeSlot);
@@ -781,8 +787,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/timeslots/:id/stop - Stop a time slot
-  app.post("/api/timeslots/:id/stop", async (req, res) => {
+  // POST /api/timeslots/:id/stop - Stop a time slot (ADMIN or PROD_RUN only)
+  app.post("/api/timeslots/:id/stop", requireRole('ADMIN', 'PROD_RUN'), async (req, res) => {
     try {
       const timeSlot = await storage.stopTimeSlot(req.params.id);
       res.json(timeSlot);
@@ -800,8 +806,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/timeslots/:id/qc - Set QC for a time slot
-  app.post("/api/timeslots/:id/qc", async (req, res) => {
+  // POST /api/timeslots/:id/qc - Set QC for a time slot (ADMIN or PROD_RUN only)
+  app.post("/api/timeslots/:id/qc", requireRole('ADMIN', 'PROD_RUN'), async (req, res) => {
     try {
       const validated = timeSlotQCSchema.parse(req.body);
       const timeSlot = await storage.setTimeSlotQC(req.params.id, validated.qc, validated.note);
@@ -823,8 +829,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/timeslots/:id/missing-parts - Mark time slot as having missing parts
-  app.post("/api/timeslots/:id/missing-parts", async (req, res) => {
+  // POST /api/timeslots/:id/missing-parts - Mark time slot as having missing parts (ADMIN or PROD_RUN only)
+  app.post("/api/timeslots/:id/missing-parts", requireRole('ADMIN', 'PROD_RUN'), async (req, res) => {
     try {
       const validated = timeSlotMissingPartsSchema.parse(req.body);
       const timeSlot = await storage.setTimeSlotMissingParts(
