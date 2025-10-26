@@ -26,7 +26,7 @@ import { Play, Pause, Square, AlertCircle, Clock, ChevronDown, ChevronUp } from 
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { WorkCenter, Department, WorkflowState } from "@prisma/client";
-import { WORKFLOW_LABELS, getWorkflowBadgeColor } from "@shared/schema";
+import { WORKFLOW_LABELS } from "@shared/schema";
 
 interface TimeSlotWithOrder {
   id: string;
@@ -65,22 +65,6 @@ interface WorkCenterWithSlotCount extends WorkCenter {
 
 type ProblemReason = "FEHLTEILE" | "MASCHINE" | "SONSTIGES";
 
-const SLOT_BADGE: Record<string, string> = {
-  PLANNED: "border-slate-500 text-slate-700 dark:text-slate-300 bg-transparent",
-  RUNNING: "bg-green-600 text-white border-green-600",
-  PAUSED:  "bg-yellow-500 text-black border-yellow-500",
-  DONE:    "border-blue-500 text-blue-700 dark:text-blue-300 bg-transparent",
-  BLOCKED: "border-red-500 text-red-700 dark:text-red-300 bg-red-900/20",
-};
-
-const SLOT_LABEL: Record<string, string> = {
-  PLANNED: "Geplant",
-  RUNNING: "Läuft",
-  PAUSED:  "Pausiert",
-  DONE:    "Fertig",
-  BLOCKED: "Blockiert",
-};
-
 const PROBLEM_REASONS: Record<ProblemReason, string> = {
   FEHLTEILE: "Fehlteile",
   MASCHINE: "Maschine defekt",
@@ -105,15 +89,12 @@ function formatDuration(minutes: number): string {
 export default function ProductionToday() {
   const { toast } = useToast();
   const [selectedDepartment, setSelectedDepartment] = useState<Department | "all">("all");
-  const [hideCompleted, setHideCompleted] = useState(true); // Default ON
+  const [hideCompleted, setHideCompleted] = useState(true);
   const [collapsedSlots, setCollapsedSlots] = useState<Set<string>>(new Set());
   
-  // Track previous slot statuses to detect transitions
   const previousStatusesRef = useRef<Map<string, string>>(new Map());
   
-  // Load and persist hideCompleted from/to localStorage
   useEffect(() => {
-    // Load from localStorage on mount
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('production_hideCompleted');
       if (stored !== null) {
@@ -123,130 +104,111 @@ export default function ProductionToday() {
   }, []);
   
   useEffect(() => {
-    // Persist to localStorage on change
     if (typeof window !== 'undefined') {
       localStorage.setItem('production_hideCompleted', hideCompleted.toString());
     }
   }, [hideCompleted]);
-  
-  // Problem Dialog State
-  const [problemDialogOpen, setProblemDialogOpen] = useState(false);
-  const [problemSlotId, setProblemSlotId] = useState<string | null>(null);
-  const [problemReason, setProblemReason] = useState<ProblemReason>("FEHLTEILE");
-  const [problemNote, setProblemNote] = useState("");
-  const [updateWorkflow, setUpdateWorkflow] = useState(true);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Fetch today's time slots
-  const endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-  const queryParams = new URLSearchParams({
-    startDate: today.toISOString(),
-    endDate: endDate.toISOString(),
-    ...(selectedDepartment !== "all" && { department: selectedDepartment }),
-  });
-  
-  const { data: slots = [], isLoading } = useQuery<TimeSlotWithOrder[]>({
-    queryKey: [`/api/calendar?${queryParams.toString()}`],
-    refetchInterval: 5000, // Refetch every 5 seconds for live timer updates
+  const { data: response, isLoading } = useQuery<{ slots: TimeSlotWithOrder[] }>({
+    queryKey: ['/api/timeslots', { date: today.toISOString() }],
   });
 
-  // Fetch work centers for department filter
-  const { data: workCenters = [] } = useQuery<WorkCenterWithSlotCount[]>({
-    queryKey: ["/api/workcenters"],
-  });
+  const slots = response?.slots ?? [];
 
-  // Get unique departments
-  const departments = Array.from(new Set(workCenters.map(wc => wc.department)));
+  const departments: Department[] = ["TEAMSPORT", "TEXTILVEREDELUNG", "STICKEREI", "DRUCK", "SONSTIGES"];
 
-  // Start mutation
+  const [problemDialogOpen, setProblemDialogOpen] = useState(false);
+  const [problemSlotId, setProblemSlotId] = useState<string | null>(null);
+  const [problemNote, setProblemNote] = useState("");
+  const [problemReason, setProblemReason] = useState<ProblemReason>("FEHLTEILE");
+  const [updateWorkflow, setUpdateWorkflow] = useState(true);
+
   const startMutation = useMutation({
     mutationFn: async (slotId: string) => {
-      await apiRequest("POST", `/api/timeslots/${slotId}/start`);
+      await apiRequest('POST', `/api/timeslots/${slotId}/start`, {});
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/timeslots'] });
       toast({
-        title: "Gestartet",
-        description: "Arbeitsschritt wurde gestartet.",
+        title: "Erfolgreich",
+        description: "Arbeitsschritt gestartet",
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: "Fehler",
-        description: error.message || "Konnte nicht gestartet werden.",
+        description: error.message || "Arbeitsschritt konnte nicht gestartet werden",
         variant: "destructive",
       });
     },
   });
 
-  // Pause mutation
   const pauseMutation = useMutation({
     mutationFn: async (slotId: string) => {
-      await apiRequest("POST", `/api/timeslots/${slotId}/pause`);
+      await apiRequest('POST', `/api/timeslots/${slotId}/pause`, {});
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/timeslots'] });
       toast({
-        title: "Pausiert",
-        description: "Arbeitsschritt wurde pausiert.",
+        title: "Erfolgreich",
+        description: "Arbeitsschritt pausiert",
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: "Fehler",
-        description: error.message || "Konnte nicht pausiert werden.",
+        description: error.message || "Arbeitsschritt konnte nicht pausiert werden",
         variant: "destructive",
       });
     },
   });
 
-  // Stop mutation
   const stopMutation = useMutation({
     mutationFn: async (slotId: string) => {
-      await apiRequest("POST", `/api/timeslots/${slotId}/stop`);
+      await apiRequest('POST', `/api/timeslots/${slotId}/stop`, {});
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/timeslots'] });
       toast({
-        title: "Beendet",
-        description: "Arbeitsschritt wurde beendet. Dauer wurde gespeichert.",
+        title: "Erfolgreich",
+        description: "Arbeitsschritt beendet",
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: "Fehler",
-        description: error.message || "Konnte nicht beendet werden.",
+        description: error.message || "Arbeitsschritt konnte nicht beendet werden",
         variant: "destructive",
       });
     },
   });
 
-  // Problem melden mutation
   const problemMutation = useMutation({
-    mutationFn: async ({ slotId, note, updateWorkflow }: { slotId: string; note: string; updateWorkflow: boolean }) => {
-      await apiRequest("POST", `/api/timeslots/${slotId}/missing-parts`, {
+    mutationFn: async ({ slotId, note, escalate }: { slotId: string; note: string; escalate: boolean }) => {
+      await apiRequest('POST', `/api/timeslots/${slotId}/missing-parts`, {
         note,
-        updateOrderWorkflow: updateWorkflow,
+        escalateWorkflow: escalate,
       });
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/timeslots'] });
       setProblemDialogOpen(false);
       setProblemSlotId(null);
       setProblemNote("");
       setProblemReason("FEHLTEILE");
       setUpdateWorkflow(true);
       toast({
-        title: "Problem gemeldet",
-        description: "Das Problem wurde erfolgreich gemeldet.",
+        title: "Erfolgreich",
+        description: "Problem wurde gemeldet",
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: "Fehler",
-        description: error.message || "Problem konnte nicht gemeldet werden.",
+        description: error.message || "Problem konnte nicht gemeldet werden",
         variant: "destructive",
       });
     },
@@ -270,20 +232,11 @@ export default function ProductionToday() {
   };
 
   const handleSubmitProblem = () => {
-    if (!problemSlotId || !problemNote.trim()) {
-      toast({
-        title: "Fehler",
-        description: "Bitte geben Sie eine Notiz ein.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const fullNote = `${PROBLEM_REASONS[problemReason]}: ${problemNote}`;
+    if (!problemSlotId || !problemNote.trim()) return;
     problemMutation.mutate({
       slotId: problemSlotId,
-      note: fullNote,
-      updateWorkflow,
+      note: problemNote,
+      escalate: updateWorkflow,
     });
   };
 
@@ -299,53 +252,49 @@ export default function ProductionToday() {
     });
   };
 
-  // Auto-collapse newly DONE slots (only on status transition, preserving user toggles)
+  const slotStatusSignature = JSON.stringify(slots.map(s => ({ id: s.id, status: s.status })));
+  
   useEffect(() => {
-    if (slots.length === 0) return;
+    const previousStatuses = previousStatusesRef.current;
+    let hasChanges = false;
+    const updates: string[] = [];
 
-    setCollapsedSlots(prev => {
-      const newSet = new Set(prev);
-      const previousStatuses = previousStatusesRef.current;
-
-      slots.forEach(slot => {
-        const prevStatus = previousStatuses.get(slot.id);
-        
-        // Auto-collapse if status is/became DONE (includes first load with undefined prevStatus)
-        // This triggers on: initial load (undefined→DONE) and transitions (RUNNING/PAUSED→DONE)
-        if (slot.status === 'DONE' && prevStatus !== 'DONE') {
-          newSet.add(slot.id);
-        }
-        
-        // Remove from collapsed if slot is no longer DONE
-        if (slot.status !== 'DONE' && newSet.has(slot.id)) {
-          newSet.delete(slot.id);
-        }
-        
-        // Update status tracking
-        previousStatuses.set(slot.id, slot.status);
-      });
-
-      // Clean up orphaned IDs from slots that no longer exist
-      const currentSlotIds = new Set(slots.map(s => s.id));
-      for (const [id] of previousStatuses) {
-        if (!currentSlotIds.has(id)) {
-          previousStatuses.delete(id);
-        }
+    slots.forEach(slot => {
+      const prevStatus = previousStatuses.get(slot.id);
+      if (prevStatus !== 'DONE' && slot.status === 'DONE') {
+        updates.push(slot.id);
+        hasChanges = true;
       }
-
-      return newSet;
+      previousStatuses.set(slot.id, slot.status);
     });
-  }, [slots]);
 
-  // Filter slots: only show assigned slots (orderId != null OR blocked == true)
+    const currentSlotIds = new Set(slots.map(s => s.id));
+    Array.from(previousStatuses.entries()).forEach(([id]) => {
+      if (!currentSlotIds.has(id)) {
+        previousStatuses.delete(id);
+      }
+    });
+
+    if (hasChanges && updates.length > 0) {
+      setCollapsedSlots(prev => {
+        const newSet = new Set(prev);
+        updates.forEach(id => newSet.add(id));
+        return newSet;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slotStatusSignature]);
+
   let filteredSlots = slots.filter(s => s.orderId !== null || s.blocked === true);
   
-  // Hide completed if toggle is on
+  if (selectedDepartment !== "all") {
+    filteredSlots = filteredSlots.filter(s => s.workCenter.department === selectedDepartment);
+  }
+  
   if (hideCompleted) {
     filteredSlots = filteredSlots.filter(s => s.status !== 'DONE');
   }
 
-  // Sort by startMin ascending (earliest first)
   filteredSlots = [...filteredSlots].sort((a, b) => a.startMin - b.startMin);
 
   if (isLoading) {
@@ -365,7 +314,6 @@ export default function ProductionToday() {
         </p>
       </div>
 
-      {/* Filters */}
       <div className="flex items-center gap-4 mb-6">
         <div className="flex items-center gap-2">
           <Label htmlFor="department-filter">Bereich:</Label>
@@ -395,7 +343,6 @@ export default function ProductionToday() {
         </div>
       </div>
 
-      {/* Time Slots */}
       {filteredSlots.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
@@ -403,26 +350,20 @@ export default function ProductionToday() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredSlots.map(slot => (
-            <TimeSlotCard
-              key={slot.id}
-              slot={slot}
-              isCollapsed={collapsedSlots.has(slot.id)}
-              onToggleCollapse={() => toggleCollapse(slot.id)}
-              onStart={handleStart}
-              onPause={handlePause}
-              onStop={handleStop}
-              onProblem={handleOpenProblemDialog}
-              isStarting={startMutation.isPending}
-              isPausing={pauseMutation.isPending}
-              isStopping={stopMutation.isPending}
-            />
-          ))}
-        </div>
+        <TimelineView
+          slots={filteredSlots}
+          collapsedSlots={collapsedSlots}
+          onToggleCollapse={toggleCollapse}
+          onStart={handleStart}
+          onPause={handlePause}
+          onStop={handleStop}
+          onProblem={handleOpenProblemDialog}
+          isStarting={startMutation.isPending}
+          isPausing={pauseMutation.isPending}
+          isStopping={stopMutation.isPending}
+        />
       )}
 
-      {/* Problem Dialog */}
       <Dialog open={problemDialogOpen} onOpenChange={setProblemDialogOpen}>
         <DialogContent data-testid="dialog-problem">
           <DialogHeader>
@@ -473,8 +414,8 @@ export default function ProductionToday() {
                   className="rounded"
                   data-testid="checkbox-update-workflow"
                 />
-                <Label htmlFor="update-workflow" className="cursor-pointer text-sm">
-                  Auftragsstatus auf "Wartet Fehlteile" setzen
+                <Label htmlFor="update-workflow" className="cursor-pointer">
+                  Auftrag auf "Wartet auf Fehlteile" setzen
                 </Label>
               </div>
             )}
@@ -507,7 +448,90 @@ export default function ProductionToday() {
   );
 }
 
-interface TimeSlotCardProps {
+interface TimelineViewProps {
+  slots: TimeSlotWithOrder[];
+  collapsedSlots: Set<string>;
+  onToggleCollapse: (id: string) => void;
+  onStart: (id: string) => void;
+  onPause: (id: string) => void;
+  onStop: (id: string) => void;
+  onProblem: (id: string) => void;
+  isStarting?: boolean;
+  isPausing?: boolean;
+  isStopping?: boolean;
+}
+
+function TimelineView({
+  slots,
+  collapsedSlots,
+  onToggleCollapse,
+  onStart,
+  onPause,
+  onStop,
+  onProblem,
+  isStarting = false,
+  isPausing = false,
+  isStopping = false,
+}: TimelineViewProps) {
+  const workStart = 7 * 60; // 07:00
+  const workEnd = 18 * 60;   // 18:00
+  const timeMarkers: number[] = [];
+  
+  for (let min = workStart; min <= workEnd; min += 30) {
+    timeMarkers.push(min);
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Day boundaries */}
+      <div className="flex items-center gap-4 text-sm text-muted-foreground border-b pb-4">
+        <div className="flex items-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-muted-foreground" />
+          <span className="font-medium">Arbeitstag: 07:00 - 18:00</span>
+        </div>
+      </div>
+
+      {/* Timeline */}
+      <div className="relative">
+        {/* Time markers */}
+        <div className="absolute left-0 top-0 bottom-0 w-20 border-r border-border/50">
+          {timeMarkers.map((min, idx) => (
+            <div
+              key={min}
+              className="absolute left-0 right-0 flex items-center justify-end pr-3"
+              style={{ top: `${(idx / (timeMarkers.length - 1)) * 100}%` }}
+            >
+              <span className="text-xs text-muted-foreground font-mono">
+                {formatTime(min)}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Slots */}
+        <div className="ml-24 space-y-2 min-h-[600px]">
+          {slots.map(slot => (
+            <TimeSlotRow
+              key={slot.id}
+              slot={slot}
+              isCollapsed={collapsedSlots.has(slot.id)}
+              onToggleCollapse={() => onToggleCollapse(slot.id)}
+              onStart={onStart}
+              onPause={onPause}
+              onStop={onStop}
+              onProblem={onProblem}
+              isStarting={isStarting}
+              isPausing={isPausing}
+              isStopping={isStopping}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface TimeSlotRowProps {
   slot: TimeSlotWithOrder;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
@@ -520,7 +544,7 @@ interface TimeSlotCardProps {
   isStopping?: boolean;
 }
 
-function TimeSlotCard({
+function TimeSlotRow({
   slot,
   isCollapsed,
   onToggleCollapse,
@@ -531,10 +555,10 @@ function TimeSlotCard({
   isStarting = false,
   isPausing = false,
   isStopping = false,
-}: TimeSlotCardProps) {
+}: TimeSlotRowProps) {
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [showActions, setShowActions] = useState(false);
 
-  // Update timer every second for RUNNING slots
   useEffect(() => {
     if (slot.status === 'RUNNING') {
       const interval = setInterval(() => {
@@ -544,89 +568,106 @@ function TimeSlotCard({
     }
   }, [slot.status]);
 
-  // Calculate elapsed time for RUNNING status
   let elapsedMin = 0;
   if (slot.status === 'RUNNING' && slot.startedAt) {
     const elapsedMs = currentTime - new Date(slot.startedAt).getTime();
     elapsedMin = Math.floor(elapsedMs / 60000);
   }
 
+  const isRunning = slot.status === 'RUNNING';
   const isDone = slot.status === 'DONE';
+  const isPaused = slot.status === 'PAUSED';
   const isBlocked = slot.status === 'BLOCKED';
 
   return (
     <Card
-      className={`${isDone ? 'bg-muted/30 border-muted' : ''} ${isBlocked ? 'border-red-300 dark:border-red-700' : ''}`}
+      className={`
+        ${isDone ? 'opacity-70' : ''}
+        ${isRunning ? 'border-l-4 border-l-green-600' : ''}
+        ${isBlocked ? 'border-l-4 border-l-red-600' : ''}
+        ${isPaused ? 'border-l-4 border-l-yellow-600' : ''}
+      `}
       data-testid={`card-slot-${slot.id}`}
     >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            {/* Prominent Time Display */}
-            <div className="mb-3">
-              <div className="text-lg font-semibold tracking-tight font-mono">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              {/* Time */}
+              <span className="text-sm font-mono text-muted-foreground">
                 {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                ({slot.lengthMin} min geplant)
-              </div>
+              </span>
+              
+              {/* Duration indicator */}
+              <span className="text-xs text-muted-foreground">
+                ({formatDuration(slot.lengthMin)})
+              </span>
+
+              {/* Status indicator - subtle */}
+              {isRunning && (
+                <Badge variant="secondary" className="text-xs">
+                  Läuft
+                </Badge>
+              )}
+              {isPaused && (
+                <Badge variant="secondary" className="text-xs">
+                  Pausiert
+                </Badge>
+              )}
+              {isDone && (
+                <Badge variant="secondary" className="text-xs">
+                  Fertig
+                </Badge>
+              )}
             </div>
 
-            {/* Status Badge */}
-            <div className="mb-2">
-              <Badge variant="outline" className={SLOT_BADGE[slot.status]} data-testid={`badge-status-${slot.status}`}>
-                {SLOT_LABEL[slot.status]}
-              </Badge>
-            </div>
-
-            {/* Order Info */}
-            <CardTitle className="text-base mb-1">
+            {/* Order info */}
+            <CardTitle className="text-base font-medium mb-1">
               {slot.order ? (
-                <>
+                <span>
                   {slot.order.displayOrderNumber && (
-                    <span className="text-primary">{slot.order.displayOrderNumber}</span>
+                    <span className="text-muted-foreground">{slot.order.displayOrderNumber} · </span>
                   )}
-                  {slot.order.displayOrderNumber && ' - '}
                   {slot.order.title}
-                </>
+                </span>
               ) : (
                 <span className="text-muted-foreground italic">Blockiert</span>
               )}
             </CardTitle>
 
             {slot.order && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-                <span>{slot.order.customer}</span>
-                <span>•</span>
-                <Badge variant="outline" className={getWorkflowBadgeColor(slot.order.workflow)}>
-                  {WORKFLOW_LABELS[slot.order.workflow]}
-                </Badge>
+              <div className="text-sm text-muted-foreground">
+                {slot.order.customer}
               </div>
             )}
+
+            {/* Work center - subtle */}
+            <div className="text-xs text-muted-foreground mt-2">
+              {slot.workCenter.name}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Live Timer for RUNNING */}
-            {slot.status === 'RUNNING' && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
-                <Clock className="h-4 w-4 text-green-600 dark:text-green-400 animate-pulse" />
-                <span className="font-mono text-lg font-semibold text-green-700 dark:text-green-300">
+            {/* Live timer for running slots */}
+            {isRunning && (
+              <div className="flex items-center gap-2 px-2 py-1 rounded bg-muted">
+                <Clock className="h-3 w-3" />
+                <span className="font-mono text-sm font-medium">
                   {formatDuration(elapsedMin)}
                 </span>
               </div>
             )}
 
-            {/* Actual Duration for DONE */}
-            {isDone && slot.actualDurationMin !== null && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
-                <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <div className="text-right">
-                  <div className="text-xs text-muted-foreground">Tatsächliche Dauer:</div>
-                  <div className="font-mono text-base font-semibold text-blue-700 dark:text-blue-300">
-                    {formatDuration(slot.actualDurationMin)}
-                  </div>
-                </div>
-              </div>
+            {/* Action menu toggle */}
+            {!isDone && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowActions(!showActions)}
+                data-testid={`button-actions-${slot.id}`}
+              >
+                {showActions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
             )}
 
             {isDone && (
@@ -643,118 +684,119 @@ function TimeSlotCard({
         </div>
       </CardHeader>
 
-      {(!isDone || !isCollapsed) && (
-        <CardContent className="space-y-4">
-          {/* Work Center */}
-          <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium">Bereich:</span>
-            <span>{slot.workCenter.name}</span>
-            <span className="text-muted-foreground">({slot.workCenter.department})</span>
-          </div>
-
-          {/* Notes */}
+      {/* Expanded content */}
+      {((!isDone && showActions) || (isDone && !isCollapsed)) && (
+        <CardContent className="space-y-3 pt-0">
+          {/* Additional info */}
           {slot.note && (
-            <div className="text-sm">
+            <div className="text-sm text-muted-foreground">
               <span className="font-medium">Notiz:</span> {slot.note}
             </div>
           )}
 
-          {/* Missing Parts Note */}
           {slot.missingPartsNote && (
-            <div className="p-3 rounded-md bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
+            <div className="p-2 rounded bg-muted text-sm">
               <div className="flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
-                <div className="text-sm">
-                  <div className="font-medium text-red-700 dark:text-red-300 mb-1">Problem:</div>
-                  <div className="text-red-600 dark:text-red-400">{slot.missingPartsNote}</div>
+                <AlertCircle className="h-4 w-4 mt-0.5 text-destructive" />
+                <div>
+                  <div className="font-medium mb-0.5">Problem:</div>
+                  <div className="text-muted-foreground">{slot.missingPartsNote}</div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-2 flex-wrap">
-            {slot.status === 'PLANNED' && (
-              <Button
-                onClick={() => onStart(slot.id)}
-                variant="default"
-                size="sm"
-                disabled={isStarting}
-                data-testid={`button-start-${slot.id}`}
-              >
-                <Play className="mr-2 h-4 w-4" />
-                {isStarting ? "Wird gestartet..." : "Start"}
-              </Button>
-            )}
+          {isDone && slot.actualDurationMin !== null && (
+            <div className="text-sm text-muted-foreground">
+              <span className="font-medium">Tatsächliche Dauer:</span> {formatDuration(slot.actualDurationMin)}
+            </div>
+          )}
 
-            {slot.status === 'RUNNING' && (
-              <>
-                <Button
-                  onClick={() => onPause(slot.id)}
-                  variant="outline"
-                  size="sm"
-                  disabled={isPausing}
-                  data-testid={`button-pause-${slot.id}`}
-                >
-                  <Pause className="mr-2 h-4 w-4" />
-                  {isPausing ? "Wird pausiert..." : "Pause"}
-                </Button>
-                <Button
-                  onClick={() => onStop(slot.id)}
-                  variant="default"
-                  size="sm"
-                  disabled={isStopping}
-                  data-testid={`button-stop-${slot.id}`}
-                >
-                  <Square className="mr-2 h-4 w-4" />
-                  {isStopping ? "Wird beendet..." : "Beenden"}
-                </Button>
-                <Button
-                  onClick={() => onProblem(slot.id)}
-                  variant="destructive"
-                  size="sm"
-                  data-testid={`button-problem-${slot.id}`}
-                >
-                  <AlertCircle className="mr-2 h-4 w-4" />
-                  Problem melden
-                </Button>
-              </>
-            )}
-
-            {slot.status === 'PAUSED' && (
-              <>
+          {/* Action buttons - only when expanded */}
+          {!isDone && (
+            <div className="flex items-center gap-2 pt-2">
+              {slot.status === 'PLANNED' && (
                 <Button
                   onClick={() => onStart(slot.id)}
                   variant="default"
                   size="sm"
                   disabled={isStarting}
-                  data-testid={`button-resume-${slot.id}`}
+                  data-testid={`button-start-${slot.id}`}
                 >
                   <Play className="mr-2 h-4 w-4" />
-                  {isStarting ? "Wird fortgesetzt..." : "Fortsetzen"}
+                  {isStarting ? "Wird gestartet..." : "Starten"}
                 </Button>
-                <Button
-                  onClick={() => onStop(slot.id)}
-                  variant="outline"
-                  size="sm"
-                  disabled={isStopping}
-                  data-testid={`button-stop-paused-${slot.id}`}
-                >
-                  <Square className="mr-2 h-4 w-4" />
-                  {isStopping ? "Wird beendet..." : "Beenden"}
-                </Button>
-                <Button
-                  onClick={() => onProblem(slot.id)}
-                  variant="destructive"
-                  size="sm"
-                  data-testid={`button-problem-paused-${slot.id}`}
-                >
-                  <AlertCircle className="mr-2 h-4 w-4" />
-                  Problem melden
-                </Button>
-              </>
-            )}
-          </div>
+              )}
+
+              {slot.status === 'RUNNING' && (
+                <>
+                  <Button
+                    onClick={() => onPause(slot.id)}
+                    variant="outline"
+                    size="sm"
+                    disabled={isPausing}
+                    data-testid={`button-pause-${slot.id}`}
+                  >
+                    <Pause className="mr-2 h-4 w-4" />
+                    {isPausing ? "Wird pausiert..." : "Pausieren"}
+                  </Button>
+                  <Button
+                    onClick={() => onStop(slot.id)}
+                    variant="outline"
+                    size="sm"
+                    disabled={isStopping}
+                    data-testid={`button-stop-${slot.id}`}
+                  >
+                    <Square className="mr-2 h-4 w-4" />
+                    {isStopping ? "Wird beendet..." : "Beenden"}
+                  </Button>
+                  <Button
+                    onClick={() => onProblem(slot.id)}
+                    variant="outline"
+                    size="sm"
+                    data-testid={`button-problem-${slot.id}`}
+                  >
+                    <AlertCircle className="mr-2 h-4 w-4" />
+                    Problem
+                  </Button>
+                </>
+              )}
+
+              {slot.status === 'PAUSED' && (
+                <>
+                  <Button
+                    onClick={() => onStart(slot.id)}
+                    variant="default"
+                    size="sm"
+                    disabled={isStarting}
+                    data-testid={`button-resume-${slot.id}`}
+                  >
+                    <Play className="mr-2 h-4 w-4" />
+                    {isStarting ? "Wird fortgesetzt..." : "Fortsetzen"}
+                  </Button>
+                  <Button
+                    onClick={() => onStop(slot.id)}
+                    variant="outline"
+                    size="sm"
+                    disabled={isStopping}
+                    data-testid={`button-stop-paused-${slot.id}`}
+                  >
+                    <Square className="mr-2 h-4 w-4" />
+                    {isStopping ? "Wird beendet..." : "Beenden"}
+                  </Button>
+                  <Button
+                    onClick={() => onProblem(slot.id)}
+                    variant="outline"
+                    size="sm"
+                    data-testid={`button-problem-paused-${slot.id}`}
+                  >
+                    <AlertCircle className="mr-2 h-4 w-4" />
+                    Problem
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
         </CardContent>
       )}
     </Card>
