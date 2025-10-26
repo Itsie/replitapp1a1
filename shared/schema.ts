@@ -13,13 +13,13 @@ export const qcStateSchema = z.enum(["IO", "NIO", "UNGEPRUEFT"]);
 // German workflow labels and colors
 export const WORKFLOW_LABELS: Record<WorkflowState, string> = {
   ENTWURF: "Entwurf",
-  NEU: "Neu",
+  NEU: "Entwurf",
   PRUEFUNG: "Prüfung",
   FUER_PROD: "Für Produktion",
   IN_PROD: "In Produktion",
-  WARTET_FEHLTEILE: "Wartet Fehlteile",
-  FERTIG: "Fertig",
-  ZUR_ABRECHNUNG: "Zur Abrechnung",
+  WARTET_FEHLTEILE: "Wartet auf Fehlteile",
+  FERTIG: "Produktion fertig",
+  ZUR_ABRECHNUNG: "Ausgabe erfolgt",
   ABGERECHNET: "Abgerechnet",
 };
 
@@ -29,17 +29,21 @@ export function getWorkflowBadgeVariant(workflow: WorkflowState): "default" | "s
     case "NEU":
       return "secondary";
     case "PRUEFUNG":
+      return "secondary";
     case "FUER_PROD":
       return "default";
     case "IN_PROD":
+      return "default";
     case "WARTET_FEHLTEILE":
-      return "outline";
+      return "destructive";
     case "FERTIG":
+      return "default";
     case "ZUR_ABRECHNUNG":
+      return "outline";
     case "ABGERECHNET":
       return "outline";
     default:
-      return "outline";
+      return "secondary";
   }
 }
 
@@ -47,23 +51,23 @@ export function getWorkflowBadgeColor(workflow: WorkflowState): string {
   switch (workflow) {
     case "ENTWURF":
     case "NEU":
-      return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
+      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600";
     case "PRUEFUNG":
-      return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200";
+      return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 border-indigo-300 dark:border-indigo-700";
     case "FUER_PROD":
-      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-300 dark:border-blue-700";
     case "IN_PROD":
-      return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200";
+      return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 border-orange-300 dark:border-orange-700";
     case "WARTET_FEHLTEILE":
-      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
+      return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 border-red-300 dark:border-red-700";
     case "FERTIG":
-      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-green-300 dark:border-green-700";
     case "ZUR_ABRECHNUNG":
-      return "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200";
+      return "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300 border-green-400 dark:border-green-600";
     case "ABGERECHNET":
-      return "bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200";
+      return "bg-gray-50 text-gray-700 dark:bg-gray-900 dark:text-gray-300 border-gray-400 dark:border-gray-600";
     default:
-      return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
+      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600";
   }
 }
 
