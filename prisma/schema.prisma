@@ -190,6 +190,7 @@ model TimeSlot {
   status           TimeSlotStatus  @default(PLANNED)
   startedAt        DateTime?
   stoppedAt        DateTime?
+  actualDurationMin Int?
   qc               QCState?
   missingPartsNote String?
 }

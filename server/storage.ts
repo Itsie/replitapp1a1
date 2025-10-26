@@ -1235,13 +1235,31 @@ export class PrismaStorage implements IStorage {
       throw new Error(`TimeSlot kann nur aus Status RUNNING oder PAUSED beendet werden (aktuell: ${slot.status})`);
     }
 
-    return await prisma.timeSlot.update({
+    // Calculate actual duration if startedAt is set
+    let actualDurationMin: number | undefined;
+    const now = new Date();
+    
+    if (slot.startedAt) {
+      const durationMs = now.getTime() - slot.startedAt.getTime();
+      actualDurationMin = Math.round(durationMs / 60000); // Convert ms to minutes
+    }
+
+    const updatedSlot = await prisma.timeSlot.update({
       where: { id },
       data: {
         status: 'DONE',
-        stoppedAt: new Date(),
+        stoppedAt: now,
+        actualDurationMin,
       },
     });
+
+    // Check if all timeslots for this order are DONE
+    // If yes, set order workflow to FERTIG
+    if (slot.orderId) {
+      await this.checkAndCompleteOrder(slot.orderId);
+    }
+
+    return updatedSlot;
   }
 
   async setTimeSlotQC(id: string, qc: 'IO' | 'NIO', note?: string | null): Promise<TimeSlot> {
@@ -1265,6 +1283,39 @@ export class PrismaStorage implements IStorage {
         missingPartsNote: note || slot.missingPartsNote, // Preserve existing note if none provided
       },
     });
+  }
+
+  /**
+   * Check if all timeslots for an order are DONE and no BLOCKED/WARTET_FEHLTEILE
+   * If yes, automatically set order workflow to FERTIG
+   */
+  private async checkAndCompleteOrder(orderId: string): Promise<void> {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        timeSlots: true,
+      },
+    });
+
+    if (!order || !order.timeSlots || order.timeSlots.length === 0) {
+      return;
+    }
+
+    // Check if all timeslots are DONE
+    const allDone = order.timeSlots.every(slot => slot.status === 'DONE');
+    
+    // Check if any timeslot is BLOCKED (missing parts)
+    const hasBlocked = order.timeSlots.some(slot => slot.status === 'BLOCKED');
+
+    // Auto-complete order if all slots DONE and no blocked slots
+    if (allDone && !hasBlocked && order.workflow !== 'FERTIG') {
+      await prisma.order.update({
+        where: { id: orderId },
+        data: {
+          workflow: 'FERTIG',
+        },
+      });
+    }
   }
 
   async setTimeSlotMissingParts(id: string, note: string, updateOrderWorkflow: boolean): Promise<TimeSlot> {
