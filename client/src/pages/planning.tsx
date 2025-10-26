@@ -236,11 +236,16 @@ const DroppableCell = memo(({ day, rowIndex, startMin, minutesPerRow }: Droppabl
     data: { type: "cell", day, startMin, minutesPerRow },
   });
 
+  const topPx = rowIndex * ROW_HEIGHT;
+
   return (
     <div
       ref={setNodeRef}
-      className={`border-b ${isOver ? "bg-primary/10" : ""}`}
-      style={{ height: `${ROW_HEIGHT}px` }}
+      className={`absolute left-0 right-0 border-b ${isOver ? "bg-primary/10" : ""}`}
+      style={{ 
+        top: `${topPx}px`,
+        height: `${ROW_HEIGHT}px`,
+      }}
       data-testid={`cell-${day}-${rowIndex}`}
     />
   );

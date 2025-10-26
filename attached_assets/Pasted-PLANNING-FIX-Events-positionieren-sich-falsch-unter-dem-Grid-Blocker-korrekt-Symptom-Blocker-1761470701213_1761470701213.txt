@@ -1,0 +1,76 @@
+PLANNING FIX – Events positionieren sich falsch (unter dem Grid), Blocker korrekt
+
+Symptom
+- Blocker erscheinen exakt in der Grid-Zeile (z. B. 07:00–08:00).
+- Geplante Aufträge/Events für (z. B.) 09:00–10:00 landen sichtbar unterhalb des Grid-Containers.
+- Drag/Resize wirkt ebenfalls „versetzt“.
+
+Ziel
+- Events und Blocker verwenden dieselbe Geometrie-Berechnung und denselben Bezugspunkt.
+- Top/Height der Event-Elemente sind identisch berechnet wie bei Blockern.
+- Keine usage von transform für Y-Positionierung (nur top/height).
+- Ein einziger „origin“: Beginn Arbeitszeit (07:00) = 0 px.
+- Pixelgenaues Alignment in allen Zoom-Stufen (15/30/60 min).
+
+Schritte (bitte exakt so):
+
+1) Vergleichs-Logs einbauen (konsole sichtbar lassen)
+   - Beim Rendern eines Blockers und eines Events mit bekannten Werten (Beispiel: Blocker 07:00–08:00, Event 09:00–10:00) die Rohdaten loggen:
+     - startMin, lengthMin
+     - computed topPx, heightPx
+     - minutesPerRow, rowHeightPx, workingHoursStart
+     - boundingClientRect von Day-Content-Container (name & selector loggen)
+   - Erwartung: Beide Pfade müssen dieselben Konstanten und denselben Container verwenden.
+
+2) Eine Geometrie-Funktion für beide
+   - Extrahiere eine einzige Funktion `getSlotGeometry(startMin, lengthMin)`:
+     ```ts
+     const ROW_HEIGHT_PX = /* aktuelle Konstante, z. B. 28 */;
+     const WORKING_HOURS_START = 420; // 07:00 in Minuten
+     const MINUTES_PER_ROW = /* von Zoom abhängig: 15, 30, 60 */;
+     function getSlotGeometry(startMin: number, lengthMin: number) {
+       const rowsFromStart = (startMin - WORKING_HOURS_START) / MINUTES_PER_ROW;
+       const topPx = rowsFromStart * ROW_HEIGHT_PX;
+       const heightPx = (lengthMin / MINUTES_PER_ROW) * ROW_HEIGHT_PX;
+       return { topPx, heightPx };
+     }
+     ```
+   - Blocker UND Events müssen exakt diese Funktion verwenden.
+
+3) Einheitlicher Container & CSS
+   - Stelle sicher, dass beide Komponenten im selben Scroll-/Layout-Container liegen:
+     - Überprüfe CSS-Selektor (z. B. `.day-content`) hat `position: relative;`
+     - Event und Blocker haben `position: absolute; top: <topPx>px; height: <heightPx>px;`
+     - Entferne jegliches `transform: translateY(...)` bei Events.
+   - Vermeide zusätzliche Margins/Paddings, die nur bei Events greifen.
+
+4) Zoom-Konsistenz
+   - Mappe Zoom-Auswahl → `MINUTES_PER_ROW` (15/30/60).
+   - Prüfe, dass die linke Zeitachse, die Grid-Zeilen und die Container-Höhe alle aus denselben Konstanten abgeleitet sind:
+     - Day-Container-Höhe = `((WORKING_HOURS_END - WORKING_HOURS_START) / MINUTES_PER_ROW) * ROW_HEIGHT_PX`
+     - Wenn WORKING_HOURS_END = 1080 (18:00), muss die letzte Zeile exakt schließen.
+
+5) Off-by-one/Alignment-Fallen
+   - Runden: benutze `Math.round` nur bei Pixelwerten, NIE bei Minuten. Minuten integer halten.
+   - 15er Raster erzwingen: beim Drag/Resize `startMin` und `lengthMin` auf 15-Minuten snap (Math.round(x/15)*15).
+
+6) Drag/Resize Pfad
+   - Während Drag: Vorschau mit derselben `getSlotGeometry`.
+   - Nach Drop: PATCH `timeslots/:id` und UI sofort mit identischen Werten updaten (optimistic).
+   - Keine Zwischenberechnungen mit CSS-Scale/Zoom.
+
+7) Tests (sichtbar in UI)
+   - Blocker 07:00–08:00: oberer Rand exakt auf 07:00-Zeile, unterer auf 08:00.
+   - Event 09:00–10:00: oberer Rand exakt 09:00, unterer 10:00.
+   - Zoom 15/30/60 min: Positionen bleiben genau.
+   - Scrollen/Viewport egal: Position bleibt korrekt.
+   - Kein Element hängt mehr unterhalb des Grids.
+
+Akzeptanzkriterien
+- Events und Blocker teilen sich dieselbe Geometrie und liegen im selben Container. 
+- `top`/`height` stimmen visuell exakt mit der Zeitachse überein.
+- Kein transform Y mehr bei Events.
+- Logs zeigen identische Konstanten bei Blocker und Event.
+
+Strikt in Scope
+- Keine neuen Features oder Models. Nur Fix der Event-Positionierung. Keine UI-Neuerfindung.
