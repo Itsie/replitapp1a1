@@ -43,6 +43,7 @@ The production execution view uses a vertical timeline layout optimized for clar
 - **Compact Mode**: Slots shorter than 30 minutes (~40px) display in compact format; click entire slot to toggle action controls
 - **Action Controls**: Collapsed by default to reduce visual clutter; expand on click to access start/pause/stop operations
 - **Live Tracking**: Running slots show elapsed time with real-time counter
+- **Date Navigation**: Quick navigation buttons (Gestern/Heute/Morgen) and calendar picker for arbitrary date selection; allows viewing past or future production days
 - This design prioritizes clean visual structure, making gaps in schedule immediately obvious and duration accurately represented
 
 ### Backend Architecture
