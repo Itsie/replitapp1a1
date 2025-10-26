@@ -80,6 +80,11 @@ export default function Billing() {
 
   const settleMutation = useMutation({
     mutationFn: async (orderId: string) => {
+      // Handle demo orders differently
+      if (orderId.startsWith('demo-')) {
+        throw new Error("Demo-Auftrag kann nicht abgerechnet werden");
+      }
+      
       const res = await apiRequest("POST", `/api/accounting/orders/${orderId}/settle`);
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -107,6 +112,9 @@ export default function Billing() {
       });
     },
   });
+
+  // Helper to check if order is a demo order
+  const isDemoOrder = (orderId: string) => orderId.startsWith('demo-');
 
   const formatDate = (date: string | Date | null) => {
     if (!date) return "—";
@@ -241,8 +249,13 @@ export default function Billing() {
                             <Button
                               size="sm"
                               onClick={() => settleMutation.mutate(order.id)}
-                              disabled={settleMutation.isPending}
-                              aria-label={`Auftrag ${order.displayOrderNumber || order.id} als abgerechnet markieren`}
+                              disabled={settleMutation.isPending || isDemoOrder(order.id)}
+                              aria-label={
+                                isDemoOrder(order.id)
+                                  ? "Demo-Auftrag kann nicht abgerechnet werden"
+                                  : `Auftrag ${order.displayOrderNumber || order.id} als abgerechnet markieren`
+                              }
+                              title={isDemoOrder(order.id) ? "Demo-Auftrag kann nicht abgerechnet werden" : ""}
                               data-testid={`button-settle-${order.id}`}
                             >
                               <Check className="h-4 w-4 mr-2" />
