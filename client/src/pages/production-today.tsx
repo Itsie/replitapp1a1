@@ -22,11 +22,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Play, Pause, Square, AlertCircle, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { Play, Pause, Square, AlertCircle, Clock, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { WorkCenter, Department, WorkflowState } from "@prisma/client";
 import { WORKFLOW_LABELS } from "@shared/schema";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { format, addDays, subDays, startOfDay, isSameDay } from "date-fns";
+import { de } from "date-fns/locale";
 
 interface TimeSlotWithOrder {
   id: string;
@@ -91,6 +95,7 @@ export default function ProductionToday() {
   const [selectedDepartment, setSelectedDepartment] = useState<Department | "all">("all");
   const [hideCompleted, setHideCompleted] = useState(true);
   const [collapsedSlots, setCollapsedSlots] = useState<Set<string>>(new Set());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => startOfDay(new Date()));
   
   const previousStatusesRef = useRef<Map<string, string>>(new Map());
   
@@ -109,11 +114,8 @@ export default function ProductionToday() {
     }
   }, [hideCompleted]);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
   const { data: response, isLoading } = useQuery<{ slots: TimeSlotWithOrder[] }>({
-    queryKey: ['/api/timeslots', { date: today.toISOString() }],
+    queryKey: ['/api/timeslots', { date: selectedDate.toISOString() }],
   });
 
   const slots = response?.slots ?? [];
@@ -305,13 +307,66 @@ export default function ProductionToday() {
     );
   }
 
+  const today = startOfDay(new Date());
+  const isToday = isSameDay(selectedDate, today);
+
   return (
     <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Produktion heute</h1>
+        <h1 className="text-3xl font-bold mb-2">Produktion</h1>
         <p className="text-muted-foreground">
-          {today.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          {selectedDate.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
+      </div>
+
+      {/* Date Navigation */}
+      <div className="flex items-center gap-2 mb-6">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setSelectedDate(subDays(selectedDate, 1))}
+          data-testid="button-previous-day"
+        >
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          Gestern
+        </Button>
+        
+        <Button
+          variant={isToday ? "default" : "outline"}
+          size="sm"
+          onClick={() => setSelectedDate(today)}
+          data-testid="button-today"
+        >
+          Heute
+        </Button>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+          data-testid="button-next-day"
+        >
+          Morgen
+          <ChevronRight className="h-4 w-4 ml-1" />
+        </Button>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" data-testid="button-calendar-picker">
+              <Calendar className="h-4 w-4 mr-2" />
+              Datum wählen
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <CalendarComponent
+              mode="single"
+              selected={selectedDate}
+              onSelect={(date) => date && setSelectedDate(startOfDay(date))}
+              locale={de}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="flex items-center gap-4 mb-6">
@@ -346,7 +401,7 @@ export default function ProductionToday() {
       {filteredSlots.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            Keine zugeordneten Arbeitsschritte für heute.
+            Keine zugeordneten Arbeitsschritte {isToday ? 'für heute' : 'für diesen Tag'}.
           </CardContent>
         </Card>
       ) : (
