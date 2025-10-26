@@ -22,10 +22,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Play, Pause, Square, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import { Play, Pause, Square, AlertCircle, Clock, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { WorkCenter, Department } from "@prisma/client";
+import { WORKFLOW_LABELS, getWorkflowBadgeColor } from "@shared/schema";
+import type { WorkCenter, Department, WorkflowState } from "@prisma/client";
 
 interface TimeSlotWithOrder {
   id: string;
@@ -47,7 +48,7 @@ interface TimeSlotWithOrder {
     title: string;
     customer: string;
     department: Department;
-    workflow: string;
+    workflow: WorkflowState;
     dueDate: Date | null;
   } | null;
   workCenter: {
@@ -61,6 +62,8 @@ interface TimeSlotWithOrder {
 interface WorkCenterWithSlotCount extends WorkCenter {
   slotsTodayCount: number;
 }
+
+type ProblemReason = "MATERIAL" | "MACHINE" | "OTHER";
 
 function formatTime(minutes: number): string {
   const hours = Math.floor(minutes / 60);
@@ -102,17 +105,22 @@ function getStatusLabel(status: string) {
   }
 }
 
+function getProblemReasonLabel(reason: ProblemReason): string {
+  switch (reason) {
+    case "MATERIAL": return "Fehlteil";
+    case "MACHINE": return "Maschine defekt";
+    case "OTHER": return "Sonstiges";
+  }
+}
+
 export default function ProductionToday() {
   const { toast } = useToast();
   const [selectedDepartment, setSelectedDepartment] = useState<Department | "ALL">("ALL");
   const [selectedWorkCenter, setSelectedWorkCenter] = useState<string>("ALL");
-  const [qcDialogOpen, setQcDialogOpen] = useState(false);
-  const [qcSlotId, setQcSlotId] = useState<string | null>(null);
-  const [qcValue, setQcValue] = useState<"IO" | "NIO">("IO");
-  const [qcNote, setQcNote] = useState("");
-  const [missingPartsDialogOpen, setMissingPartsDialogOpen] = useState(false);
-  const [missingPartsSlotId, setMissingPartsSlotId] = useState<string | null>(null);
-  const [missingPartsNote, setMissingPartsNote] = useState("");
+  const [problemDialogOpen, setProblemDialogOpen] = useState(false);
+  const [problemSlotId, setProblemSlotId] = useState<string | null>(null);
+  const [problemReason, setProblemReason] = useState<ProblemReason>("MATERIAL");
+  const [problemNote, setProblemNote] = useState("");
   const [updateOrderWorkflow, setUpdateOrderWorkflow] = useState(false);
 
   // Get today's date in YYYY-MM-DD format
@@ -149,8 +157,16 @@ export default function ProductionToday() {
       }
       return await res.json();
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      // Update order workflow to IN_PROD
+      if (data.orderId) {
+        await apiRequest("PATCH", `/api/orders/${data.orderId}`, { workflow: "IN_PROD" });
+      }
       await queryClient.refetchQueries({ queryKey: [`/api/calendar?startDate=${today}&endDate=${today}`] });
+      await queryClient.refetchQueries({ predicate: (query) => {
+        const key = query.queryKey[0];
+        return typeof key === 'string' && key.startsWith('/api/orders');
+      }});
       toast({ title: "TimeSlot gestartet" });
     },
     onError: (error: any) => {
@@ -193,8 +209,16 @@ export default function ProductionToday() {
       }
       return await res.json();
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      // Update order workflow to FERTIG
+      if (data.orderId) {
+        await apiRequest("PATCH", `/api/orders/${data.orderId}`, { workflow: "FERTIG" });
+      }
       await queryClient.refetchQueries({ queryKey: [`/api/calendar?startDate=${today}&endDate=${today}`] });
+      await queryClient.refetchQueries({ predicate: (query) => {
+        const key = query.queryKey[0];
+        return typeof key === 'string' && key.startsWith('/api/orders');
+      }});
       toast({ title: "TimeSlot beendet" });
     },
     onError: (error: any) => {
@@ -206,51 +230,60 @@ export default function ProductionToday() {
     },
   });
 
-  const qcMutation = useMutation({
-    mutationFn: async ({ id, qc, note }: { id: string; qc: "IO" | "NIO"; note?: string }) => {
-      const res = await apiRequest("POST", `/api/timeslots/${id}/qc`, { qc, note });
+  const problemMutation = useMutation({
+    mutationFn: async ({ id, reason, note, updateOrderWorkflow }: { id: string; reason: ProblemReason; note: string; updateOrderWorkflow: boolean }) => {
+      const res = await apiRequest("POST", `/api/timeslots/${id}/missing-parts`, { 
+        note: `[${getProblemReasonLabel(reason)}] ${note}`, 
+        updateOrderWorkflow 
+      });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to set QC");
+        throw new Error(errorData.error || "Failed to report problem");
       }
       return await res.json();
     },
     onSuccess: async () => {
       await queryClient.refetchQueries({ queryKey: [`/api/calendar?startDate=${today}&endDate=${today}`] });
-      toast({ title: "QC gesetzt" });
-      setQcDialogOpen(false);
-      setQcSlotId(null);
-      setQcNote("");
+      await queryClient.refetchQueries({ predicate: (query) => {
+        const key = query.queryKey[0];
+        return typeof key === 'string' && key.startsWith('/api/orders');
+      }});
+      toast({ title: "Problem gemeldet" });
+      setProblemDialogOpen(false);
+      setProblemSlotId(null);
+      setProblemNote("");
+      setProblemReason("MATERIAL");
+      setUpdateOrderWorkflow(false);
     },
     onError: (error: any) => {
       toast({ 
-        title: "Fehler beim Setzen der QC", 
+        title: "Fehler beim Melden des Problems", 
         description: error.message || "Unbekannter Fehler",
         variant: "destructive" 
       });
     },
   });
 
-  const missingPartsMutation = useMutation({
-    mutationFn: async ({ id, note, updateOrderWorkflow }: { id: string; note: string; updateOrderWorkflow: boolean }) => {
-      const res = await apiRequest("POST", `/api/timeslots/${id}/missing-parts`, { note, updateOrderWorkflow });
+  const handOverMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const res = await apiRequest("PATCH", `/api/orders/${orderId}`, { workflow: "ZUR_ABRECHNUNG" });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to report missing parts");
+        throw new Error(errorData.error || "Failed to hand over");
       }
       return await res.json();
     },
     onSuccess: async () => {
       await queryClient.refetchQueries({ queryKey: [`/api/calendar?startDate=${today}&endDate=${today}`] });
-      toast({ title: "Fehlteile gemeldet" });
-      setMissingPartsDialogOpen(false);
-      setMissingPartsSlotId(null);
-      setMissingPartsNote("");
-      setUpdateOrderWorkflow(false);
+      await queryClient.refetchQueries({ predicate: (query) => {
+        const key = query.queryKey[0];
+        return typeof key === 'string' && key.startsWith('/api/orders');
+      }});
+      toast({ title: "An Kunden ausgegeben" });
     },
     onError: (error: any) => {
       toast({ 
-        title: "Fehler beim Melden der Fehlteile", 
+        title: "Fehler bei der Ausgabe", 
         description: error.message || "Unbekannter Fehler",
         variant: "destructive" 
       });
@@ -269,30 +302,24 @@ export default function ProductionToday() {
     stopMutation.mutate(id);
   };
 
-  const handleOpenQC = (id: string) => {
-    setQcSlotId(id);
-    setQcDialogOpen(true);
+  const handleOpenProblem = (id: string) => {
+    setProblemSlotId(id);
+    setProblemDialogOpen(true);
   };
 
-  const handleSubmitQC = () => {
-    if (qcSlotId) {
-      qcMutation.mutate({ id: qcSlotId, qc: qcValue, note: qcNote || undefined });
-    }
-  };
-
-  const handleOpenMissingParts = (id: string) => {
-    setMissingPartsSlotId(id);
-    setMissingPartsDialogOpen(true);
-  };
-
-  const handleSubmitMissingParts = () => {
-    if (missingPartsSlotId && missingPartsNote.trim()) {
-      missingPartsMutation.mutate({ 
-        id: missingPartsSlotId, 
-        note: missingPartsNote, 
+  const handleSubmitProblem = () => {
+    if (problemSlotId && problemNote.trim()) {
+      problemMutation.mutate({ 
+        id: problemSlotId, 
+        reason: problemReason,
+        note: problemNote, 
         updateOrderWorkflow 
       });
     }
+  };
+
+  const handleHandOver = (orderId: string) => {
+    handOverMutation.mutate(orderId);
   };
 
   return (
@@ -384,6 +411,11 @@ export default function ProductionToday() {
                         <Badge className={`${getStatusColor(slot.status)} text-white`} data-testid={`badge-status-${slot.id}`}>
                           {getStatusLabel(slot.status)}
                         </Badge>
+                        {slot.order && (
+                          <Badge variant="outline" className={getWorkflowBadgeColor(slot.order.workflow)}>
+                            {WORKFLOW_LABELS[slot.order.workflow]}
+                          </Badge>
+                        )}
                         <span className="text-sm font-medium" data-testid={`text-time-${slot.id}`}>
                           {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
                         </span>
@@ -426,17 +458,10 @@ export default function ProductionToday() {
                         <LiveTimer startTime={new Date(slot.startedAt)} slotId={slot.id} />
                       )}
 
-                      {/* QC Badge */}
-                      {slot.qc && (
-                        <Badge variant={slot.qc === 'IO' ? 'default' : 'destructive'} className="text-xs">
-                          QC: {slot.qc}
-                        </Badge>
-                      )}
-
                       {/* Missing Parts Note */}
                       {slot.missingPartsNote && (
                         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-2">
-                          <p className="text-xs font-medium">Fehlteile:</p>
+                          <p className="text-xs font-medium">Problem:</p>
                           <p className="text-xs text-muted-foreground">{slot.missingPartsNote}</p>
                         </div>
                       )}
@@ -473,7 +498,7 @@ export default function ProductionToday() {
                               data-testid={`button-stop-${slot.id}`}
                             >
                               <Square className="w-4 h-4 mr-1" />
-                              Stop
+                              Beenden
                             </Button>
                           </>
                         )}
@@ -494,20 +519,19 @@ export default function ProductionToday() {
                               data-testid={`button-stop-${slot.id}`}
                             >
                               <Square className="w-4 h-4 mr-1" />
-                              Stop
+                              Beenden
                             </Button>
                           </>
                         )}
 
-                        {slot.status === 'DONE' && !slot.qc && (
+                        {slot.status === 'DONE' && slot.order.workflow === 'FERTIG' && (
                           <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => handleOpenQC(slot.id)}
-                            data-testid={`button-qc-${slot.id}`}
+                            size="sm"
+                            onClick={() => handleHandOver(slot.order!.id)}
+                            data-testid={`button-handover-${slot.id}`}
                           >
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            QC
+                            <Package className="w-4 h-4 mr-1" />
+                            An Kunden ausgegeben
                           </Button>
                         )}
 
@@ -515,11 +539,11 @@ export default function ProductionToday() {
                           <Button 
                             size="sm" 
                             variant="destructive"
-                            onClick={() => handleOpenMissingParts(slot.id)}
-                            data-testid={`button-missing-parts-${slot.id}`}
+                            onClick={() => handleOpenProblem(slot.id)}
+                            data-testid={`button-problem-${slot.id}`}
                           >
                             <AlertCircle className="w-4 h-4 mr-1" />
-                            Fehlteile
+                            Problem melden
                           </Button>
                         )}
                       </div>
@@ -532,81 +556,48 @@ export default function ProductionToday() {
         </div>
       )}
 
-      {/* QC Dialog */}
-      <Dialog open={qcDialogOpen} onOpenChange={setQcDialogOpen}>
-        <DialogContent data-testid="dialog-qc">
+      {/* Problem Dialog */}
+      <Dialog open={problemDialogOpen} onOpenChange={setProblemDialogOpen}>
+        <DialogContent data-testid="dialog-problem">
           <DialogHeader>
-            <DialogTitle>Qualitätskontrolle</DialogTitle>
+            <DialogTitle>Problem melden</DialogTitle>
             <DialogDescription>
-              Setzen Sie das QC-Ergebnis für diesen TimeSlot.
+              Melden Sie ein Problem für diesen TimeSlot.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
               <Label className="text-xs font-medium uppercase text-muted-foreground mb-3 block">
-                QC Ergebnis
+                Grund
               </Label>
-              <RadioGroup value={qcValue} onValueChange={(value) => setQcValue(value as "IO" | "NIO")}>
+              <RadioGroup value={problemReason} onValueChange={(value) => setProblemReason(value as ProblemReason)}>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="IO" id="qc-io" data-testid="radio-qc-io" />
-                  <Label htmlFor="qc-io" className="cursor-pointer">IO (In Ordnung)</Label>
+                  <RadioGroupItem value="MATERIAL" id="reason-material" data-testid="radio-reason-material" />
+                  <Label htmlFor="reason-material" className="cursor-pointer">Fehlteil</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="NIO" id="qc-nio" data-testid="radio-qc-nio" />
-                  <Label htmlFor="qc-nio" className="cursor-pointer">NIO (Nicht in Ordnung)</Label>
+                  <RadioGroupItem value="MACHINE" id="reason-machine" data-testid="radio-reason-machine" />
+                  <Label htmlFor="reason-machine" className="cursor-pointer">Maschine defekt</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="OTHER" id="reason-other" data-testid="radio-reason-other" />
+                  <Label htmlFor="reason-other" className="cursor-pointer">Sonstiges</Label>
                 </div>
               </RadioGroup>
             </div>
 
             <div>
-              <Label htmlFor="qc-note" className="text-xs font-medium uppercase text-muted-foreground mb-2 block">
-                Notiz (optional)
+              <Label htmlFor="problem-note" className="text-xs font-medium uppercase text-muted-foreground mb-2 block">
+                Kommentar *
               </Label>
               <Textarea
-                id="qc-note"
-                value={qcNote}
-                onChange={(e) => setQcNote(e.target.value)}
-                placeholder="Zusätzliche Informationen..."
-                rows={3}
-                data-testid="textarea-qc-note"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setQcDialogOpen(false)} data-testid="button-qc-cancel">
-              Abbrechen
-            </Button>
-            <Button onClick={handleSubmitQC} data-testid="button-qc-submit">
-              QC setzen
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Missing Parts Dialog */}
-      <Dialog open={missingPartsDialogOpen} onOpenChange={setMissingPartsDialogOpen}>
-        <DialogContent data-testid="dialog-missing-parts">
-          <DialogHeader>
-            <DialogTitle>Fehlteile melden</DialogTitle>
-            <DialogDescription>
-              Melden Sie fehlende Teile für diesen TimeSlot.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="missing-parts-note" className="text-xs font-medium uppercase text-muted-foreground mb-2 block">
-                Hinweis *
-              </Label>
-              <Textarea
-                id="missing-parts-note"
-                value={missingPartsNote}
-                onChange={(e) => setMissingPartsNote(e.target.value)}
-                placeholder="Beschreiben Sie die fehlenden Teile..."
+                id="problem-note"
+                value={problemNote}
+                onChange={(e) => setProblemNote(e.target.value)}
+                placeholder="Beschreiben Sie das Problem..."
                 rows={4}
-                data-testid="textarea-missing-parts-note"
+                data-testid="textarea-problem-note"
               />
             </div>
 
@@ -627,18 +618,19 @@ export default function ProductionToday() {
             <Button 
               variant="outline" 
               onClick={() => {
-                setMissingPartsDialogOpen(false);
-                setMissingPartsNote("");
+                setProblemDialogOpen(false);
+                setProblemNote("");
+                setProblemReason("MATERIAL");
                 setUpdateOrderWorkflow(false);
               }}
-              data-testid="button-missing-parts-cancel"
+              data-testid="button-problem-cancel"
             >
               Abbrechen
             </Button>
             <Button 
-              onClick={handleSubmitMissingParts}
-              disabled={!missingPartsNote.trim()}
-              data-testid="button-missing-parts-submit"
+              onClick={handleSubmitProblem}
+              disabled={!problemNote.trim()}
+              data-testid="button-problem-submit"
             >
               Melden
             </Button>

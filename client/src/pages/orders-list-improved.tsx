@@ -59,6 +59,7 @@ import {
   VisibilityState,
 } from "@tanstack/react-table";
 import type { OrderWithRelations, OrderSource, WorkflowState } from "@shared/schema";
+import { WORKFLOW_LABELS, getWorkflowBadgeColor } from "@shared/schema";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/hooks/use-toast";
 
@@ -204,21 +205,6 @@ export default function OrdersList() {
   
   const getSourceBadgeVariant = (source: OrderSource) => {
     return source === "JTL" ? "default" : "secondary";
-  };
-  
-  const getWorkflowBadgeVariant = (workflow: WorkflowState) => {
-    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-      ENTWURF: "outline",
-      NEU: "default",
-      PRUEFUNG: "secondary",
-      FUER_PROD: "default",
-      IN_PROD: "default",
-      WARTET_FEHLTEILE: "destructive",
-      FERTIG: "secondary",
-      ZUR_ABRECHNUNG: "outline",
-      ABGERECHNET: "outline",
-    };
-    return variants[workflow] || "outline";
   };
   
   const toggleQuickFilter = (filter: QuickFilter) => {
@@ -382,8 +368,8 @@ export default function OrdersList() {
       header: () => <div className="px-3 py-2 w-44">Status</div>,
       cell: ({ row }) => (
         <div className={`${cellBase} w-44`}>
-          <Badge variant={getWorkflowBadgeVariant(row.original.workflow)}>
-            {row.original.workflow}
+          <Badge variant="outline" className={getWorkflowBadgeColor(row.original.workflow)}>
+            {WORKFLOW_LABELS[row.original.workflow]}
           </Badge>
         </div>
       ),
@@ -981,8 +967,8 @@ export default function OrdersList() {
                         <Badge variant={getSourceBadgeVariant(order.source)}>
                           {order.source === "INTERNAL" ? "Intern" : order.source}
                         </Badge>
-                        <Badge variant={getWorkflowBadgeVariant(order.workflow)}>
-                          {order.workflow}
+                        <Badge variant="outline" className={getWorkflowBadgeColor(order.workflow)}>
+                          {WORKFLOW_LABELS[order.workflow]}
                         </Badge>
                       </div>
                       

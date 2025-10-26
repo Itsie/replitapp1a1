@@ -1,0 +1,80 @@
+TASK: Finalize “Produktion heute” without breaking other features.
+
+STRICT SCOPE
+- Touch only:
+  - app/(production)/production-today/page.tsx (or the file that exports ProductionToday)
+  - shared UI badge/label map for order workflows (if existent)
+  - orders table cell that renders the workflow badge (read-only change: mapping + label)
+- Do NOT change Planning or Orders CRUD beyond workflow PATCH calls.
+
+REQUIREMENTS
+
+1) Remove QC feature:
+   - Delete QC dialog and actions from ProductionToday.
+   - Replace with a single “Problem melden” flow.
+
+2) Actions per TimeSlot (if slot.order is present):
+   - Start → call POST /api/timeslots/:id/start
+     - On success: PATCH /api/orders/:orderId { workflow: "IN_PROD" }
+     - Show live timer (see #3)
+   - Pause → POST /api/timeslots/:id/pause
+     - Timer pauses visually
+   - Beenden → POST /api/timeslots/:id/stop
+     - On success: PATCH /api/orders/:orderId { workflow: "FERTIG" }
+     - Timer stops, card shows “Fertig”
+   - Problem melden → Dialog (see #4)
+   - An Kunden ausgegeben → Button only visible if slot.status === DONE
+     - PATCH /api/orders/:orderId { workflow: "ZUR_ABRECHNUNG" }
+
+3) Timer (robust, no flicker)
+   - Show a running timer if slot.status === "RUNNING" and slot.startedAt != null.
+   - Keep existing LiveTimer but ensure it:
+     - Uses startedAt from backend.
+     - If slot.status === "PAUSED", don’t tick, show accumulated duration from backend if provided; else compute from startedAt to last stopped/paused time if given.
+     - After stop, freeze and show final duration.
+   - Do NOT introduce client-only persistence. Use server values.
+
+4) Problem melden (replaces QC):
+   - Button label: “Problem melden”
+   - Dialog fields:
+     - RadioGroup “Grund”: MATERIAL (Fehlteil), MACHINE (Maschine defekt), OTHER (Sonstiges)
+     - Textarea “Kommentar” (required)
+     - Checkbox “Auftragsstatus auf ‘Wartet Fehlteile’ setzen”
+   - On submit:
+     - POST /api/timeslots/:id/missing-parts  with { reason, note, updateOrderWorkflow }
+     - If updateOrderWorkflow = true: PATCH /api/orders/:orderId { workflow: "WARTET_FEHLTEILE" }
+   - After success: toast + refetch calendar query + close dialog
+
+5) Order workflow badges (German labels; read-only UI change)
+   - Map workflows to DE labels and consistent colors:
+     ENTWURF → “Entwurf” (gray)
+     NEU → “Neu” (gray)
+     PRUEFUNG → “Prüfung” (indigo)
+     FUER_PROD → “Für Produktion” (blue)
+     IN_PROD → “In Produktion” (orange)
+     WARTET_FEHLTEILE → “Wartet Fehlteile” (yellow)
+     FERTIG → “Fertig” (green)
+     ZUR_ABRECHNUNG → “Zur Abrechnung” (violet)
+     ABGERECHNET → “Abgerechnet” (slate)
+   - Use same mapping in:
+     a) ProductionToday cards (small badge next to time)
+     b) Orders table list workflow column (no logic change, only label/color)
+
+6) Do NOT break:
+   - Existing Planning drag&drop.
+   - Size table, Assets, Positions.
+   - Orders create/update validations.
+
+7) UX micro:
+   - Disable Start when status is RUNNING.
+   - Disable Pause when not RUNNING.
+   - Show “An Kunden ausgegeben” only when slot.status === “DONE”.
+   - All mutations → refetch calendar query + (for workflow changes) refetch orders list.
+
+ACCEPTANCE TESTS
+- Start a slot: badge shows “In Produktion”, timer runs, orders list shows “In Produktion”.
+- Pause a running slot: timer stops ticking; Start enabled again; workflow remains “In Produktion”.
+- Problem melden (Grund MATERIAL + Checkbox aktiv): slot shows note, order moves to “Wartet Fehlteile”.
+- Stop on a running slot: status “Fertig”, timer frozen, order shows “Fertig”.
+- “An Kunden ausgegeben”: order shows “Zur Abrechnung”.
+- Orders overview shows German labels consistently, no layout break.

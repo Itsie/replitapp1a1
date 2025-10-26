@@ -10,6 +10,63 @@ export const departmentSchema = z.enum(["TEAMSPORT", "TEXTILVEREDELUNG", "STICKE
 export const workflowStateSchema = z.enum(["ENTWURF", "NEU", "PRUEFUNG", "FUER_PROD", "IN_PROD", "WARTET_FEHLTEILE", "FERTIG", "ZUR_ABRECHNUNG", "ABGERECHNET"]);
 export const qcStateSchema = z.enum(["IO", "NIO", "UNGEPRUEFT"]);
 
+// German workflow labels and colors
+export const WORKFLOW_LABELS: Record<WorkflowState, string> = {
+  ENTWURF: "Entwurf",
+  NEU: "Neu",
+  PRUEFUNG: "Prüfung",
+  FUER_PROD: "Für Produktion",
+  IN_PROD: "In Produktion",
+  WARTET_FEHLTEILE: "Wartet Fehlteile",
+  FERTIG: "Fertig",
+  ZUR_ABRECHNUNG: "Zur Abrechnung",
+  ABGERECHNET: "Abgerechnet",
+};
+
+export function getWorkflowBadgeVariant(workflow: WorkflowState): "default" | "secondary" | "destructive" | "outline" {
+  switch (workflow) {
+    case "ENTWURF":
+    case "NEU":
+      return "secondary";
+    case "PRUEFUNG":
+    case "FUER_PROD":
+      return "default";
+    case "IN_PROD":
+    case "WARTET_FEHLTEILE":
+      return "outline";
+    case "FERTIG":
+    case "ZUR_ABRECHNUNG":
+    case "ABGERECHNET":
+      return "outline";
+    default:
+      return "outline";
+  }
+}
+
+export function getWorkflowBadgeColor(workflow: WorkflowState): string {
+  switch (workflow) {
+    case "ENTWURF":
+    case "NEU":
+      return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
+    case "PRUEFUNG":
+      return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200";
+    case "FUER_PROD":
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+    case "IN_PROD":
+      return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200";
+    case "WARTET_FEHLTEILE":
+      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
+    case "FERTIG":
+      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+    case "ZUR_ABRECHNUNG":
+      return "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200";
+    case "ABGERECHNET":
+      return "bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200";
+    default:
+      return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
+  }
+}
+
 // Insert schemas for creating new records
 export const insertOrderSchema = z.object({
   title: z.string().min(1, "Title is required"),
