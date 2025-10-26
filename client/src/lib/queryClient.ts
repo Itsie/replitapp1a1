@@ -9,14 +9,27 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+function getMockUserEmail(): string {
+  if (typeof window === 'undefined') return 'admin@1ashirt.de';
+  return localStorage.getItem('mockUserEmail') || 'admin@1ashirt.de';
+}
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  const headers: Record<string, string> = {
+    'X-User-Email': getMockUserEmail(),
+  };
+  
+  if (data) {
+    headers['Content-Type'] = 'application/json';
+  }
+  
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -33,6 +46,9 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
+      headers: {
+        'X-User-Email': getMockUserEmail(),
+      },
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
