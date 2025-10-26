@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertOrderSchema, updateOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertOrderAssetSchema, insertPositionSchema, updatePositionSchema, insertWorkCenterSchema, updateWorkCenterSchema, insertTimeSlotSchema, updateTimeSlotSchema, batchTimeSlotSchema, timeSlotQCSchema, timeSlotMissingPartsSchema } from "@shared/schema";
+import { insertOrderSchema, updateOrderSchema, insertSizeTableSchema, csvImportSchema, insertPrintAssetSchema, insertOrderAssetSchema, insertPositionSchema, updatePositionSchema, insertWorkCenterSchema, updateWorkCenterSchema, insertTimeSlotSchema, updateTimeSlotSchema, batchTimeSlotSchema, timeSlotQCSchema, timeSlotMissingPartsSchema, insertStorageSlotSchema, updateStorageSlotSchema, insertOrderStorageSchema } from "@shared/schema";
 import { z } from "zod";
 import { Decimal } from "@prisma/client/runtime/library";
 import { upload } from "./upload";
@@ -1143,6 +1143,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error marking missing parts:", error);
       res.status(500).json({ error: "Failed to mark missing parts" });
+    }
+  });
+
+  // ===== Storage Routes =====
+
+  // GET /api/storage/slots - Get all storage slots (authenticated users)
+  app.get("/api/storage/slots", requireAuth, async (req, res) => {
+    try {
+      const active = req.query.active === 'true' ? true : req.query.active === 'false' ? false : undefined;
+      const slots = await storage.getStorageSlots(active);
+      res.json(slots);
+    } catch (error) {
+      console.error("Error fetching storage slots:", error);
+      res.status(500).json({ error: "Failed to fetch storage slots" });
+    }
+  });
+
+  // POST /api/storage/slots - Create a new storage slot (ADMIN or PROD_PLAN only)
+  app.post("/api/storage/slots", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
+    try {
+      const validated = insertStorageSlotSchema.parse(req.body);
+      const slot = await storage.createStorageSlot(validated);
+      res.json(slot);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Error creating storage slot:", error);
+      res.status(500).json({ error: "Failed to create storage slot" });
+    }
+  });
+
+  // PATCH /api/storage/slots/:id - Update a storage slot (ADMIN or PROD_PLAN only)
+  app.patch("/api/storage/slots/:id", requireRole('ADMIN', 'PROD_PLAN'), async (req, res) => {
+    try {
+      const validated = updateStorageSlotSchema.parse(req.body);
+      const slot = await storage.updateStorageSlot(req.params.id, validated);
+      res.json(slot);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Error updating storage slot:", error);
+      res.status(500).json({ error: "Failed to update storage slot" });
+    }
+  });
+
+  // GET /api/orders/:id/storage - Get storage bookings for an order (authenticated users)
+  app.get("/api/orders/:id/storage", requireAuth, async (req, res) => {
+    try {
+      const storageBookings = await storage.getOrderStorage(req.params.id);
+      res.json(storageBookings);
+    } catch (error) {
+      if (error instanceof Error && error.message === "Order not found") {
+        return res.status(404).json({ error: error.message });
+      }
+      console.error("Error fetching order storage:", error);
+      res.status(500).json({ error: "Failed to fetch order storage" });
+    }
+  });
+
+  // POST /api/orders/:id/storage - Create a storage booking for an order (ADMIN, PROD_PLAN, or PROD_RUN)
+  app.post("/api/orders/:id/storage", requireRole('ADMIN', 'PROD_PLAN', 'PROD_RUN'), async (req, res) => {
+    try {
+      const validated = insertOrderStorageSchema.parse(req.body);
+      const storageBooking = await storage.createOrderStorage(req.params.id, validated);
+      res.json(storageBooking);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error) {
+        if (error.message === "Order not found" || error.message === "Storage slot not found") {
+          return res.status(404).json({ error: error.message });
+        }
+      }
+      console.error("Error creating order storage:", error);
+      res.status(500).json({ error: "Failed to create order storage" });
     }
   });
 
