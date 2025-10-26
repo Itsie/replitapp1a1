@@ -107,35 +107,30 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         <div className="flex flex-col space-y-1">
                           <p className="text-sm font-medium">{user.name}</p>
                           <p className="text-xs text-muted-foreground">{user.email}</p>
-                          <p className="text-xs text-muted-foreground">Rolle: {user.role}</p>
+                          <p className="text-xs text-muted-foreground" data-testid="text-current-role">Rolle: {user.role}</p>
                         </div>
                       </DropdownMenuLabel>
                       <DropdownMenuSeparator />
                     </>
                   )}
                   
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="menu-switch-user">
-                      Benutzer wechseln (Dev)
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                      {DEMO_USERS.map((demoUser) => (
-                        <DropdownMenuItem
-                          key={demoUser.email}
-                          onClick={() => setMockUser(demoUser.email)}
-                          data-testid={`menu-switch-${demoUser.role.toLowerCase()}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            {user?.email === demoUser.email && <Check className="h-4 w-4" />}
-                            <div className="flex flex-col">
-                              <span className="text-sm">{demoUser.name}</span>
-                              <span className="text-xs text-muted-foreground">{demoUser.role}</span>
-                            </div>
-                          </div>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Benutzer wechseln (Dev)</DropdownMenuLabel>
+                  {DEMO_USERS.map((demoUser) => (
+                    <DropdownMenuItem
+                      key={demoUser.email}
+                      onClick={() => setMockUser(demoUser.email)}
+                      data-testid={`menu-switch-${demoUser.role.toLowerCase()}`}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        {user?.email === demoUser.email && <Check className="h-4 w-4 shrink-0" />}
+                        {user?.email !== demoUser.email && <span className="w-4 shrink-0" />}
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <span className="text-sm truncate">{demoUser.name}</span>
+                          <span className="text-xs text-muted-foreground">{demoUser.role}</span>
+                        </div>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
                   
                   <DropdownMenuSeparator />
                   <DropdownMenuItem data-testid="menu-settings">Einstellungen</DropdownMenuItem>

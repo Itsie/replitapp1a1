@@ -39,7 +39,7 @@ const navigationSections: NavSection[] = [
         title: "Aufträge",
         url: "/orders",
         icon: FileText,
-        // All roles can view orders
+        roles: ['ADMIN', 'SALES_OPS'], // Only admin and sales can manage orders
       },
     ],
   },
@@ -53,7 +53,7 @@ const navigationSections: NavSection[] = [
         roles: ['ADMIN', 'PROD_PLAN'],
       },
       {
-        title: "Produktion heute",
+        title: "Produktion",
         url: "/production/today",
         icon: Activity,
         roles: ['ADMIN', 'PROD_RUN'],
@@ -73,7 +73,7 @@ const navigationSections: NavSection[] = [
         title: "Lager",
         url: "/warehouse",
         icon: Boxes,
-        // All roles can view warehouse
+        roles: ['ADMIN'], // Only admin for now
       },
     ],
   },
@@ -84,7 +84,7 @@ const navigationSections: NavSection[] = [
         title: "Einstellungen",
         url: "/settings",
         icon: Settings,
-        // All roles can access settings
+        roles: ['ADMIN'], // Only admin can access settings
       },
     ],
   },
