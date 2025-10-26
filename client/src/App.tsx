@@ -15,6 +15,7 @@ import OrderNew from "@/pages/order-new";
 import OrderDetail from "@/pages/order-detail";
 import Planning from "@/pages/planning";
 import ProductionToday from "@/pages/production-today";
+import MissingPartsPage from "@/pages/missing-parts";
 import Billing from "@/pages/billing";
 import Lager from "@/pages/lager";
 import Settings from "@/pages/settings";
@@ -80,6 +81,13 @@ function Router() {
         {(params) => (
           <AppLayout>
             <ProtectedRoute component={ProductionToday} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/missing-parts">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={MissingPartsPage} {...params} />
           </AppLayout>
         )}
       </Route>

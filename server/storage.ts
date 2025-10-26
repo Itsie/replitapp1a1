@@ -653,6 +653,37 @@ export class PrismaStorage implements IStorage {
     return updated;
   }
 
+  async releaseOrderFromMissingParts(orderId: string): Promise<OrderWithRelations> {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    // Guard: Order must be in WARTET_FEHLTEILE status
+    if (order.workflow !== 'WARTET_FEHLTEILE') {
+      throw new Error('Order must have workflow WARTET_FEHLTEILE to be released');
+    }
+
+    // Update order workflow back to FUER_PROD (ready for planning)
+    const updated = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        workflow: 'FUER_PROD',
+      },
+      include: {
+        sizeTable: true,
+        printAssets: true,
+        orderAssets: true,
+        positions: true,
+      },
+    });
+
+    return updated;
+  }
+
   async getAccountingOrders(filters: { status?: 'ZUR_ABRECHNUNG' | 'ABGERECHNET'; q?: string; dueFrom?: string; dueTo?: string }): Promise<OrderWithRelations[]> {
     const where: any = {};
 

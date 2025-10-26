@@ -873,18 +873,6 @@ function TimeSlotRow({
             </div>
           )}
 
-          {!isCompact && slot.missingPartsNote && (
-            <div className="p-1.5 rounded bg-destructive/10 border border-destructive/20">
-              <div className="flex items-start gap-1.5">
-                <AlertCircle className="h-3.5 w-3.5 mt-0.5 text-destructive flex-shrink-0" />
-                <div>
-                  <div className="font-medium text-destructive mb-0.5">Problem:</div>
-                  <div className="text-muted-foreground">{slot.missingPartsNote}</div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {!isCompact && isDone && slot.actualDurationMin !== null && (
             <div>
               <span className="text-muted-foreground">Tatsächlich:</span>{' '}
