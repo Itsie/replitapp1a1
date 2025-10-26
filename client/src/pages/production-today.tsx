@@ -18,6 +18,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -65,6 +70,36 @@ interface WorkCenterWithSlotCount extends WorkCenter {
 
 type ProblemReason = "MATERIAL" | "MACHINE" | "OTHER";
 
+// Workflow Badge Mapping
+const WORKFLOW_BADGES = {
+  ENTWURF:         { label: "Entwurf",          class: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100" },
+  NEU:             { label: "Neu",              class: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100" },
+  PRUEFUNG:        { label: "Prüfung",          class: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-100" },
+  FUER_PROD:       { label: "Für Produktion",   class: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" },
+  IN_PROD:         { label: "In Produktion",    class: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100" },
+  WARTET_FEHLTEILE:{ label: "Wartet Fehlteile", class: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100" },
+  FERTIG:          { label: "Fertig",           class: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" },
+  ZUR_ABRECHNUNG:  { label: "Zur Abrechnung",   class: "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100" },
+  ABGERECHNET:     { label: "Abgerechnet",      class: "bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100" },
+};
+
+// TimeSlot Status Badge Mapping
+const SLOT_BADGE = {
+  PLANNED: "bg-slate-600 text-white",
+  RUNNING: "bg-green-600 text-white",
+  PAUSED:  "bg-yellow-600 text-white",
+  DONE:    "bg-blue-600 text-white",
+  BLOCKED: "bg-red-600 text-white",
+};
+
+const SLOT_LABEL = {
+  PLANNED: "Geplant",
+  RUNNING: "Läuft",
+  PAUSED:  "Pausiert",
+  DONE:    "Fertig",
+  BLOCKED: "Blockiert",
+};
+
 function formatTime(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
@@ -83,28 +118,6 @@ function formatDuration(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function getStatusColor(status: string) {
-  switch (status) {
-    case 'PLANNED': return 'bg-slate-500';
-    case 'RUNNING': return 'bg-green-500';
-    case 'PAUSED': return 'bg-yellow-500';
-    case 'DONE': return 'bg-blue-500';
-    case 'BLOCKED': return 'bg-red-500';
-    default: return 'bg-gray-500';
-  }
-}
-
-function getStatusLabel(status: string) {
-  switch (status) {
-    case 'PLANNED': return 'Geplant';
-    case 'RUNNING': return 'Läuft';
-    case 'PAUSED': return 'Pausiert';
-    case 'DONE': return 'Fertig';
-    case 'BLOCKED': return 'Blockiert';
-    default: return status;
-  }
-}
-
 function getProblemReasonLabel(reason: ProblemReason): string {
   switch (reason) {
     case "MATERIAL": return "Fehlteil";
@@ -116,7 +129,7 @@ function getProblemReasonLabel(reason: ProblemReason): string {
 export default function ProductionToday() {
   const { toast } = useToast();
   const [selectedDepartment, setSelectedDepartment] = useState<Department | "ALL">("ALL");
-  const [selectedWorkCenter, setSelectedWorkCenter] = useState<string>("ALL");
+  const [showCompleted, setShowCompleted] = useState(false);
   const [problemDialogOpen, setProblemDialogOpen] = useState(false);
   const [problemSlotId, setProblemSlotId] = useState<string | null>(null);
   const [problemReason, setProblemReason] = useState<ProblemReason>("MATERIAL");
@@ -138,10 +151,12 @@ export default function ProductionToday() {
 
   // Filter time slots
   const filteredSlots = timeSlots.filter(slot => {
+    // Filter by department
     if (selectedDepartment !== "ALL" && slot.order?.department !== selectedDepartment) {
       return false;
     }
-    if (selectedWorkCenter !== "ALL" && slot.workCenterId !== selectedWorkCenter) {
+    // Filter out DONE slots unless showCompleted is enabled
+    if (!showCompleted && slot.status === "DONE") {
       return false;
     }
     return true;
@@ -339,7 +354,7 @@ export default function ProductionToday() {
           <CardTitle className="text-base">Filter</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4 flex-wrap">
+          <div className="flex gap-4 flex-wrap items-end">
             <div className="flex-1 min-w-[200px]">
               <Label htmlFor="department-filter" className="text-xs font-medium uppercase text-muted-foreground mb-2 block">
                 Abteilung
@@ -359,25 +374,16 @@ export default function ProductionToday() {
               </Select>
             </div>
 
-            <div className="flex-1 min-w-[200px]">
-              <Label htmlFor="workcenter-filter" className="text-xs font-medium uppercase text-muted-foreground mb-2 block">
-                Arbeitsplatz
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="show-completed" 
+                checked={showCompleted} 
+                onCheckedChange={(checked) => setShowCompleted(!!checked)}
+                data-testid="checkbox-show-completed"
+              />
+              <Label htmlFor="show-completed" className="text-sm font-normal cursor-pointer">
+                Fertige anzeigen
               </Label>
-              <Select value={selectedWorkCenter} onValueChange={setSelectedWorkCenter}>
-                <SelectTrigger id="workcenter-filter" data-testid="select-workcenter-filter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Alle</SelectItem>
-                  {workCenters
-                    .filter(wc => selectedDepartment === "ALL" || wc.department === selectedDepartment)
-                    .map(wc => (
-                      <SelectItem key={wc.id} value={wc.id}>
-                        {wc.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
             </div>
           </div>
         </CardContent>
@@ -406,22 +412,29 @@ export default function ProductionToday() {
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-3">
-                      {/* Header */}
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <Badge className={`${getStatusColor(slot.status)} text-white`} data-testid={`badge-status-${slot.id}`}>
-                          {getStatusLabel(slot.status)}
+                      {/* Time - Prominent */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-base font-semibold tracking-tight" data-testid={`text-time-${slot.id}`}>
+                          {formatTime(slot.startMin)}–{formatTime(slot.startMin + slot.lengthMin)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">({slot.lengthMin} min)</span>
+                      </div>
+
+                      {/* Timer for RUNNING slots */}
+                      {slot.status === 'RUNNING' && slot.startedAt && (
+                        <LiveTimer startTime={new Date(slot.startedAt)} slotId={slot.id} />
+                      )}
+
+                      {/* Badges */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge className={SLOT_BADGE[slot.status as keyof typeof SLOT_BADGE] || SLOT_BADGE.PLANNED} data-testid={`badge-status-${slot.id}`}>
+                          {SLOT_LABEL[slot.status as keyof typeof SLOT_LABEL] || slot.status}
                         </Badge>
                         {slot.order && (
-                          <Badge variant="outline" className={getWorkflowBadgeColor(slot.order.workflow)}>
-                            {WORKFLOW_LABELS[slot.order.workflow]}
+                          <Badge variant="outline" className={WORKFLOW_BADGES[slot.order.workflow as keyof typeof WORKFLOW_BADGES]?.class || ""}>
+                            {WORKFLOW_BADGES[slot.order.workflow as keyof typeof WORKFLOW_BADGES]?.label || slot.order.workflow}
                           </Badge>
                         )}
-                        <span className="text-sm font-medium" data-testid={`text-time-${slot.id}`}>
-                          {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          ({slot.lengthMin} min)
-                        </span>
                       </div>
 
                       {/* Order Info */}
@@ -453,11 +466,6 @@ export default function ProductionToday() {
                         Bereich: {slot.workCenter.name}
                       </p>
 
-                      {/* Timer for RUNNING slots */}
-                      {slot.status === 'RUNNING' && slot.startedAt && (
-                        <LiveTimer startTime={new Date(slot.startedAt)} slotId={slot.id} />
-                      )}
-
                       {/* Missing Parts Note */}
                       {slot.missingPartsNote && (
                         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-2">
@@ -470,60 +478,62 @@ export default function ProductionToday() {
                     {/* Actions */}
                     {slot.order && (
                       <div className="flex flex-col gap-2">
-                        {slot.status === 'PLANNED' && (
+                        {/* Start/Resume Button */}
+                        {(slot.status === 'PLANNED' || slot.status === 'PAUSED') && (
                           <Button 
                             size="sm" 
                             onClick={() => handleStart(slot.id)}
-                            data-testid={`button-start-${slot.id}`}
+                            data-testid={slot.status === 'PAUSED' ? `button-resume-${slot.id}` : `button-start-${slot.id}`}
                           >
                             <Play className="w-4 h-4 mr-1" />
-                            Start
+                            {slot.status === 'PAUSED' ? 'Fortsetzen' : 'Start'}
                           </Button>
                         )}
 
+                        {/* Pause Button */}
                         {slot.status === 'RUNNING' && (
-                          <>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handlePause(slot.id)}
-                              data-testid={`button-pause-${slot.id}`}
-                            >
-                              <Pause className="w-4 h-4 mr-1" />
-                              Pause
-                            </Button>
-                            <Button 
-                              size="sm"
-                              onClick={() => handleStop(slot.id)}
-                              data-testid={`button-stop-${slot.id}`}
-                            >
-                              <Square className="w-4 h-4 mr-1" />
-                              Beenden
-                            </Button>
-                          </>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handlePause(slot.id)}
+                            data-testid={`button-pause-${slot.id}`}
+                          >
+                            <Pause className="w-4 h-4 mr-1" />
+                            Pause
+                          </Button>
                         )}
 
-                        {slot.status === 'PAUSED' && (
-                          <>
-                            <Button 
-                              size="sm"
-                              onClick={() => handleStart(slot.id)}
-                              data-testid={`button-resume-${slot.id}`}
-                            >
-                              <Play className="w-4 h-4 mr-1" />
-                              Fortsetzen
-                            </Button>
-                            <Button 
-                              size="sm"
-                              onClick={() => handleStop(slot.id)}
-                              data-testid={`button-stop-${slot.id}`}
-                            >
-                              <Square className="w-4 h-4 mr-1" />
-                              Beenden
-                            </Button>
-                          </>
+                        {/* Stop Button with Tooltip */}
+                        {(slot.status === 'RUNNING' || slot.status === 'PAUSED') ? (
+                          <Button 
+                            size="sm"
+                            onClick={() => handleStop(slot.id)}
+                            data-testid={`button-stop-${slot.id}`}
+                          >
+                            <Square className="w-4 h-4 mr-1" />
+                            Beenden
+                          </Button>
+                        ) : slot.status !== 'DONE' && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Button 
+                                  size="sm"
+                                  disabled
+                                  data-testid={`button-stop-${slot.id}`}
+                                >
+                                  <Square className="w-4 h-4 mr-1" />
+                                  Beenden
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Kann nur beendet werden, wenn gestartet oder pausiert.
+                            </TooltipContent>
+                          </Tooltip>
                         )}
 
+                        {/* Hand Over Button */}
                         {slot.status === 'DONE' && slot.order.workflow === 'FERTIG' && (
                           <Button 
                             size="sm"
@@ -535,6 +545,7 @@ export default function ProductionToday() {
                           </Button>
                         )}
 
+                        {/* Problem Button */}
                         {(slot.status === 'RUNNING' || slot.status === 'PAUSED') && (
                           <Button 
                             size="sm" 

@@ -1,0 +1,126 @@
+🔧 Prompt: Fixpack „Produktion heute“ (Stop-Fehler, Kontrast, Liste bereinigen, Filter aufräumen, Zeit hervorheben)
+
+Scope strikt: Nur die Seite Produktion heute und ggf. lokale Badge-Styles. Keine Änderungen an Planung, Orders-CRUD oder DB-Schema. Kein Refactor über den Scope hinaus.
+
+Ziele
+
+Stop-Fehler verhindern
+
+Beenden nur erlauben, wenn slot.status in ['RUNNING','PAUSED'].
+
+Button „Beenden“ in allen anderen Stati disabled mit Tooltip:
+„Kann nur beendet werden, wenn gestartet oder pausiert.“
+
+Keine Requests an /api/timeslots/:id/stop aus anderen Stati schicken.
+
+Lesbarkeit/Kontrast fixen
+
+Einheitliche, Dark/Light-taugliche Badges für Order-Workflow (Anzeigezwecke) und TimeSlot-Status:
+
+// Workflow → Label + Klassen
+const WORKFLOW_BADGES = {
+  ENTWURF:         { label: "Entwurf",          class: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100" },
+  NEU:             { label: "Neu",              class: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100" },
+  PRUEFUNG:        { label: "Prüfung",          class: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-100" },
+  FUER_PROD:       { label: "Für Produktion",   class: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" },
+  IN_PROD:         { label: "In Produktion",    class: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100" },
+  WARTET_FEHLTEILE:{ label: "Wartet Fehlteile", class: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100" },
+  FERTIG:          { label: "Fertig",           class: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" },
+  ZUR_ABRECHNUNG:  { label: "Zur Abrechnung",   class: "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100" },
+  ABGERECHNET:     { label: "Abgerechnet",      class: "bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100" },
+};
+
+// TimeSlot-Status → starke Kontraste
+const SLOT_BADGE = {
+  PLANNED: "bg-slate-600 text-white",
+  RUNNING: "bg-green-600 text-white",
+  PAUSED:  "bg-yellow-600 text-white",
+  DONE:    "bg-blue-600 text-white",
+  BLOCKED: "bg-red-600 text-white",
+};
+
+
+Keine „grau auf grau“-Kombis. Min. text-xs/text-sm.
+
+Erledigte aus Tagesliste ausblenden
+
+Standardmäßig nur Slots mit Status PLANNED, RUNNING, PAUSED, BLOCKED anzeigen.
+
+Optionaler Toggle „Fertige anzeigen“ (default = aus).
+
+Nach stop-Mutation Refetch und Slot verschwindet aus „Produktion heute“.
+(Order bleibt in der Auftragsübersicht, Workflow ggf. bereits auf „Fertig“.)
+
+„Arbeitsplatz“-Filter entfernen
+
+In „Produktion heute“ die Workcenter/Arbeitsplatz-Select entfernen.
+
+Filter nur nach Abteilung belassen.
+
+Entsprechende Filter-Logik in filteredSlots bereinigen (keine workCenterId-Abfrage mehr).
+
+Zeit prominenter darstellen
+
+Zeitbereich über den Kartentitel ziehen, größer und fett:
+
+<div className="flex items-center gap-2">
+  <span className="text-base font-semibold tracking-tight">
+    {formatTime(slot.startMin)}–{formatTime(slot.startMin + slot.lengthMin)}
+  </span>
+  <span className="text-xs text-muted-foreground">({slot.lengthMin} min)</span>
+</div>
+
+
+LiveTimer direkt darunter: text-sm font-medium text-green-600 dark:text-green-400.
+
+Action-Buttons rechts, vertikal sauber gestapelt, konsistente Abstände.
+
+Button-States sauber
+
+Start: enabled bei PLANNED und PAUSED.
+
+Pause: enabled bei RUNNING.
+
+Beenden: enabled bei RUNNING und PAUSED; sonst disabled + Tooltip.
+
+Problem melden: enabled bei RUNNING und PAUSED; optional disabled bei PLANNED.
+
+An Kunden ausgeben (falls vorhanden): nur sichtbar nach erfolgreichem Stop bzw. Workflow „FERTIG“.
+
+Refetch & Sync
+
+Nach jeder Mutation (start, pause, stop, missing-parts):
+refetchQueries(['/api/calendar?startDate=TODAY&endDate=TODAY']).
+
+Falls Workflow geändert wurde, zusätzlich: refetchQueries(['/api/orders', …]).
+
+Stellen im Code (Hinweise)
+
+Datei: ProductionToday (Seite „Produktion heute“).
+
+Button-Enable-Logik nach o. g. Regeln anpassen.
+
+Tooltip bei disabled Buttons (shadcn title reicht, optional Tooltip).
+
+Filter-Komponente: Arbeitsplatz-Select komplett entfernen.
+
+Rendering von Badges mit neuen Mappings ersetzen.
+
+Zeitbereich visuell verstärken.
+
+Mutations bleiben unverändert, aber keine Requests aus invaliden Stati auslösen.
+
+Akzeptanzkriterien
+
+„Beenden“ ist bei PLANNED disabled; kein 422-Fehler mehr, keine Requests in invalidem Status.
+
+RUNNING-Slot zeigt gut sichtbaren Timer und prominente Zeit; Pause/Stop funktionieren, Slot verschwindet danach aus „Produktion heute“.
+
+Badges sind in Dark/Light Mode klar lesbar, keine schwachen Kontraste.
+
+Oben existiert nur noch der Abteilung-Filter, kein Arbeitsplatz.
+
+Design bleibt ansonsten unverändert, keine Seiteneffekte außerhalb „Produktion heute“.
+
+Bitte als eigenen Commit „fix(production-today): stop-state guards, badges, filters, time UI“.
+Danach bestätige kurz die Screenshots in Dark/Light, dann gehen wir die Fehlteile-Übersicht an.
