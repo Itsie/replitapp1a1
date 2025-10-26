@@ -15,8 +15,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(req.user);
   });
   
-  // GET /api/orders - List orders with filters
-  app.get("/api/orders", async (req, res) => {
+  // GET /api/orders - List orders with filters (requires authentication)
+  app.get("/api/orders", requireAuth, async (req, res) => {
     try {
       const filters = {
         q: req.query.q as string | undefined,
@@ -33,8 +33,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // GET /api/orders/:id - Get order details
-  app.get("/api/orders/:id", async (req, res) => {
+  // GET /api/orders/:id - Get order details (requires authentication)
+  app.get("/api/orders/:id", requireAuth, async (req, res) => {
     try {
       const order = await storage.getOrderById(req.params.id);
       
@@ -90,8 +90,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // GET /api/orders/:id/size - Get size table with countsBySize
-  app.get("/api/orders/:id/size", async (req, res) => {
+  // GET /api/orders/:id/size - Get size table with countsBySize (requires authentication)
+  app.get("/api/orders/:id/size", requireAuth, async (req, res) => {
     try {
       const sizeTable = await storage.getSizeTable(req.params.id);
       
@@ -221,8 +221,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/orders/:id/size/export.csv - Export size table as CSV
-  app.get("/api/orders/:id/size/export.csv", async (req, res) => {
+  // GET /api/orders/:id/size/export.csv - Export size table as CSV (requires authentication)
+  app.get("/api/orders/:id/size/export.csv", requireAuth, async (req, res) => {
     try {
       const sizeTable = await storage.getSizeTable(req.params.id);
       
@@ -268,8 +268,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // GET /api/orders/:id/assets - List all order assets
-  app.get("/api/orders/:id/assets", async (req, res) => {
+  // GET /api/orders/:id/assets - List all order assets (requires authentication)
+  app.get("/api/orders/:id/assets", requireAuth, async (req, res) => {
     try {
       const assets = await storage.getOrderAssets(req.params.id);
       res.json(assets);
@@ -412,8 +412,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/orders/:id/positions - List positions for order
-  app.get("/api/orders/:id/positions", async (req, res) => {
+  // GET /api/orders/:id/positions - List positions for order (requires authentication)
+  app.get("/api/orders/:id/positions", requireAuth, async (req, res) => {
     try {
       const positions = await storage.getPositions(req.params.id);
       res.json(positions);
@@ -492,8 +492,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== WorkCenter Routes =====
 
-  // GET /api/workcenters - List work centers
-  app.get("/api/workcenters", async (req, res) => {
+  // GET /api/workcenters - List work centers (requires authentication)
+  app.get("/api/workcenters", requireAuth, async (req, res) => {
     try {
       const department = req.query.department as any;
       const active = req.query.active === 'true' ? true : req.query.active === 'false' ? false : undefined;
@@ -560,8 +560,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== TimeSlot Routes =====
 
-  // GET /api/calendar - Get time slots for calendar view
-  app.get("/api/calendar", async (req, res) => {
+  // GET /api/calendar - Get time slots for calendar view (requires authentication)
+  app.get("/api/calendar", requireAuth, async (req, res) => {
     try {
       if (!req.query.startDate || !req.query.endDate) {
         return res.status(400).json({ error: "startDate and endDate are required" });
@@ -582,8 +582,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/timeslots - Get time slots with filters (weekly planning)
-  app.get("/api/timeslots", async (req, res) => {
+  // GET /api/timeslots - Get time slots with filters (weekly planning) (requires authentication)
+  app.get("/api/timeslots", requireAuth, async (req, res) => {
     try {
       const department = req.query.department as string | undefined;
       const weekStart = req.query.weekStart as string | undefined;
@@ -615,8 +615,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/orders/:id/timeslots - Get time slots for an order
-  app.get("/api/orders/:id/timeslots", async (req, res) => {
+  // GET /api/orders/:id/timeslots - Get time slots for an order (requires authentication)
+  app.get("/api/orders/:id/timeslots", requireAuth, async (req, res) => {
     try {
       const slots = await storage.getOrderTimeSlots(req.params.id);
       res.json(slots);
