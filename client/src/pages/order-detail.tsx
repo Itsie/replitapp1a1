@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import type { OrderWithRelations, SizeTableResponse, SizeTableRow, OrderAsset } from "@shared/schema";
+import type { OrderWithRelations, SizeTableResponse, SizeTableRow, OrderAsset, OrderStorageWithRelations, StorageSlot } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SizeTableEditor } from "@/components/size-table-editor";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -403,6 +403,7 @@ export default function OrderDetail() {
               <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
               <TabsTrigger value="sizes" data-testid="tab-sizes">Größen</TabsTrigger>
               <TabsTrigger value="assets" data-testid="tab-assets">Druckdaten / Anhänge</TabsTrigger>
+              <TabsTrigger value="storage" data-testid="tab-storage">Lager</TabsTrigger>
               <TabsTrigger value="history" data-testid="tab-history">Historie</TabsTrigger>
             </TabsList>
             
@@ -596,6 +597,10 @@ export default function OrderDetail() {
                 </Alert>
               )}
               <AttachmentsTab orderId={orderId!} />
+            </TabsContent>
+            
+            <TabsContent value="storage">
+              <StorageTab orderId={orderId!} />
             </TabsContent>
             
             <TabsContent value="history">
@@ -1845,5 +1850,217 @@ function OrderEditDialog({ order, isOpen, onClose, onSave, editForm, setEditForm
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function StorageTab({ orderId }: { orderId: string }) {
+  const { toast } = useToast();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [slotId, setSlotId] = useState("");
+  const [qty, setQty] = useState("");
+  const [note, setNote] = useState("");
+
+  const { data: storageBookings, isLoading: bookingsLoading } = useQuery<OrderStorageWithRelations[]>({
+    queryKey: [`/api/orders/${orderId}/storage`],
+  });
+
+  const { data: slots, isLoading: slotsLoading } = useQuery<StorageSlot[]>({
+    queryKey: ['/api/storage/slots'],
+  });
+
+  const activeSlots = slots?.filter(s => s.active) || [];
+
+  const createBookingMutation = useMutation({
+    mutationFn: async (data: { slotId: string; qty: number; note?: string }) => {
+      const res = await apiRequest("POST", `/api/orders/${orderId}/storage`, data);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to create booking");
+      }
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${orderId}/storage`] });
+      toast({
+        title: "Buchung erstellt",
+        description: "Die Lagerbuchung wurde erfolgreich erstellt.",
+      });
+      setDialogOpen(false);
+      setSlotId("");
+      setQty("");
+      setNote("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Fehler",
+        description: error.message || "Buchung konnte nicht erstellt werden.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreate = () => {
+    if (!slotId || !qty) {
+      toast({
+        title: "Fehler",
+        description: "Bitte füllen Sie alle Pflichtfelder aus.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createBookingMutation.mutate({
+      slotId,
+      qty: parseInt(qty),
+      note: note || undefined,
+    });
+  };
+
+  if (bookingsLoading || slotsLoading) {
+    return (
+      <Card className="rounded-2xl">
+        <CardContent className="p-12">
+          <div className="space-y-4">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="rounded-2xl">
+        <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0">
+          <CardTitle>Lagerbuchungen</CardTitle>
+          <Button
+            onClick={() => setDialogOpen(true)}
+            data-testid="button-add-storage"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Neue Buchung
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {!storageBookings || storageBookings.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground" data-testid="text-no-storage">
+              Keine Lagerbuchungen vorhanden.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Lagerplatz</TableHead>
+                  <TableHead className="text-right">Menge</TableHead>
+                  <TableHead>Hinweis</TableHead>
+                  <TableHead className="text-right">Erstellt am</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {storageBookings.map((booking) => (
+                  <TableRow key={booking.id} data-testid={`storage-booking-${booking.id}`}>
+                    <TableCell className="font-medium" data-testid={`text-slot-${booking.id}`}>
+                      {booking.slot.name}
+                    </TableCell>
+                    <TableCell className="text-right" data-testid={`text-qty-${booking.id}`}>
+                      {booking.qty}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground" data-testid={`text-note-${booking.id}`}>
+                      {booking.note || "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground" data-testid={`text-created-${booking.id}`}>
+                      {new Date(booking.createdAt).toLocaleString("de-DE", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Add Storage Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent data-testid="dialog-add-storage">
+          <DialogHeader>
+            <DialogTitle>Neue Lagerbuchung</DialogTitle>
+            <DialogDescription>
+              Erfassen Sie eine neue Lagerbuchung für diesen Auftrag.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="slotId">Lagerplatz</Label>
+              <Select value={slotId} onValueChange={setSlotId}>
+                <SelectTrigger id="slotId" data-testid="select-slot">
+                  <SelectValue placeholder="Lagerplatz auswählen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeSlots.length === 0 ? (
+                    <SelectItem value="_none" disabled>
+                      Keine aktiven Lagerplätze
+                    </SelectItem>
+                  ) : (
+                    activeSlots.map((slot) => (
+                      <SelectItem key={slot.id} value={slot.id} data-testid={`slot-option-${slot.id}`}>
+                        {slot.name}
+                        {slot.capacity && ` (Kapazität: ${slot.capacity})`}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="qty">Menge</Label>
+              <Input
+                id="qty"
+                type="number"
+                min="1"
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                placeholder="z.B. 50"
+                data-testid="input-qty"
+              />
+            </div>
+            <div>
+              <Label htmlFor="note">Hinweis (optional)</Label>
+              <Textarea
+                id="note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="z.B. Karton 1-3"
+                rows={3}
+                data-testid="input-note"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+              data-testid="button-cancel-storage"
+            >
+              Abbrechen
+            </Button>
+            <Button
+              onClick={handleCreate}
+              disabled={createBookingMutation.isPending}
+              data-testid="button-save-storage"
+            >
+              {createBookingMutation.isPending ? "Wird erstellt..." : "Erstellen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
