@@ -249,6 +249,11 @@ export type OrderWithRelations = Order & {
   printAssets: PrintAsset[];
   orderAssets: OrderAsset[];
   positions: OrderPosition[];
+  timeSlots?: Array<{
+    id: string;
+    status: string;
+    startedAt: Date | null;
+  }>;
 };
 
 // ===== WorkCenter & TimeSlot Schemas =====

@@ -245,6 +245,20 @@ export class PrismaStorage implements IStorage {
         printAssets: true,
         orderAssets: true,
         positions: true,
+        timeSlots: {
+          where: {
+            status: 'RUNNING',
+          },
+          orderBy: {
+            startedAt: 'asc',
+          },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
+            startedAt: true,
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
