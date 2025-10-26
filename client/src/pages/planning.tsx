@@ -268,10 +268,9 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
       <div
         className="absolute left-0 right-0 bg-red-50 dark:bg-red-900/20 border-2 border-dashed border-red-300 dark:border-red-700 rounded p-2 m-1"
         style={{
-          transform: `translateY(${topPx}px)`,
+          top: `${topPx}px`,
           height: `${heightPx}px`,
           minHeight: "24px",
-          willChange: "transform",
         }}
         onMouseEnter={() => setShowDelete(true)}
         onMouseLeave={() => setShowDelete(false)}
@@ -306,10 +305,9 @@ const RenderedSlot = memo(({ slot, minutesPerRow, onDelete }: RenderedSlotProps)
     <div
       className="absolute left-0 right-0 bg-card border rounded p-2 m-1 hover-elevate"
       style={{
-        transform: `translateY(${topPx}px)`,
+        top: `${topPx}px`,
         height: `${heightPx}px`,
         minHeight: "24px",
-        willChange: "transform",
       }}
       onMouseEnter={() => setShowDelete(true)}
       onMouseLeave={() => setShowDelete(false)}
@@ -923,7 +921,7 @@ export default function PlanningPage() {
                           <div
                             className="absolute left-0 right-0 bg-primary/20 border border-primary border-dashed rounded m-1 pointer-events-none"
                             style={{
-                              transform: `translateY(${getSlotGeometry(dragOverCell.startMin, 60, zoom).topPx}px)`,
+                              top: `${getSlotGeometry(dragOverCell.startMin, 60, zoom).topPx}px`,
                               height: `${getSlotGeometry(dragOverCell.startMin, 60, zoom).heightPx}px`,
                             }}
                           >

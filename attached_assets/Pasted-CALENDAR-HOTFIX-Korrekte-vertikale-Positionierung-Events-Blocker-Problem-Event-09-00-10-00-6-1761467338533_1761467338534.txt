@@ -1,0 +1,71 @@
+CALENDAR HOTFIX: Korrekte vertikale Positionierung (Events & Blocker)
+
+Problem
+Event „09:00–10:00 (60 Min)“ und Blocker „07:00–08:00“ werden unterhalb der korrekten Rasterlinien gerendert. Ursache ist ein falscher Bezugspunkt (top/transform) oder ein zusätzlicher Offset (Padding/Border/Scroll) im Spalten-Container.
+
+Ziel
+- Alle Event- und Blocker-Karten exakt auf der Minutenposition rendern.
+- Bezugspunkt ist die jeweilige Tages-Spalte (ohne Header), beginnend bei sichtbarem Start (z. B. 07:00).
+- Gilt für alle Zoom-Stufen (15/30/60 Min).
+
+Do this exactly
+
+1) Struktur & CSS korrigieren
+- Jede Tages-Spalte hat:
+  <div class="dayCol">
+    <div class="dayHeader">…Datum…</div>
+    <div class="dayBody">…Rasterlinien + Events…</div>
+  </div>
+- CSS:
+  .dayCol { position: relative; }
+  .dayHeader { height: var(--header-h); }
+  .dayBody { position: relative; height: var(--day-h); padding: 0; margin: 0; }
+  .calendarEvent, .calendarBlocker {
+    position: absolute; left: 0; right: 0;
+    transform: translateY(0); /* KEIN zusätzliches translateY-Stacking! */
+  }
+- Entferne jegliche margin-top/padding-top an .dayBody oder Event-Wrapppern. Keine zusätzlichen Wrapper mit transform o. relative/absolute, die den Bezugspunkt verschieben.
+
+2) Ein einziger Koordinaten-Ursprung
+- Verwende NUR .dayBody als Bezug (offsetParent).
+- Ermittle keine globalen getBoundingClientRect()-Deltas; rechne nur mit Minuten → Pixel.
+
+3) Einheitliche Umrechnung Minuten → Pixel
+- Variablen pro Render:
+  const visibleStartMin = 7 * 60;        // 07:00 (konfigurierbar)
+  const zoomMinutes     = 30;             // 15|30|60 (aktuelle Zoomstufe)
+  const rowHeightPx     = 24;             // Höhe einer Rasterzeile (Konstante im Layout)
+  const pxPerMin        = rowHeightPx / zoomMinutes;
+- Für jedes Event:
+  const startMin = event.startMin;        // ab 00:00
+  const lengthMin = event.lengthMin;
+  const relMin = startMin - visibleStartMin;   // ab 07:00
+  const topPx = Math.max(0, relMin * pxPerMin);
+  const heightPx = Math.max(1, lengthMin * pxPerMin);
+  eventEl.style.top = `${topPx}px`;
+  eventEl.style.height = `${heightPx}px`;
+- Blocker identisch behandeln (blocked=true).
+
+4) Keine doppelten Offsets
+- Falls derzeit zusätzlich ein translateY(topPx) verwendet wird: entfernen und nur .style.top setzen.
+- Kein zusätzliches ScrollPadding, kein inneres Padding an .dayBody.
+- Wenn die Rasterlinien via background-gradient gezeichnet werden: sicherstellen, dass deren Start genau bei .dayBody top=0 liegt.
+
+5) Overlay-Debug (temporär)
+- Toggle „Debug grid“:
+  - Zeichne horizontale Linien alle zoomMinutes (top = i*zoomMinutes*pxPerMin).
+  - Zeichne für jedes Event eine 1px-Linie an „soll“-Position (start) und an „start+length“.
+
+6) Regressionen
+- Drag&Drop: beim Drop position round auf 15-Minuten: 
+  const rounded = Math.round(relMin/15)*15; top = rounded*pxPerMin
+- Zoomwechsel: Events neu layouten mit neuem pxPerMin.
+- Scroll: dayBody bleibt statisch, keine zusätzliche translateY beim Scrollen.
+
+Akzeptanzkriterien
+- Blocker 07:00–08:00 liegt exakt zwischen den Linien 07:00 und 08:00.
+- Event 09:00–10:00 deckt exakt diesen Bereich ab, ohne Gap/Versatz.
+- Beim Wechsel 15/30/60 Min stimmen top/height weiter.
+- Kein „Unterhalb der Spalte“-Rendern mehr; top nie <0 außer gekappt.
+
+Bitte implementieren, Debug-Overlay kurz verlinken und die Stelle nennen, an der pxPerMin berechnet wird.
