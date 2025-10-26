@@ -158,8 +158,8 @@ export default function ProductionToday() {
     mutationFn: async (slotId: string) => {
       await apiRequest("POST", `/api/timeslots/${slotId}/start`);
     },
-    onSuccess: () => {
-      queryClient.refetchQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
       toast({
         title: "Gestartet",
         description: "Arbeitsschritt wurde gestartet.",
@@ -179,8 +179,8 @@ export default function ProductionToday() {
     mutationFn: async (slotId: string) => {
       await apiRequest("POST", `/api/timeslots/${slotId}/pause`);
     },
-    onSuccess: () => {
-      queryClient.refetchQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
       toast({
         title: "Pausiert",
         description: "Arbeitsschritt wurde pausiert.",
@@ -200,8 +200,8 @@ export default function ProductionToday() {
     mutationFn: async (slotId: string) => {
       await apiRequest("POST", `/api/timeslots/${slotId}/stop`);
     },
-    onSuccess: () => {
-      queryClient.refetchQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
       toast({
         title: "Beendet",
         description: "Arbeitsschritt wurde beendet. Dauer wurde gespeichert.",
@@ -224,8 +224,8 @@ export default function ProductionToday() {
         updateOrderWorkflow: updateWorkflow,
       });
     },
-    onSuccess: () => {
-      queryClient.refetchQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0]?.toString().startsWith('/api/calendar') });
       setProblemDialogOpen(false);
       setProblemSlotId(null);
       setProblemNote("");
