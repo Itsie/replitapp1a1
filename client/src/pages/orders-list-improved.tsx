@@ -27,6 +27,8 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -126,6 +128,12 @@ export default function OrdersList() {
   const [source, setSource] = useState<string>("");
   const [workflow, setWorkflow] = useState<string>("");
   
+  // Hide "Abgerechnet" orders by default
+  const [hideAbgerechnet, setHideAbgerechnet] = useState<boolean>(() => {
+    const saved = localStorage.getItem('orders_hideAbgerechnet');
+    return saved === null ? true : saved === 'true';
+  });
+  
   // Persist preferences
   useEffect(() => {
     localStorage.setItem('orders_viewMode', viewMode);
@@ -142,6 +150,10 @@ export default function OrdersList() {
   useEffect(() => {
     localStorage.setItem('orders_sort', JSON.stringify(sorting));
   }, [sorting]);
+  
+  useEffect(() => {
+    localStorage.setItem('orders_hideAbgerechnet', hideAbgerechnet.toString());
+  }, [hideAbgerechnet]);
   
   // Update search query when URL changes
   useEffect(() => {
@@ -227,6 +239,11 @@ export default function OrdersList() {
   const filteredOrders = useMemo(() => {
     let filtered = [...ordersRaw];
     
+    // Hide ABGERECHNET orders if enabled
+    if (hideAbgerechnet) {
+      filtered = filtered.filter(order => order.workflow !== 'ABGERECHNET');
+    }
+    
     if (activeQuickFilters.has('dueToday')) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -261,7 +278,7 @@ export default function OrdersList() {
     }
     
     return filtered;
-  }, [ordersRaw, activeQuickFilters]);
+  }, [ordersRaw, activeQuickFilters, hideAbgerechnet]);
   
   // Apply 500-row cap and sorting
   const isRowLimitReached = filteredOrders.length > MAX_ROWS;
@@ -801,6 +818,18 @@ export default function OrdersList() {
             Filter zurücksetzen
           </Button>
         )}
+        
+        <div className="ml-auto flex items-center gap-2">
+          <Switch
+            id="hide-abgerechnet"
+            checked={!hideAbgerechnet}
+            onCheckedChange={(checked) => setHideAbgerechnet(!checked)}
+            data-testid="switch-show-abgerechnet"
+          />
+          <Label htmlFor="hide-abgerechnet" className="cursor-pointer text-sm">
+            Abgerechnete anzeigen
+          </Label>
+        </div>
       </div>
       
       {/* Row limit notice */}
