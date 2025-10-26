@@ -895,7 +895,7 @@ export default function PlanningPage() {
               Bitte wählen Sie einen Bereich aus
             </div>
           ) : (
-            <div className="flex-1 overflow-auto p-4" ref={gridContainerRef}>
+            <div className="flex-1 overflow-auto" ref={gridContainerRef}>
               <div className="inline-block min-w-full">
                 <div className="flex border">
                   {/* Time Column */}
