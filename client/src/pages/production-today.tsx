@@ -149,6 +149,10 @@ export default function ProductionToday() {
   const [problemNote, setProblemNote] = useState("");
   const [problemReason, setProblemReason] = useState<ProblemReason>("FEHLTEILE");
   const [updateWorkflow, setUpdateWorkflow] = useState(true);
+  
+  // Order Detail Modal
+  const [orderDetailModalOpen, setOrderDetailModalOpen] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<TimeSlotWithOrder | null>(null);
 
   const startMutation = useMutation({
     mutationFn: async (slotId: string) => {
@@ -553,6 +557,342 @@ export default function ProductionToday() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Order Detail Modal */}
+      <Dialog open={orderDetailModalOpen} onOpenChange={setOrderDetailModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-order-detail">
+          <DialogHeader>
+            <DialogTitle>Auftragsdetails</DialogTitle>
+            {selectedSlot?.order && (
+              <DialogDescription>
+                {selectedSlot.order.displayOrderNumber && `${selectedSlot.order.displayOrderNumber} · `}
+                {selectedSlot.order.title}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+
+          {selectedSlot && selectedSlot.order && (
+            <div className="space-y-6">
+              {/* Time Slot Info */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Termin</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Zeit:</span>
+                    <span className="font-medium">
+                      {formatTime(selectedSlot.startMin)} - {formatTime(selectedSlot.startMin + selectedSlot.lengthMin)}
+                      {' '}({formatDuration(selectedSlot.lengthMin)})
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Arbeitsplatz:</span>
+                    <span className="font-medium">{selectedSlot.workCenter.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Status:</span>
+                    <Badge variant={selectedSlot.status === 'RUNNING' ? 'default' : 'outline'}>
+                      {selectedSlot.status}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Order Basic Info */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Auftragsinformationen</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Kunde:</span>
+                    <span className="font-medium">{selectedSlot.order.customer}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Abteilung:</span>
+                    <Badge variant="outline">{selectedSlot.order.department}</Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Workflow:</span>
+                    <Badge variant="outline">{WORKFLOW_LABELS[selectedSlot.order.workflow]}</Badge>
+                  </div>
+                  {selectedSlot.order.dueDate && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Fällig:</span>
+                      <span className="font-medium">
+                        {format(new Date(selectedSlot.order.dueDate), "dd.MM.yyyy", { locale: de })}
+                      </span>
+                    </div>
+                  )}
+                  {selectedSlot.order.notes && (
+                    <div className="pt-2 border-t">
+                      <span className="text-muted-foreground block mb-1">Notizen:</span>
+                      <p className="text-sm">{selectedSlot.order.notes}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Print Assets */}
+              {selectedSlot.order.printAssets && selectedSlot.order.printAssets.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Druckdaten ({selectedSlot.order.printAssets.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {selectedSlot.order.printAssets.map((asset) => (
+                        <a
+                          key={asset.id}
+                          href={asset.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between p-3 rounded-lg border hover-elevate active-elevate-2"
+                          data-testid={`asset-link-${asset.id}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Download className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium text-sm">{asset.label}</p>
+                              {asset.required && (
+                                <p className="text-xs text-red-600">Erforderlich</p>
+                              )}
+                            </div>
+                          </div>
+                          <Button variant="ghost" size="sm">
+                            Öffnen
+                          </Button>
+                        </a>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Size Table */}
+              {selectedSlot.order.sizeTable && selectedSlot.order.sizeTable.rowsJson.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Table2 className="h-4 w-4" />
+                      Größentabelle
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted">
+                          <tr>
+                            {selectedSlot.order.sizeTable.scheme === 'roster' ? (
+                              <>
+                                <th className="text-left p-2 font-medium">Nr.</th>
+                                <th className="text-left p-2 font-medium">Name</th>
+                                <th className="text-left p-2 font-medium">Größe</th>
+                              </>
+                            ) : selectedSlot.order.sizeTable.scheme === 'simple' ? (
+                              <>
+                                <th className="text-left p-2 font-medium">Größe</th>
+                                <th className="text-right p-2 font-medium">Anzahl</th>
+                              </>
+                            ) : (
+                              <>
+                                <th className="text-left p-2 font-medium">Größe</th>
+                                <th className="text-left p-2 font-medium">Farbe</th>
+                                <th className="text-right p-2 font-medium">Anzahl</th>
+                              </>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedSlot.order.sizeTable.rowsJson.map((row: any, idx: number) => (
+                            <tr key={idx} className="border-t">
+                              {selectedSlot.order?.sizeTable?.scheme === 'roster' ? (
+                                <>
+                                  <td className="p-2">{row.number}</td>
+                                  <td className="p-2">{row.name || '—'}</td>
+                                  <td className="p-2 font-medium">{row.size}</td>
+                                </>
+                              ) : selectedSlot.order?.sizeTable?.scheme === 'simple' ? (
+                                <>
+                                  <td className="p-2">{row.size}</td>
+                                  <td className="text-right p-2 font-medium">{row.quantity}</td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="p-2">{row.size}</td>
+                                  <td className="p-2">{row.color}</td>
+                                  <td className="text-right p-2 font-medium">{row.quantity}</td>
+                                </>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {selectedSlot.order.sizeTable.comment && (
+                      <p className="text-sm text-muted-foreground mt-3">
+                        {selectedSlot.order.sizeTable.comment}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Positions */}
+              {selectedSlot.order.positions && selectedSlot.order.positions.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      Positionen ({selectedSlot.order.positions.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {selectedSlot.order.positions.map((pos) => (
+                        <div
+                          key={pos.id}
+                          className="flex items-center justify-between p-3 rounded-lg border"
+                          data-testid={`position-detail-${pos.id}`}
+                        >
+                          <div>
+                            <p className="font-medium text-sm">{pos.articleName}</p>
+                            {pos.articleNumber && (
+                              <p className="text-xs text-muted-foreground">Art.-Nr.: {pos.articleNumber}</p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium text-sm">
+                              {pos.qty} {pos.unit}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {pos.unitPriceNet.toFixed(2)} €
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Control Buttons */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Aktionen</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedSlot.status === 'PLANNED' && (
+                      <Button
+                        onClick={() => {
+                          onStart(selectedSlot.id);
+                          setOrderDetailModalOpen(false);
+                        }}
+                        data-testid="modal-button-start"
+                      >
+                        <Play className="mr-2 h-4 w-4" />
+                        Starten
+                      </Button>
+                    )}
+
+                    {selectedSlot.status === 'RUNNING' && (
+                      <>
+                        <Button
+                          onClick={() => {
+                            onPause(selectedSlot.id);
+                            setOrderDetailModalOpen(false);
+                          }}
+                          variant="outline"
+                          data-testid="modal-button-pause"
+                        >
+                          <Pause className="mr-2 h-4 w-4" />
+                          Pause
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            onStop(selectedSlot.id);
+                            setOrderDetailModalOpen(false);
+                          }}
+                          variant="outline"
+                          data-testid="modal-button-stop"
+                        >
+                          <Square className="mr-2 h-4 w-4" />
+                          Stop
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setProblemSlotId(selectedSlot.id);
+                            setProblemDialogOpen(true);
+                            setOrderDetailModalOpen(false);
+                          }}
+                          variant="destructive"
+                          data-testid="modal-button-problem"
+                        >
+                          <AlertCircle className="mr-2 h-4 w-4" />
+                          Problem melden
+                        </Button>
+                      </>
+                    )}
+
+                    {selectedSlot.status === 'PAUSED' && (
+                      <>
+                        <Button
+                          onClick={() => {
+                            onStart(selectedSlot.id);
+                            setOrderDetailModalOpen(false);
+                          }}
+                          data-testid="modal-button-resume"
+                        >
+                          <Play className="mr-2 h-4 w-4" />
+                          Fortsetzen
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            onStop(selectedSlot.id);
+                            setOrderDetailModalOpen(false);
+                          }}
+                          variant="outline"
+                          data-testid="modal-button-stop-paused"
+                        >
+                          <Square className="mr-2 h-4 w-4" />
+                          Stop
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setProblemSlotId(selectedSlot.id);
+                            setProblemDialogOpen(true);
+                            setOrderDetailModalOpen(false);
+                          }}
+                          variant="destructive"
+                          data-testid="modal-button-problem-paused"
+                        >
+                          <AlertCircle className="mr-2 h-4 w-4" />
+                          Problem melden
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setOrderDetailModalOpen(false)}
+              data-testid="button-close-detail"
+            >
+              Schließen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -748,6 +1088,10 @@ function TimelineView({
                   onPause={onPause}
                   onStop={onStop}
                   onProblem={onProblem}
+                  onViewDetails={() => {
+                    setSelectedSlot(slot);
+                    setOrderDetailModalOpen(true);
+                  }}
                   isStarting={isStarting}
                   isPausing={isPausing}
                   isStopping={isStopping}
@@ -770,6 +1114,7 @@ interface TimeSlotRowProps {
   onPause: (id: string) => void;
   onStop: (id: string) => void;
   onProblem: (id: string) => void;
+  onViewDetails: () => void;
   isStarting?: boolean;
   isPausing?: boolean;
   isStopping?: boolean;
@@ -784,6 +1129,7 @@ function TimeSlotRow({
   onPause,
   onStop,
   onProblem,
+  onViewDetails,
   isStarting = false,
   isPausing = false,
   isStopping = false,
@@ -816,7 +1162,7 @@ function TimeSlotRow({
   return (
     <div
       className={`
-        relative pl-4 py-2 pr-4 rounded-md border bg-card/50 h-full overflow-hidden flex flex-col
+        relative pl-4 py-2 pr-4 rounded-md border bg-card/50 h-full overflow-hidden flex flex-col cursor-pointer hover-elevate
         ${isDone ? 'opacity-60' : ''}
         ${isRunning ? 'border-l-4 border-l-green-600 bg-green-50/5' : ''}
         ${isBlocked ? 'border-l-4 border-l-red-600 bg-red-50/5' : ''}
