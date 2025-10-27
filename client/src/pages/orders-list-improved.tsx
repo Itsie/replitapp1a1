@@ -82,18 +82,16 @@ const MAX_ROWS = 500;
 // Single Status Badge Component
 function OrderStatusBadge({ order }: { order: OrderWithRelations }) {
   const statusLabel = WORKFLOW_LABELS[order.workflow];
+  const badgeClass = getWorkflowBadgeClass(order.workflow);
   
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getWorkflowBadgeClass(order.workflow)}`} data-testid="badge-status">
-          {statusLabel}
-        </Badge>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>Status: {statusLabel}</p>
-      </TooltipContent>
-    </Tooltip>
+    <span 
+      className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${badgeClass}`} 
+      data-testid="badge-status"
+      title={`Status: ${statusLabel}`}
+    >
+      {statusLabel}
+    </span>
   );
 }
 
