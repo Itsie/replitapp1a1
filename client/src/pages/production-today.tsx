@@ -738,7 +738,12 @@ function TimeSlotRow({
   isStopping = false,
 }: TimeSlotRowProps) {
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [showActions, setShowActions] = useState(false);
+  
+  // For very short slots (< 40 px = ~30 min), use compact display
+  const isCompact = slotHeight < 40;
+  
+  // Show actions by default for non-compact slots, hidden for compact slots
+  const [showActions, setShowActions] = useState(!isCompact);
 
   useEffect(() => {
     if (slot.status === 'RUNNING') {
@@ -759,9 +764,6 @@ function TimeSlotRow({
   const isDone = slot.status === 'DONE';
   const isPaused = slot.status === 'PAUSED';
   const isBlocked = slot.status === 'BLOCKED';
-
-  // For very short slots (< 40 px = ~30 min), use compact display
-  const isCompact = slotHeight < 40;
 
   return (
     <div
