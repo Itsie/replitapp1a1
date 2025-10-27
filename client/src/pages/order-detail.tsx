@@ -346,7 +346,7 @@ export default function OrderDetail() {
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge variant="outline" className={getWorkflowBadgeColor(order.workflow)} data-testid="badge-workflow">
+                    <Badge className={getWorkflowBadgeColor(order.workflow)} data-testid="badge-workflow">
                       {WORKFLOW_LABELS[order.workflow]}
                     </Badge>
                   </TooltipTrigger>

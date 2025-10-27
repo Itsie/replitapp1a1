@@ -164,7 +164,7 @@ export default function OrdersList() {
                       <Badge variant="outline" data-testid={`badge-department-${order.id}`}>
                         {order.department}
                       </Badge>
-                      <Badge variant="outline" className={getWorkflowBadgeColor(order.workflow)} data-testid={`badge-workflow-${order.id}`}>
+                      <Badge className={getWorkflowBadgeColor(order.workflow)} data-testid={`badge-workflow-${order.id}`}>
                         {order.workflow}
                       </Badge>
                     </div>

@@ -78,7 +78,7 @@ function OrderStatusBadge({ order }: { order: OrderWithRelations }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge variant="outline" className={getWorkflowBadgeColor(order.workflow)} data-testid="badge-status">
+        <Badge className={getWorkflowBadgeColor(order.workflow)} data-testid="badge-status">
           {statusLabel}
         </Badge>
       </TooltipTrigger>
