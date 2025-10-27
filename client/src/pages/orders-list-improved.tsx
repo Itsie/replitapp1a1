@@ -65,6 +65,7 @@ import {
   WORKFLOW_LABELS, 
   DEPARTMENT_LABELS,
   SOURCE_LABELS,
+  VIRTUAL_WORKFLOW_LABELS,
   getWorkflowBadgeClass, 
   getDepartmentBadgeClass,
   getSourceBadgeClass,
@@ -79,11 +80,40 @@ type QuickFilter = 'dueToday' | 'overdue' | 'noAssets' | 'noSize';
 
 const MAX_ROWS = 500;
 
-// Single Status Badge Component
+// Intelligent Status Badge Component
 function OrderStatusBadge({ order }: { order: OrderWithRelations }) {
-  const statusLabel = WORKFLOW_LABELS[order.workflow];
-  const badgeClass = getWorkflowBadgeClass(order.workflow);
-  
+  const hints = getOrderHints(order);
+
+  let statusKey: string = order.workflow;
+  let statusLabel = WORKFLOW_LABELS[order.workflow];
+
+  // Logik für "intelligente" Status
+  if (order.workflow === 'NEU') {
+    if (!order.positions || order.positions.length === 0) {
+      statusKey = 'NEU_FEHLENDE_POSITIONEN';
+      statusLabel = VIRTUAL_WORKFLOW_LABELS.NEU_FEHLENDE_POSITIONEN;
+    } else if (hints.includes("Größentabelle fehlt")) {
+      statusKey = 'NEU_FEHLENDE_GROESSE';
+      statusLabel = VIRTUAL_WORKFLOW_LABELS.NEU_FEHLENDE_GROESSE;
+    } else if (hints.includes("Druckdaten fehlen")) {
+      statusKey = 'NEU_FEHLENDE_DRUCKDATEN';
+      statusLabel = VIRTUAL_WORKFLOW_LABELS.NEU_FEHLENDE_DRUCKDATEN;
+    } else {
+      // Alles ist da, bereit für den "Submit"-Button
+      statusKey = 'NEU_BEREIT_ZUR_FREIGABE';
+      statusLabel = VIRTUAL_WORKFLOW_LABELS.NEU_BEREIT_ZUR_FREIGABE;
+    }
+  } else if (order.workflow === 'FUER_PROD') {
+    // FUER_PROD bedeutet "Bereit zur Planung", es sei denn, es GIBT Slots
+    if (order.timeSlots && order.timeSlots.length > 0) {
+      statusKey = 'FUER_PROD_EINGEPLANT';
+      statusLabel = VIRTUAL_WORKFLOW_LABELS.FUER_PROD_EINGEPLANT;
+    }
+    // Sonst bleibt es "Bereit zur Planung" (Standard-Label für FUER_PROD)
+  }
+
+  const badgeClass = getWorkflowBadgeClass(statusKey);
+
   return (
     <span 
       className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${badgeClass}`} 
@@ -92,23 +122,6 @@ function OrderStatusBadge({ order }: { order: OrderWithRelations }) {
     >
       {statusLabel}
     </span>
-  );
-}
-
-// Order Hints Component (text hints in Hinweise column)
-function OrderHintsCell({ order }: { order: OrderWithRelations }) {
-  const hints = getOrderHints(order);
-  
-  if (hints.length === 0) {
-    return <span className="text-muted-foreground">—</span>;
-  }
-  
-  return (
-    <div className="flex flex-col gap-1 text-sm">
-      {hints.map((hint, index) => (
-        <span key={index} className="text-muted-foreground">{hint}</span>
-      ))}
-    </div>
   );
 }
 
@@ -434,15 +447,6 @@ export default function OrdersList() {
       enableSorting: true,
     },
     {
-      id: "hints",
-      header: () => <div className="px-3 py-2 min-w-[12rem] max-w-xs">Hinweise</div>,
-      cell: ({ row }) => (
-        <div className={`${cellBase} min-w-[12rem] max-w-xs`}>
-          <OrderHintsCell order={row.original} />
-        </div>
-      ),
-    },
-    {
       accessorKey: "dueDate",
       header: () => <div className="px-3 py-2 text-right w-36">Fälligkeit</div>,
       cell: ({ row }) => {
@@ -456,35 +460,6 @@ export default function OrdersList() {
         );
       },
       enableSorting: true,
-    },
-    {
-      id: "sizeTable",
-      header: () => <div className="px-3 py-2 text-center w-24">Größe</div>,
-      cell: ({ row }) => (
-        <div className={`${cellBase} text-center w-24`}>
-          {row.original.sizeTable ? (
-            <Check className="h-4 w-4 text-green-600 inline" />
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </div>
-      ),
-    },
-    {
-      id: "assets",
-      header: () => <div className="px-3 py-2 text-center w-28">Druckdaten</div>,
-      cell: ({ row }) => {
-        const requiredAssets = row.original.printAssets.filter(a => a.required);
-        return (
-          <div className={`${cellBase} text-center w-28`}>
-            {requiredAssets.length > 0 ? (
-              <Badge variant="secondary">{requiredAssets.length}</Badge>
-            ) : (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </div>
-        );
-      },
     },
     {
       accessorKey: "totalGross",
@@ -1061,36 +1036,11 @@ export default function OrdersList() {
                         <OrderStatusBadge order={order} />
                       </div>
                       
-                      {getOrderHints(order).length > 0 && (
-                        <div className="mt-2 flex flex-col gap-1">
-                          {getOrderHints(order).map((hint, index) => (
-                            <span key={index} className="text-xs text-muted-foreground">{hint}</span>
-                          ))}
-                        </div>
-                      )}
-                      
                       <div className="mt-3">
                         <Badge variant={dueVariant} className="text-xs">
                           {dueLabel === "Heute" ? "Heute fällig" : dueLabel}
                         </Badge>
                       </div>
-                      
-                      {(order.sizeTable || requiredAssets.length > 0) && (
-                        <div className="mt-2 flex gap-3 text-xs text-muted-foreground">
-                          {order.sizeTable && (
-                            <span className="flex items-center gap-1">
-                              <Check className="h-3 w-3 text-green-600" />
-                              Größe
-                            </span>
-                          )}
-                          {requiredAssets.length > 0 && (
-                            <span className="flex items-center gap-1">
-                              <Check className="h-3 w-3 text-green-600" />
-                              {requiredAssets.length} Asset{requiredAssets.length > 1 ? 's' : ''}
-                            </span>
-                          )}
-                        </div>
-                      )}
                     </Card>
                   </Link>
                 );

@@ -1,0 +1,137 @@
+Hallo, wir müssen die Workflow-Logik für den Benutzer verständlicher machen. Das aktuelle System mit "Status" + "Hinweise" ist verwirrend.
+
+Ziel: Der Status-Badge allein soll den genauen Zustand des Auftrags widerspiegeln (z.B. "Wartet auf Daten" statt "Neu" + Hinweis). Dadurch werden die Spalten "Hinweise", "Größe" und "Druckdaten" in der Auftragsübersicht überflüssig.
+
+Hier sind die Schritte:
+
+Aufgabe 1: shared/schema.ts aktualisieren
+
+Bitte füge die neuen, "menschlicheren" Labels und die entsprechenden Farb-Badges hinzu.
+
+Ersetze die WORKFLOW_LABELS [cite: 4 (lines 28-39)] durch diese neuen Bezeichnungen:
+
+export const WORKFLOW_LABELS: Record<WorkflowState, string> = {
+  ENTWURF: "Entwurf",
+  NEU: "Wartet auf Daten", // Standard-Fallback für "Neu"
+  PRUEFUNG: "Prüfung",
+  FUER_PROD: "Bereit zur Planung", // Standard-Fallback für "Freigegeben"
+  IN_PROD: "Wird produziert",
+  WARTET_FEHLTEILE: "Fehlteil (Material)",
+  FERTIG: "Zur Auslieferung bereit",
+  ZUR_ABRECHNUNG: "Ausgeliefert (Abrechnung offen)",
+  ABGERECHNET: "Abgerechnet",
+};
+
+
+Füge direkt unter WORKFLOW_LABELS diese neuen virtuellen Labels hinzu (für unsere intelligente Anzeige):
+
+// Labels für "intelligente" Status, die den Workflow-Status überschreiben
+export const VIRTUAL_WORKFLOW_LABELS = {
+  NEU_FEHLENDE_POSITIONEN: "Entwurf (Positionen fehlen)",
+  NEU_FEHLENDE_GROESSE: "Wartet auf Größentabelle",
+  NEU_FEHLENDE_DRUCKDATEN: "Wartet auf Druckdaten",
+  NEU_BEREIT_ZUR_FREIGABE: "Bereit zur Freigabe",
+  FUER_PROD_EINGEPLANT: "Produktion eingeplant",
+};
+
+
+Aktualisiere die WORKFLOW_BADGE_CLASSES [cite: 4 (lines 71-85)], um die neuen virtuellen Status und die geänderten Farben (z.B. NEU ist jetzt orange) aufzunehmen. Ersetze den gesamten Block:
+
+// Kontrastsichere Badge-Styles (solid), Dunkel/Hell tauglich
+export const WORKFLOW_BADGE_CLASSES: Record<string, string> = {
+  // Standard Workflow-Status
+  ENTWURF: "bg-slate-500 text-white border-transparent dark:bg-slate-600",
+  NEU: "bg-orange-600 text-white border-transparent dark:bg-orange-500", // "Wartet auf Daten" ist jetzt Orange
+  PRUEFUNG: "bg-amber-600 text-white border-transparent dark:bg-amber-500",
+  FUER_PROD: "bg-blue-600 text-white border-transparent dark:bg-blue-500", // "Bereit zur Planung" ist Blau
+  IN_PROD: "bg-violet-600 text-white border-transparent dark:bg-violet-500", // "Wird produziert" ist Violett
+  WARTET_FEHLTEILE: "bg-red-600 text-white border-transparent dark:bg-red-500", // "Fehlteil" ist Rot
+  FERTIG: "bg-emerald-600 text-white border-transparent dark:bg-emerald-500", // "Zur Auslieferung bereit" ist Grün
+  ZUR_ABRECHNUNG: "bg-fuchsia-600 text-white border-transparent dark:bg-fuchsia-500",
+  ABGERECHNET: "bg-zinc-700 text-white border-transparent dark:bg-zinc-600",
+
+  // Virtuelle Status (basierend auf Logik)
+  NEU_FEHLENDE_POSITIONEN: "bg-slate-500 text-white border-transparent dark:bg-slate-600",
+  NEU_FEHLENDE_GROESSE: "bg-orange-600 text-white border-transparent dark:bg-orange-500",
+  NEU_FEHLENDE_DRUCKDATEN: "bg-orange-600 text-white border-transparent dark:bg-orange-500",
+  NEU_BEREIT_ZUR_FREIGABE: "bg-cyan-600 text-white border-transparent dark:bg-cyan-500", // Bereit zur Freigabe ist Cyan
+  FUER_PROD_EINGEPLANT: "bg-indigo-600 text-white border-transparent dark:bg-indigo-500", // Eingeplant ist Indigo
+};
+
+
+Ändere die Hilfsfunktion getWorkflowBadgeClass [cite: 4 (line 91)], sodass sie string als Eingabe akzeptiert (da wir jetzt auch virtuelle Keys übergeben):
+
+// Convenience-Getter
+export function getWorkflowBadgeClass(wf: string): string {
+  return WORKFLOW_BADGE_CLASSES[wf] ?? "bg-slate-500 text-white border-transparent";
+}
+
+
+Aufgabe 2: client/src/pages/orders-list-improved.tsx anpassen
+
+Entferne die überflüssigen Spalten. Finde die columns Definition [cite: 1 (line 352)] und lösche die ColumnDef für:
+
+id: "hints" [cite: 1 (line 399)] (Hinweise)
+
+id: "sizeTable" [cite: 1 (line 427)] (Größe)
+
+id: "assets" [cite: 1 (line 437)] (Druckdaten)
+
+Entferne die Komponente OrderHintsCell [cite: 1 (line 96)], da sie nicht mehr verwendet wird.
+
+Ersetze die OrderStatusBadge-Komponente [cite: 1 (lines 80-93)] durch eine neue, intelligente Komponente, die das order-Objekt verarbeitet und die neuen virtuellen Status ermittelt.
+
+// Oben in der Datei, wo die anderen Komponenten definiert sind:
+function OrderStatusBadge({ order }: { order: OrderWithRelations }) {
+  const { getOrderHints } = await import("@shared/schema");
+  const hints = getOrderHints(order);
+
+  let statusKey = order.workflow;
+  let statusLabel = WORKFLOW_LABELS[order.workflow];
+
+  // Logik für "intelligente" Status
+  if (order.workflow === 'NEU') {
+    if (!order.positions || order.positions.length === 0) {
+      statusKey = 'NEU_FEHLENDE_POSITIONEN';
+      statusLabel = VIRTUAL_WORKFLOW_LABELS.NEU_FEHLENDE_POSITIONEN;
+    } else if (hints.includes("Größentabelle fehlt")) {
+      statusKey = 'NEU_FEHLENDE_GROESSE';
+      statusLabel = VIRTUAL_WORKFLOW_LABELS.NEU_FEHLENDE_GROESSE;
+    } else if (hints.includes("Druckdaten fehlen")) {
+      statusKey = 'NEU_FEHLENDE_DRUCKDATEN';
+      statusLabel = VIRTUAL_WORKFLOW_LABELS.NEU_FEHLENDE_DRUCKDATEN;
+    } else {
+      // Alles ist da, bereit für den "Submit"-Button
+      statusKey = 'NEU_BEREIT_ZUR_FREIGABE';
+      statusLabel = VIRTUAL_WORKFLOW_LABELS.NEU_BEREIT_ZUR_FREIGABE;
+    }
+  } else if (order.workflow === 'FUER_PROD') {
+    // FUER_PROD bedeutet "Bereit zur Planung", es sei denn, es GIBT Slots
+    if (order.timeSlots && order.timeSlots.length > 0) {
+      statusKey = 'FUER_PROD_EINGEPLANT';
+      statusLabel = VIRTUAL_WORKFLOW_LABELS.FUER_PROD_EINGEPLANT;
+    }
+    // Sonst bleibt es "Bereit zur Planung" (Standard-Label für FUER_PROD)
+  }
+
+  const badgeClass = getWorkflowBadgeClass(statusKey);
+
+  return (
+    <span 
+      className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${badgeClass}`} 
+      data-testid="badge-status"
+      title={`Status: ${statusLabel}`}
+    >
+      {statusLabel}
+    </span>
+  );
+}
+
+
+Importiere die neuen Konstanten oben in orders-list-improved.tsx (ca. Zeile 70, bei den anderen schema-Importen):
+
+import { 
+  // ... bestehende Importe ...
+  VIRTUAL_WORKFLOW_LABELS,
+  // ...
+} from "@shared/schema";

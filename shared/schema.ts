@@ -14,14 +14,23 @@ export const qcStateSchema = z.enum(["IO", "NIO", "UNGEPRUEFT"]);
 // German workflow labels (Order Status)
 export const WORKFLOW_LABELS: Record<WorkflowState, string> = {
   ENTWURF: "Entwurf",
-  NEU: "Neu",
+  NEU: "Wartet auf Daten", // Standard-Fallback für "Neu"
   PRUEFUNG: "Prüfung",
-  FUER_PROD: "Bereit für Produktion",
-  IN_PROD: "In Produktion",
-  WARTET_FEHLTEILE: "Wartet auf Fehlteile",
-  FERTIG: "Fertig produziert",
-  ZUR_ABRECHNUNG: "Zur Abrechnung",
+  FUER_PROD: "Bereit zur Planung", // Standard-Fallback für "Freigegeben"
+  IN_PROD: "Wird produziert",
+  WARTET_FEHLTEILE: "Fehlteil (Material)",
+  FERTIG: "Zur Auslieferung bereit",
+  ZUR_ABRECHNUNG: "Ausgeliefert (Abrechnung offen)",
   ABGERECHNET: "Abgerechnet",
+};
+
+// Labels für "intelligente" Status, die den Workflow-Status überschreiben
+export const VIRTUAL_WORKFLOW_LABELS = {
+  NEU_FEHLENDE_POSITIONEN: "Entwurf (Positionen fehlen)",
+  NEU_FEHLENDE_GROESSE: "Wartet auf Größentabelle",
+  NEU_FEHLENDE_DRUCKDATEN: "Wartet auf Druckdaten",
+  NEU_BEREIT_ZUR_FREIGABE: "Bereit zur Freigabe",
+  FUER_PROD_EINGEPLANT: "Produktion eingeplant",
 };
 
 // Department labels
@@ -49,31 +58,39 @@ export const TIMESLOT_STATUS_LABELS = {
 } as const;
 
 // Kontrastsichere Badge-Styles (solid), Dunkel/Hell tauglich
-export const WORKFLOW_BADGE_CLASSES: Record<WorkflowState, string> = {
+export const WORKFLOW_BADGE_CLASSES: Record<string, string> = {
+  // Standard Workflow-Status
   ENTWURF: "bg-slate-500 text-white border-transparent dark:bg-slate-600",
-  NEU: "bg-cyan-600 text-white border-transparent dark:bg-cyan-500",
+  NEU: "bg-orange-600 text-white border-transparent dark:bg-orange-500", // "Wartet auf Daten" ist jetzt Orange
   PRUEFUNG: "bg-amber-600 text-white border-transparent dark:bg-amber-500",
-  FUER_PROD: "bg-indigo-600 text-white border-transparent dark:bg-indigo-500",
-  IN_PROD: "bg-blue-600 text-white border-transparent dark:bg-blue-500",
-  WARTET_FEHLTEILE: "bg-orange-600 text-white border-transparent dark:bg-orange-500",
-  FERTIG: "bg-emerald-600 text-white border-transparent dark:bg-emerald-500",
+  FUER_PROD: "bg-blue-600 text-white border-transparent dark:bg-blue-500", // "Bereit zur Planung" ist Blau
+  IN_PROD: "bg-violet-600 text-white border-transparent dark:bg-violet-500", // "Wird produziert" ist Violett
+  WARTET_FEHLTEILE: "bg-red-600 text-white border-transparent dark:bg-red-500", // "Fehlteil" ist Rot
+  FERTIG: "bg-emerald-600 text-white border-transparent dark:bg-emerald-500", // "Zur Auslieferung bereit" ist Grün
   ZUR_ABRECHNUNG: "bg-fuchsia-600 text-white border-transparent dark:bg-fuchsia-500",
   ABGERECHNET: "bg-zinc-700 text-white border-transparent dark:bg-zinc-600",
+
+  // Virtuelle Status (basierend auf Logik)
+  NEU_FEHLENDE_POSITIONEN: "bg-slate-500 text-white border-transparent dark:bg-slate-600",
+  NEU_FEHLENDE_GROESSE: "bg-orange-600 text-white border-transparent dark:bg-orange-500",
+  NEU_FEHLENDE_DRUCKDATEN: "bg-orange-600 text-white border-transparent dark:bg-orange-500",
+  NEU_BEREIT_ZUR_FREIGABE: "bg-cyan-600 text-white border-transparent dark:bg-cyan-500", // Bereit zur Freigabe ist Cyan
+  FUER_PROD_EINGEPLANT: "bg-indigo-600 text-white border-transparent dark:bg-indigo-500", // Eingeplant ist Indigo
 };
 
-// Department Badge Classes (solid colors)
+// Department Badge Classes (neutral, keine Farbe)
 export const DEPARTMENT_BADGE_CLASSES: Record<Department, string> = {
-  TEAMSPORT: "bg-blue-500 text-white border-transparent dark:bg-blue-600",
-  TEXTILVEREDELUNG: "bg-purple-500 text-white border-transparent dark:bg-purple-600",
-  STICKEREI: "bg-pink-500 text-white border-transparent dark:bg-pink-600",
-  DRUCK: "bg-green-600 text-white border-transparent dark:bg-green-500",
-  SONSTIGES: "bg-gray-500 text-white border-transparent dark:bg-gray-600",
+  TEAMSPORT: "bg-muted text-muted-foreground border-border",
+  TEXTILVEREDELUNG: "bg-muted text-muted-foreground border-border",
+  STICKEREI: "bg-muted text-muted-foreground border-border",
+  DRUCK: "bg-muted text-muted-foreground border-border",
+  SONSTIGES: "bg-muted text-muted-foreground border-border",
 };
 
-// Source Badge Classes (solid colors)
+// Source Badge Classes (neutral, keine Farbe)
 export const SOURCE_BADGE_CLASSES: Record<OrderSource, string> = {
-  JTL: "bg-sky-600 text-white border-transparent dark:bg-sky-500",
-  INTERNAL: "bg-emerald-600 text-white border-transparent dark:bg-emerald-500",
+  JTL: "bg-muted text-muted-foreground border-border",
+  INTERNAL: "bg-muted text-muted-foreground border-border",
 };
 
 // TimeSlot Status Colors (for production views - solid colors)
@@ -86,7 +103,7 @@ export const TIMESLOT_BADGE_CLASSES: Record<string, string> = {
 };
 
 // Convenience-Getter
-export function getWorkflowBadgeClass(wf: WorkflowState): string {
+export function getWorkflowBadgeClass(wf: string): string {
   return WORKFLOW_BADGE_CLASSES[wf] ?? "bg-slate-500 text-white border-transparent";
 }
 
