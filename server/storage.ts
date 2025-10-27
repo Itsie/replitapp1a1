@@ -219,15 +219,25 @@ export class PrismaStorage implements IStorage {
     
     // Use Prisma transaction to atomically increment the sequence
     const result = await prisma.$transaction(async (tx) => {
-      // Upsert the sequence for the current year
-      const sequence = await tx.orderSequence.upsert({
+      // Try to find existing sequence
+      const existing = await tx.orderSequence.findUnique({
         where: { year },
-        create: { year, current: 999 }, // First will be 1000
-        update: { current: { increment: 1 } },
       });
       
-      // Return the next sequence number
-      return sequence.current + 1;
+      if (!existing) {
+        // Create new sequence starting at 1000
+        const sequence = await tx.orderSequence.create({
+          data: { year, current: 1000 },
+        });
+        return sequence.current;
+      } else {
+        // Increment and return new value
+        const sequence = await tx.orderSequence.update({
+          where: { year },
+          data: { current: { increment: 1 } },
+        });
+        return sequence.current;
+      }
     });
     
     return `INT-${year}-${result}`;

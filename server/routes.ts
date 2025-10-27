@@ -263,8 +263,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // POST /api/orders - Create new INTERNAL order (ADMIN or SALES_OPS only)
-  app.post("/api/orders", requireRole('ADMIN', 'SALES_OPS'), async (req, res) => {
+  // POST /api/orders - Create new INTERNAL order (ADMIN, SALES_OPS, or PROD_PLAN)
+  app.post("/api/orders", requireRole('ADMIN', 'SALES_OPS', 'PROD_PLAN'), async (req, res) => {
     try {
       const validated = insertOrderSchema.parse(req.body);
       const order = await storage.createOrder(validated);
@@ -278,8 +278,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // PATCH /api/orders/:id - Update order fields (ADMIN or SALES_OPS only)
-  app.patch("/api/orders/:id", requireRole('ADMIN', 'SALES_OPS'), async (req, res) => {
+  // PATCH /api/orders/:id - Update order fields (ADMIN, SALES_OPS, or PROD_PLAN)
+  app.patch("/api/orders/:id", requireRole('ADMIN', 'SALES_OPS', 'PROD_PLAN'), async (req, res) => {
     try {
       const validated = updateOrderSchema.parse(req.body);
       const order = await storage.updateOrder(req.params.id, validated);
