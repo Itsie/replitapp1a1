@@ -349,24 +349,21 @@ export default function OrderDetail() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getWorkflowBadgeClass(order.workflow)}`} data-testid="badge-workflow">
-                      {WORKFLOW_LABELS[order.workflow]}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Status: {WORKFLOW_LABELS[order.workflow]}</p>
-                  </TooltipContent>
-                </Tooltip>
+                <span 
+                  className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getWorkflowBadgeClass(order.workflow)}`} 
+                  data-testid="badge-workflow"
+                  title={`Status: ${WORKFLOW_LABELS[order.workflow]}`}
+                >
+                  {WORKFLOW_LABELS[order.workflow]}
+                </span>
                 
-                <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getSourceBadgeClass(order.source)}`} data-testid="badge-source">
+                <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getSourceBadgeClass(order.source)}`} data-testid="badge-source">
                   {SOURCE_LABELS[order.source]}
-                </Badge>
+                </span>
                 
-                <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getDepartmentBadgeClass(order.department)}`} data-testid="badge-department">
+                <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getDepartmentBadgeClass(order.department)}`} data-testid="badge-department">
                   {DEPARTMENT_LABELS[order.department]}
-                </Badge>
+                </span>
               </div>
               
               {hints.length > 0 && (
@@ -577,25 +574,25 @@ export default function OrderDetail() {
                             <div>
                               <Label className="text-xs text-muted-foreground">ABTEILUNG</Label>
                               <div>
-                                <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getDepartmentBadgeClass(order.department)}`} data-testid="badge-department">
+                                <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getDepartmentBadgeClass(order.department)}`} data-testid="badge-department">
                                   {DEPARTMENT_LABELS[order.department]}
-                                </Badge>
+                                </span>
                               </div>
                             </div>
                             <div>
                               <Label className="text-xs text-muted-foreground">QUELLE</Label>
                               <div>
-                                <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getSourceBadgeClass(order.source)}`} data-testid="badge-source-detail">
+                                <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getSourceBadgeClass(order.source)}`} data-testid="badge-source-detail">
                                   {SOURCE_LABELS[order.source]}
-                                </Badge>
+                                </span>
                               </div>
                             </div>
                             <div>
                               <Label className="text-xs text-muted-foreground">WORKFLOW</Label>
                               <div>
-                                <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getWorkflowBadgeClass(order.workflow)}`} data-testid="badge-workflow-detail">
+                                <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getWorkflowBadgeClass(order.workflow)}`} data-testid="badge-workflow-detail">
                                   {WORKFLOW_LABELS[order.workflow]}
-                                </Badge>
+                                </span>
                               </div>
                             </div>
                             <div>

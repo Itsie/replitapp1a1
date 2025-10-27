@@ -402,9 +402,9 @@ export default function OrdersList() {
         const dep = row.original.department;
         return (
           <div className={`${cellBase} w-44`}>
-            <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getDepartmentBadgeClass(dep)}`}>
+            <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getDepartmentBadgeClass(dep)}`}>
               {DEPARTMENT_LABELS[dep] ?? dep}
-            </Badge>
+            </span>
           </div>
         );
       },
@@ -416,9 +416,9 @@ export default function OrdersList() {
         const src = row.original.source;
         return (
           <div className={`${cellBase} w-28`}>
-            <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getSourceBadgeClass(src)}`}>
+            <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getSourceBadgeClass(src)}`}>
               {SOURCE_LABELS[src] ?? src}
-            </Badge>
+            </span>
           </div>
         );
       },
@@ -1049,12 +1049,12 @@ export default function OrdersList() {
                       </div>
                       
                       <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                        <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getDepartmentBadgeClass(order.department)}`}>
+                        <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getDepartmentBadgeClass(order.department)}`}>
                           {DEPARTMENT_LABELS[order.department] ?? order.department}
-                        </Badge>
-                        <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getSourceBadgeClass(order.source)}`}>
+                        </span>
+                        <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getSourceBadgeClass(order.source)}`}>
                           {SOURCE_LABELS[order.source] ?? order.source}
-                        </Badge>
+                        </span>
                       </div>
                       
                       <div className="mt-2">

@@ -603,9 +603,9 @@ export default function ProductionToday() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Status:</span>
-                    <Badge className={getTimeSlotBadgeClass(selectedSlot.status)}>
+                    <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getTimeSlotBadgeClass(selectedSlot.status)}`}>
                       {TIMESLOT_STATUS_LABELS[selectedSlot.status as keyof typeof TIMESLOT_STATUS_LABELS] || selectedSlot.status}
-                    </Badge>
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -622,15 +622,15 @@ export default function ProductionToday() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Abteilung:</span>
-                    <Badge className={getDepartmentBadgeClass(selectedSlot.order.department)}>
+                    <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getDepartmentBadgeClass(selectedSlot.order.department)}`}>
                       {DEPARTMENT_LABELS[selectedSlot.order.department]}
-                    </Badge>
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Workflow:</span>
-                    <Badge className={getWorkflowBadgeClass(selectedSlot.order.workflow)}>
+                    <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getWorkflowBadgeClass(selectedSlot.order.workflow)}`}>
                       {WORKFLOW_LABELS[selectedSlot.order.workflow]}
-                    </Badge>
+                    </span>
                   </div>
                   {selectedSlot.order.dueDate && (
                     <div className="flex justify-between">
