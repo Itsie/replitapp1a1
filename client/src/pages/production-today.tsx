@@ -1164,6 +1164,7 @@ function TimeSlotRow({
 
   return (
     <div
+      onClick={onViewDetails}
       className={`
         relative pl-4 py-2 pr-4 rounded-md border bg-card/50 h-full overflow-hidden flex flex-col cursor-pointer hover-elevate
         ${isDone ? 'opacity-60' : ''}
@@ -1239,7 +1240,10 @@ function TimeSlotRow({
             <Button
               variant="ghost"
               size="sm"
-              onClick={onToggleCollapse}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleCollapse();
+              }}
               data-testid={`button-toggle-${slot.id}`}
               className="h-7 w-7 p-0"
             >
@@ -1290,6 +1294,7 @@ function TimeSlotRow({
                         href={asset.url}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         data-testid={`link-download-${asset.id}`}
                         className="flex items-center gap-2 text-xs hover-elevate active-elevate-2 p-1.5 rounded bg-card border"
                       >
@@ -1304,92 +1309,6 @@ function TimeSlotRow({
                 </div>
               )}
 
-              {/* Size Table */}
-              {slot.order.sizeTable && slot.order.sizeTable.rowsJson.length > 0 && (
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-muted-foreground font-medium">
-                    <Table2 className="h-3.5 w-3.5" />
-                    <span>Größentabelle</span>
-                  </div>
-                  <div className="pl-5">
-                    <div className="bg-card border rounded p-2 text-xs overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b">
-                            {slot.order.sizeTable.scheme === 'simple' ? (
-                              <>
-                                <th className="text-left p-1">Größe</th>
-                                <th className="text-right p-1">Anzahl</th>
-                              </>
-                            ) : (
-                              <>
-                                <th className="text-left p-1">Größe</th>
-                                <th className="text-left p-1">Farbe</th>
-                                <th className="text-right p-1">Anzahl</th>
-                              </>
-                            )}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {slot.order.sizeTable.rowsJson.map((row: any, idx: number) => (
-                            <tr key={idx} className="border-b last:border-0">
-                              {slot.order?.sizeTable?.scheme === 'simple' ? (
-                                <>
-                                  <td className="p-1">{row.size}</td>
-                                  <td className="text-right p-1 font-medium">{row.quantity}</td>
-                                </>
-                              ) : (
-                                <>
-                                  <td className="p-1">{row.size}</td>
-                                  <td className="p-1">{row.color}</td>
-                                  <td className="text-right p-1 font-medium">{row.quantity}</td>
-                                </>
-                              )}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    {slot.order.sizeTable.comment && (
-                      <p className="text-xs text-muted-foreground mt-1 pl-2">
-                        {slot.order.sizeTable.comment}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Order Positions */}
-              {slot.order.positions && slot.order.positions.length > 0 && (
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-muted-foreground font-medium">
-                    <Package className="h-3.5 w-3.5" />
-                    <span>Positionen ({slot.order.positions.length})</span>
-                  </div>
-                  <div className="space-y-1 pl-5">
-                    {slot.order.positions.map((pos) => (
-                      <div
-                        key={pos.id}
-                        data-testid={`position-${pos.id}`}
-                        className="bg-card border rounded p-2 text-xs"
-                      >
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="font-medium">{pos.articleName}</span>
-                          <span className="text-muted-foreground">{Number(pos.qty)} {pos.unit}</span>
-                        </div>
-                        {pos.articleNumber && (
-                          <div className="text-muted-foreground mt-0.5 text-xs">
-                            Art.-Nr.: {pos.articleNumber}
-                          </div>
-                        )}
-                        <div className="text-muted-foreground mt-0.5 text-xs">
-                          € {Number(pos.unitPriceNet).toFixed(2)} / {pos.unit}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </>
           )}
 
@@ -1398,7 +1317,10 @@ function TimeSlotRow({
             <div className={`flex items-center gap-1.5 pt-1 flex-wrap ${isCompact ? 'justify-center' : ''}`}>
               {slot.status === 'PLANNED' && (
                 <Button
-                  onClick={() => onStart(slot.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStart(slot.id);
+                  }}
                   size="sm"
                   disabled={isStarting}
                   data-testid={`button-start-${slot.id}`}
@@ -1412,7 +1334,10 @@ function TimeSlotRow({
               {slot.status === 'RUNNING' && (
                 <>
                   <Button
-                    onClick={() => onPause(slot.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPause(slot.id);
+                    }}
                     variant="outline"
                     size="sm"
                     disabled={isPausing}
@@ -1423,7 +1348,10 @@ function TimeSlotRow({
                     {isPausing ? "Pausiert..." : "Pause"}
                   </Button>
                   <Button
-                    onClick={() => onStop(slot.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStop(slot.id);
+                    }}
                     variant="outline"
                     size="sm"
                     disabled={isStopping}
@@ -1434,7 +1362,10 @@ function TimeSlotRow({
                     {isStopping ? "Stoppt..." : "Stop"}
                   </Button>
                   <Button
-                    onClick={() => onProblem(slot.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onProblem(slot.id);
+                    }}
                     variant="outline"
                     size="sm"
                     data-testid={`button-problem-${slot.id}`}
@@ -1449,7 +1380,10 @@ function TimeSlotRow({
               {slot.status === 'PAUSED' && (
                 <>
                   <Button
-                    onClick={() => onStart(slot.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStart(slot.id);
+                    }}
                     size="sm"
                     disabled={isStarting}
                     data-testid={`button-resume-${slot.id}`}
@@ -1459,7 +1393,10 @@ function TimeSlotRow({
                     {isStarting ? "Fortsetzt..." : "Weiter"}
                   </Button>
                   <Button
-                    onClick={() => onStop(slot.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStop(slot.id);
+                    }}
                     variant="outline"
                     size="sm"
                     disabled={isStopping}
@@ -1470,7 +1407,10 @@ function TimeSlotRow({
                     {isStopping ? "Stoppt..." : "Stop"}
                   </Button>
                   <Button
-                    onClick={() => onProblem(slot.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onProblem(slot.id);
+                    }}
                     variant="outline"
                     size="sm"
                     data-testid={`button-problem-paused-${slot.id}`}
