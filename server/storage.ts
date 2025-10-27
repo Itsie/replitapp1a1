@@ -220,16 +220,16 @@ export class PrismaStorage implements IStorage {
     const searchQuery = filters.q?.trim();
     if (searchQuery && searchQuery.length >= 2) {
       where.OR = [
-        { title: { contains: searchQuery, mode: 'insensitive' } },
-        { customer: { contains: searchQuery, mode: 'insensitive' } },
-        { extId: { contains: searchQuery, mode: 'insensitive' } },
-        { displayOrderNumber: { contains: searchQuery, mode: 'insensitive' } },
-        { notes: { contains: searchQuery, mode: 'insensitive' } },
-        { location: { contains: searchQuery, mode: 'insensitive' } },
-        { billCity: { contains: searchQuery, mode: 'insensitive' } },
-        { billZip: { contains: searchQuery, mode: 'insensitive' } },
-        { customerEmail: { contains: searchQuery, mode: 'insensitive' } },
-        { customerPhone: { contains: searchQuery, mode: 'insensitive' } },
+        { title: { contains: searchQuery } },
+        { customer: { contains: searchQuery } },
+        { extId: { contains: searchQuery } },
+        { displayOrderNumber: { contains: searchQuery } },
+        { notes: { contains: searchQuery } },
+        { location: { contains: searchQuery } },
+        { billCity: { contains: searchQuery } },
+        { billZip: { contains: searchQuery } },
+        { customerEmail: { contains: searchQuery } },
+        { customerPhone: { contains: searchQuery } },
       ];
     }
     
