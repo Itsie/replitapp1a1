@@ -73,6 +73,7 @@ import {
 } from "@shared/schema";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type ViewMode = 'table' | 'cards';
 type DensityMode = 'comfort' | 'compact';
@@ -126,13 +127,19 @@ function OrderStatusBadge({ order }: { order: OrderWithRelations }) {
 }
 
 export default function OrdersList() {
+  const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   
   // View mode with localStorage persistence
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('orders_viewMode');
-    return (saved === 'table' || saved === 'cards') ? saved : 'table';
+    // 1. Gespeicherte Auswahl des Benutzers verwenden
+    if (saved === 'table' || saved === 'cards') {
+      return saved;
+    }
+    // 2. Wenn nichts gespeichert ist, Standard basierend auf Bildschirmgröße wählen
+    return isMobile ? 'cards' : 'table';
   });
   
   // Density mode
