@@ -304,7 +304,9 @@ export default function OrderDetail() {
 
   const hasShippingAddress = !!(order!.shipStreet || order!.shipZip || order!.shipCity || order!.shipCountry);
   const hasPositions = (order.positions?.length || 0) > 0;
-  const hasRequiredAssets = order.printAssets.some(a => a.required);
+  // Check both printAssets (legacy) and orderAssets (current) for required assets
+  const hasRequiredAssets = (order.printAssets && order.printAssets.some(a => a.required)) || 
+                            (order.orderAssets && order.orderAssets.some(a => a.required));
   const hasSizeTable = !!order.sizeTable;
   const isTeamsport = order.department === "TEAMSPORT";
   const canSubmitOrder = hasPositions && hasRequiredAssets && (!isTeamsport || hasSizeTable);
