@@ -61,7 +61,7 @@ import {
   VisibilityState,
 } from "@tanstack/react-table";
 import type { OrderWithRelations, OrderSource, WorkflowState } from "@shared/schema";
-import { WORKFLOW_LABELS, getWorkflowBadgeColor, getOrderNotificationBadges } from "@shared/schema";
+import { WORKFLOW_LABELS, getWorkflowBadgeColor, getOrderHints } from "@shared/schema";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/hooks/use-toast";
 
@@ -71,35 +71,36 @@ type QuickFilter = 'dueToday' | 'overdue' | 'noAssets' | 'noSize';
 
 const MAX_ROWS = 500;
 
-// StatusBadges Component with Tooltips and Notification Badges
-function OrderStatusBadges({ order }: { order: OrderWithRelations }) {
+// Single Status Badge Component
+function OrderStatusBadge({ order }: { order: OrderWithRelations }) {
   const statusLabel = WORKFLOW_LABELS[order.workflow];
-  const notifications = getOrderNotificationBadges(order);
   
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge variant="outline" className={getWorkflowBadgeColor(order.workflow)} data-testid="badge-status">
-            {statusLabel}
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Status: {statusLabel}</p>
-        </TooltipContent>
-      </Tooltip>
-      
-      {notifications.map((notification) => (
-        <Tooltip key={notification.type}>
-          <TooltipTrigger asChild>
-            <Badge variant="outline" className={notification.color} data-testid={`badge-${notification.type.toLowerCase()}`}>
-              {notification.label}
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{notification.tooltip}</p>
-          </TooltipContent>
-        </Tooltip>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge variant="outline" className={getWorkflowBadgeColor(order.workflow)} data-testid="badge-status">
+          {statusLabel}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>Status: {statusLabel}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// Order Hints Component (text hints in Hinweise column)
+function OrderHintsCell({ order }: { order: OrderWithRelations }) {
+  const hints = getOrderHints(order);
+  
+  if (hints.length === 0) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  
+  return (
+    <div className="flex flex-col gap-1 text-sm">
+      {hints.map((hint, index) => (
+        <span key={index} className="text-muted-foreground">{hint}</span>
       ))}
     </div>
   );
@@ -416,13 +417,22 @@ export default function OrdersList() {
     },
     {
       accessorKey: "workflow",
-      header: () => <div className="px-3 py-2 min-w-[16rem]">Status & Hinweise</div>,
+      header: () => <div className="px-3 py-2 w-48">Status</div>,
       cell: ({ row }) => (
-        <div className={`${cellBase} min-w-[16rem] max-w-md`}>
-          <OrderStatusBadges order={row.original} />
+        <div className={`${cellBase} w-48`}>
+          <OrderStatusBadge order={row.original} />
         </div>
       ),
       enableSorting: true,
+    },
+    {
+      id: "hints",
+      header: () => <div className="px-3 py-2 min-w-[12rem] max-w-xs">Hinweise</div>,
+      cell: ({ row }) => (
+        <div className={`${cellBase} min-w-[12rem] max-w-xs`}>
+          <OrderHintsCell order={row.original} />
+        </div>
+      ),
     },
     {
       accessorKey: "dueDate",
@@ -1038,8 +1048,16 @@ export default function OrdersList() {
                       </div>
                       
                       <div className="mt-2">
-                        <OrderStatusBadges order={order} />
+                        <OrderStatusBadge order={order} />
                       </div>
+                      
+                      {getOrderHints(order).length > 0 && (
+                        <div className="mt-2 flex flex-col gap-1">
+                          {getOrderHints(order).map((hint, index) => (
+                            <span key={index} className="text-xs text-muted-foreground">{hint}</span>
+                          ))}
+                        </div>
+                      )}
                       
                       <div className="mt-3">
                         <Badge variant={dueVariant} className="text-xs">

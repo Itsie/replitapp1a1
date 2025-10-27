@@ -18,7 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import type { OrderWithRelations, SizeTableResponse, SizeTableRow, OrderAsset, WarehouseGroupWithRelations, WarehousePlaceWithRelations } from "@shared/schema";
-import { WORKFLOW_LABELS, getWorkflowBadgeColor, getOrderNotificationBadges } from "@shared/schema";
+import { WORKFLOW_LABELS, getWorkflowBadgeColor, getOrderHints } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SizeTableEditor } from "@/components/size-table-editor";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -299,8 +299,8 @@ export default function OrderDetail() {
     return source === "JTL" ? "secondary" : "default";
   };
 
-  // Get notification badges for the order (order is guaranteed to be defined here after the checks above)
-  const notificationBadges = getOrderNotificationBadges(order!);
+  // Get hints for the order (order is guaranteed to be defined here after the checks above)
+  const hints = getOrderHints(order!);
 
   const hasShippingAddress = !!(order!.shipStreet || order!.shipZip || order!.shipCity || order!.shipCountry);
   const hasPositions = (order.positions?.length || 0) > 0;
@@ -355,23 +355,18 @@ export default function OrderDetail() {
                   </TooltipContent>
                 </Tooltip>
                 
-                {notificationBadges.map((notification) => (
-                  <Tooltip key={notification.type}>
-                    <TooltipTrigger asChild>
-                      <Badge variant="outline" className={notification.color} data-testid={`badge-${notification.type.toLowerCase()}`}>
-                        {notification.label}
-                      </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{notification.tooltip}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                ))}
-                
                 <Badge variant={getSourceBadgeVariant(order.source)} data-testid="badge-source">
                   {order.source === "JTL" ? "JTL" : "Intern"}
                 </Badge>
               </div>
+              
+              {hints.length > 0 && (
+                <div className="mt-2 flex flex-col gap-1">
+                  {hints.map((hint, index) => (
+                    <span key={index} className="text-sm text-muted-foreground">{hint}</span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2">
@@ -586,11 +581,7 @@ export default function OrderDetail() {
                             </div>
                             <div>
                               <Label className="text-xs text-muted-foreground">WORKFLOW</Label>
-                              <div>
-                                <Badge variant={getWorkflowBadgeVariant(order.workflow)} data-testid="badge-workflow-detail">
-                                  {order.workflow}
-                                </Badge>
-                              </div>
+                              <p data-testid="text-workflow">{WORKFLOW_LABELS[order.workflow]}</p>
                             </div>
                             <div>
                               <Label className="text-xs text-muted-foreground">FÄLLIG AM</Label>

@@ -100,54 +100,12 @@ export function getTimeSlotBadgeColor(status: string): string {
   }
 }
 
-// ===== AUTO-NOTIFICATION BADGES =====
-// These badges appear when specific conditions are met
+// ===== ORDER HINTS =====
+// Text hints that appear in the "Hinweise" column to show requirements or warnings
 
-export type NotificationBadgeType = 
-  | "MISSING_PRINT_ASSETS"
-  | "MISSING_SIZE_TABLE"
-  | "OVERDUE"
-  | "NOT_PLANNED"
-  | "PLANNED_FUTURE";
-
-export interface NotificationBadge {
-  type: NotificationBadgeType;
-  label: string;
-  color: string;
-  tooltip: string;
-}
-
-export const NOTIFICATION_BADGE_CONFIG: Record<NotificationBadgeType, Omit<NotificationBadge, 'type'>> = {
-  MISSING_PRINT_ASSETS: {
-    label: "Druckdaten fehlen",
-    color: "bg-red-600 text-white dark:bg-red-700 dark:text-white border-red-700 dark:border-red-800",
-    tooltip: "Hinweis: Es wurden noch keine erforderlichen Druckdaten hochgeladen"
-  },
-  MISSING_SIZE_TABLE: {
-    label: "Größentabelle fehlt",
-    color: "bg-orange-500 text-black dark:bg-orange-600 dark:text-black border-orange-600 dark:border-orange-700",
-    tooltip: "Hinweis: Für TEAMSPORT-Aufträge ist eine Größentabelle erforderlich"
-  },
-  OVERDUE: {
-    label: "Überfällig",
-    color: "bg-red-800 text-white dark:bg-red-900 dark:text-white border-red-900 dark:border-red-950",
-    tooltip: "Hinweis: Fälligkeitsdatum wurde überschritten"
-  },
-  NOT_PLANNED: {
-    label: "Nicht eingeplant",
-    color: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 border-orange-400 dark:border-orange-700",
-    tooltip: "Hinweis: Auftrag ist bereit, aber noch nicht in der Produktion eingeplant"
-  },
-  PLANNED_FUTURE: {
-    label: "Geplant für später",
-    color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 border-indigo-400 dark:border-indigo-700",
-    tooltip: "Hinweis: Produktion ist für einen zukünftigen Termin geplant"
-  }
-};
-
-// Calculate which notification badges to show for an order
-export function getOrderNotificationBadges(order: OrderWithRelations): NotificationBadge[] {
-  const badges: NotificationBadge[] = [];
+// Calculate which text hints to show for an order
+export function getOrderHints(order: OrderWithRelations): string[] {
+  const hints: string[] = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -155,52 +113,30 @@ export function getOrderNotificationBadges(order: OrderWithRelations): Notificat
   const hasRequiredAssets = (order.printAssets && order.printAssets.some(a => a.required)) || 
                             (order.orderAssets && order.orderAssets.some(a => a.required));
   if (!hasRequiredAssets) {
-    badges.push({
-      type: "MISSING_PRINT_ASSETS",
-      ...NOTIFICATION_BADGE_CONFIG.MISSING_PRINT_ASSETS
-    });
+    hints.push("Druckdaten fehlen");
   }
 
   // Check for missing size table (TEAMSPORT only)
   if (order.department === "TEAMSPORT" && !order.sizeTable) {
-    badges.push({
-      type: "MISSING_SIZE_TABLE",
-      ...NOTIFICATION_BADGE_CONFIG.MISSING_SIZE_TABLE
-    });
+    hints.push("Größentabelle fehlt");
   }
 
-  // Check for overdue
-  if (order.dueDate && order.workflow !== "FERTIG" && order.workflow !== "ABGERECHNET") {
+  // Check for overdue or due today
+  if (order.dueDate && order.workflow !== "FERTIG" && order.workflow !== "ABGERECHNET" && order.workflow !== "ZUR_ABRECHNUNG") {
     const dueDate = new Date(order.dueDate);
     dueDate.setHours(0, 0, 0, 0);
-    if (dueDate < today) {
-      badges.push({
-        type: "OVERDUE",
-        ...NOTIFICATION_BADGE_CONFIG.OVERDUE
-      });
+    
+    if (dueDate.getTime() === today.getTime()) {
+      hints.push("Heute fällig");
+    } else if (dueDate < today) {
+      const diffTime = Math.abs(today.getTime() - dueDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const formattedDate = dueDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      hints.push(`Überfällig seit ${formattedDate}`);
     }
   }
 
-  // Check for not planned (FUER_PROD but no timeslots)
-  if (order.workflow === "FUER_PROD" && (!order.timeSlots || order.timeSlots.length === 0)) {
-    badges.push({
-      type: "NOT_PLANNED",
-      ...NOTIFICATION_BADGE_CONFIG.NOT_PLANNED
-    });
-  }
-
-  // Check for planned future (has PLANNED timeslot in future)
-  if (order.timeSlots && order.timeSlots.length > 0) {
-    const hasPlannedSlot = order.timeSlots.some((slot: any) => slot.status === "PLANNED");
-    if (hasPlannedSlot) {
-      badges.push({
-        type: "PLANNED_FUTURE",
-        ...NOTIFICATION_BADGE_CONFIG.PLANNED_FUTURE
-      });
-    }
-  }
-
-  return badges;
+  return hints;
 }
 
 // Insert schemas for creating new records
