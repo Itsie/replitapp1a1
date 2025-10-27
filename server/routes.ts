@@ -891,33 +891,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/timeslots - Get time slots with filters (weekly planning) (requires authentication)
+  // GET /api/timeslots - Get time slots with filters (weekly planning or daily production) (requires authentication)
   app.get("/api/timeslots", requireAuth, async (req, res) => {
     try {
       const department = req.query.department as string | undefined;
       const weekStart = req.query.weekStart as string | undefined;
-      
-      if (!department) {
-        return res.status(400).json({ error: "department parameter is required" });
+      const date = req.query.date as string | undefined;
+
+      // Support two modes: weekly planning (department + weekStart) or daily production (date only)
+      if (date) {
+        // Daily production mode - return all slots for a specific date
+        const dateObj = new Date(date);
+        const dateStr = dateObj.toISOString().split('T')[0];
+        
+        const filters = {
+          startDate: dateStr,
+          endDate: dateStr,
+        };
+
+        const slots = await storage.getCalendar(filters);
+        res.json({ slots });
+      } else {
+        // Weekly planning mode - requires department and weekStart
+        if (!department) {
+          return res.status(400).json({ error: "department or date parameter is required" });
+        }
+        
+        if (!weekStart) {
+          return res.status(400).json({ error: "weekStart parameter is required when using department" });
+        }
+
+        // Calculate week end (Sunday, 6 days after Monday)
+        const startDate = new Date(weekStart);
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 6);
+
+        const filters = {
+          startDate: weekStart,
+          endDate: endDate.toISOString().split('T')[0],
+          department: department as any,
+        };
+
+        const slots = await storage.getCalendar(filters);
+        res.json(slots);
       }
-      
-      if (!weekStart) {
-        return res.status(400).json({ error: "weekStart parameter is required" });
-      }
-
-      // Calculate week end (Sunday, 6 days after Monday)
-      const startDate = new Date(weekStart);
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 6);
-
-      const filters = {
-        startDate: weekStart,
-        endDate: endDate.toISOString().split('T')[0],
-        department: department as any,
-      };
-
-      const slots = await storage.getCalendar(filters);
-      res.json(slots);
     } catch (error) {
       console.error("Error fetching time slots:", error);
       res.status(500).json({ error: "Failed to fetch time slots" });

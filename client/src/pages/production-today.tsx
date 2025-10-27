@@ -114,8 +114,10 @@ export default function ProductionToday() {
     }
   }, [hideCompleted]);
 
+  const queryUrl = `/api/timeslots?date=${encodeURIComponent(selectedDate.toISOString())}`;
+  
   const { data: response, isLoading } = useQuery<{ slots: TimeSlotWithOrder[] }>({
-    queryKey: ['/api/timeslots', { date: selectedDate.toISOString() }],
+    queryKey: [queryUrl],
   });
 
   const slots = response?.slots ?? [];
