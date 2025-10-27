@@ -1831,14 +1831,14 @@ function OrderEditDialog({ order, isOpen, onClose, onSave, editForm, setEditForm
               <div>
                 <Label>Lagerplatz</Label>
                 <Select
-                  value={editForm.locationPlaceId || ""}
-                  onValueChange={(value) => setEditForm({...editForm, locationPlaceId: value || null})}
+                  value={editForm.locationPlaceId || "NONE"}
+                  onValueChange={(value) => setEditForm({...editForm, locationPlaceId: value === "NONE" ? null : value})}
                 >
                   <SelectTrigger data-testid="select-edit-locationPlace">
                     <SelectValue placeholder="Bitte wählen..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Kein Lagerplatz</SelectItem>
+                    <SelectItem value="NONE">Kein Lagerplatz</SelectItem>
                     {warehousePlaces.map((place) => (
                       <SelectItem key={place.id} value={place.id}>
                         {place.group.name} - {place.name}

@@ -151,6 +151,11 @@ export default function OrderNew() {
       data.customer = "Unbekannt";
     }
     
+    // Convert "NONE" to null for locationPlaceId
+    if (data.locationPlaceId === "NONE") {
+      data.locationPlaceId = null;
+    }
+    
     createMutation.mutate(data);
   };
 
@@ -604,7 +609,7 @@ export default function OrderNew() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="">Kein Lagerplatz</SelectItem>
+                                <SelectItem value="NONE">Kein Lagerplatz</SelectItem>
                                 {warehousePlaces.map((place) => (
                                   <SelectItem key={place.id} value={place.id}>
                                     {place.group.name} - {place.name}

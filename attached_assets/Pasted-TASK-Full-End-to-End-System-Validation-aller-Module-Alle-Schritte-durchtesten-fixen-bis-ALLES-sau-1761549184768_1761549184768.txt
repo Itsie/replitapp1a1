@@ -1,0 +1,156 @@
+TASK: Full End-to-End System Validation aller Module
+Alle Schritte durchtesten & fixen bis ALLES sauber läuft
+
+=====================================================
+1) AUFTRAGSANLAGE & VALIDIERUNG
+=====================================================
+✅ Internen Auftrag korrekt anlegen
+→ Status: NEU
+
+✅ Validierung testen:
+- Pflichtfelder
+- Versandadresse optional, aber konsistent
+- Email/Telefon format validiert
+
+✅ Auto-Badges:
+- „Druckdaten fehlen“
+- „Größentabelle fehlt“ (nur Teamsport)
+
+=====================================================
+2) PRODUKTIONSVORAUSSETZUNGEN PRÜFEN
+=====================================================
+✅ PRINT-Asset hinzufügen
+✅ SizeTable hinzufügen (Teamsport)
+
+Dann:
+✅ Submit → Status: BEREIT FÜR PRODUKTION
+
+Submit-Button:
+- Disabled wenn Voraussetzungen fehlen
+- Aktiv mit Tooltip wenn OK
+
+=====================================================
+3) PLANUNG / DRAG & DROP / KALENDER
+=====================================================
+✅ Auftrag rechts im Plan-Pool
+✅ Drag-Drop auf Wochentag
+→ Status: GEPLANT
+✅ Zeitposition korrekt sichtbar
+✅ Löschen → zurück in Pool
+
+Edge-Cases:
+- Blocker Konflikt sichtbar
+- Verschieben eines Slots möglich
+
+=====================================================
+4) PRODUKTION HEUTE / LIVE-STATUS
+=====================================================
+✅ Heute liegende geplante Aufträge werden angezeigt
+✅ Start → Timer sichtbar → Status: IN PRODUKTION
+✅ Pause → Status: PAUSIERT
+✅ Weiter → zurück zu IN PRODUKTION
+✅ Stop → Slot DONE
+
+✅ Wenn ALLE Slots DONE → Auftrag: FERTIG PRODUZIERT
+
+Fehlteile:
+✅ Problem melden (Modal)
+→ Status: WARTET AUF FEHLTEILE
+✅ erscheint unter „Fehlteile“ Ansicht
+✅ nach Behebung zurück zu BEREIT FÜR PRODUKTION
+
+=====================================================
+5) KUNDENAUSGABE / ÜBERGABE
+=====================================================
+✅ Button „Ausgabe erfassen“ im Auftrag
+→ Datum & Notiz speichern
+→ Status: WARTET AUF ABRECHNUNG
+✅ verschwindet aus Planung & Produktion
+
+=====================================================
+6) ABRECHNUNG
+=====================================================
+✅ Auftrag erscheint unter /abrechnung ➜ „Offen“
+✅ Option „Abgerechnet“
+→ Status: ABGERECHNET
+✅ erscheint im Tab „Abgerechnet“
+✅ NICHT mehr anderswo
+
+=====================================================
+7) LAGER – VOLLTEST
+=====================================================
+✅ Lagerbereiche anlegen, bearbeiten, löschen
+✅ Auto-Generator für Lagerplätze testen:
+→ z.B. „Regal 1 bis 55“ erzeugen
+
+✅ Auftrag Lager-Zuweisung:
+- Bereich + Lagerplatz Such-Dropdown
+- Speichern & in DB sichtbar
+
+✅ Lager-Übersicht:
+- Nach Bereichen filterbar
+- Freie / belegte Plätze farblich unterscheidbar
+- Mit Auftrag verlinkt (Klick springt in Auftrag)
+
+✅ Beim Abrechnen:
+→ Lagerplatz automatisch freigeben
+
+Edge-Cases:
+- Doppelte Belegung verboten
+- Löschen eines Lagerbereichs mit belegten Slots → Blockiert + Hinweis
+
+=====================================================
+8) STATUS- & BADGE-KONTROLLE
+=====================================================
+Ein Auftrag pro Status erzeugen:
+NEU
+BEREIT FÜR PRODUKTION
+GEPLANT
+IN PRODUKTION
+PAUSIERT
+WARTET AUF FEHLTEILE
+FERTIG PRODUZIERT
+WARTET AUF ABRECHNUNG
+ABGERECHNET
+
+✅ Farben + Texte + Tooltips korrekt
+✅ Dark-Mode Lesbarkeit
+
+Auto-Badges testen:
+- Keine Druckdaten
+- Keine Größentabelle (Teamsport)
+- „Heute fällig“
+- „Überfällig“
+
+=====================================================
+9) UI-LAYOUT & RESPONSIVE TEST
+=====================================================
+✅ Rechter Inhalt 100% Breite nutzen
+✅ Auftragsübersicht Tabellen-Scrollbar & Sticky Header
+✅ Buttons / Icons sichtbar (dark + light)
+
+=====================================================
+10) API, DB & PERFORMANCE CHECK
+=====================================================
+✅ Keine 500er Errors backend-seitig
+✅ Totals werden bei Positionen immer neu berechnet
+✅ Keine „Waisenslots“ ohne Order
+✅ Keine Orders im falschen Status sichtbar
+✅ Keine Warnungen/Fehler in Browser-Console
+
+=====================================================
+11) SCREENSHOT-DOKUMENTATION
+=====================================================
+✅ Für jede Phase ein Screenshot
+✅ Bei Errors: Screenshot + Log + Fix dokumentieren
+
+=====================================================
+12) FERTIG?
+=====================================================
+Wenn ALLE Tests erfolgreich:
+→ Systemausgabe: „ALL TESTS PASSED ✅“
+→ Zusammenfassung GENAU dieser Liste
+=====================================================
+
+Regel:
+Nichts weiterentwickeln bevor nicht ALLES 100% grüner Haken hat.
