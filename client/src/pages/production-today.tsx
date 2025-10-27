@@ -471,6 +471,10 @@ export default function ProductionToday() {
           onPause={handlePause}
           onStop={handleStop}
           onProblem={handleOpenProblemDialog}
+          onViewDetails={(slot) => {
+            setSelectedSlot(slot);
+            setOrderDetailModalOpen(true);
+          }}
           isStarting={startMutation.isPending}
           isPausing={pauseMutation.isPending}
           isStopping={stopMutation.isPending}
@@ -790,7 +794,7 @@ export default function ProductionToday() {
                     {selectedSlot.status === 'PLANNED' && (
                       <Button
                         onClick={() => {
-                          onStart(selectedSlot.id);
+                          handleStart(selectedSlot.id);
                           setOrderDetailModalOpen(false);
                         }}
                         data-testid="modal-button-start"
@@ -804,7 +808,7 @@ export default function ProductionToday() {
                       <>
                         <Button
                           onClick={() => {
-                            onPause(selectedSlot.id);
+                            handlePause(selectedSlot.id);
                             setOrderDetailModalOpen(false);
                           }}
                           variant="outline"
@@ -815,7 +819,7 @@ export default function ProductionToday() {
                         </Button>
                         <Button
                           onClick={() => {
-                            onStop(selectedSlot.id);
+                            handleStop(selectedSlot.id);
                             setOrderDetailModalOpen(false);
                           }}
                           variant="outline"
@@ -843,7 +847,7 @@ export default function ProductionToday() {
                       <>
                         <Button
                           onClick={() => {
-                            onStart(selectedSlot.id);
+                            handleStart(selectedSlot.id);
                             setOrderDetailModalOpen(false);
                           }}
                           data-testid="modal-button-resume"
@@ -853,7 +857,7 @@ export default function ProductionToday() {
                         </Button>
                         <Button
                           onClick={() => {
-                            onStop(selectedSlot.id);
+                            handleStop(selectedSlot.id);
                             setOrderDetailModalOpen(false);
                           }}
                           variant="outline"
@@ -905,6 +909,7 @@ interface TimelineViewProps {
   onPause: (id: string) => void;
   onStop: (id: string) => void;
   onProblem: (id: string) => void;
+  onViewDetails: (slot: TimeSlotWithOrder) => void;
   isStarting?: boolean;
   isPausing?: boolean;
   isStopping?: boolean;
@@ -984,6 +989,7 @@ function TimelineView({
   onPause,
   onStop,
   onProblem,
+  onViewDetails,
   isStarting = false,
   isPausing = false,
   isStopping = false,
@@ -1088,10 +1094,7 @@ function TimelineView({
                   onPause={onPause}
                   onStop={onStop}
                   onProblem={onProblem}
-                  onViewDetails={() => {
-                    setSelectedSlot(slot);
-                    setOrderDetailModalOpen(true);
-                  }}
+                  onViewDetails={() => onViewDetails(slot)}
                   isStarting={isStarting}
                   isPausing={isPausing}
                   isStopping={isStopping}
