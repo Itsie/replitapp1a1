@@ -2004,8 +2004,12 @@ function StorageTab({ orderId }: { orderId: string }) {
     unassignMutation.mutate();
   };
 
-  // Find current warehouse assignment
-  const currentWarehousePlace = groups?.flatMap(g => g.places).find(p => p.occupiedByOrderId === orderId);
+  // Find current warehouse assignment with group info
+  const currentWarehouseData = groups?.reduce<{ place: any; group: any } | null>((acc, group) => {
+    const place = group.places.find(p => p.occupiedByOrderId === orderId);
+    return place ? { place, group } : acc;
+  }, null);
+  const currentWarehousePlace = currentWarehouseData?.place;
 
   if (orderLoading || groupsLoading) {
     return (
@@ -2051,15 +2055,15 @@ function StorageTab({ orderId }: { orderId: string }) {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Bereich</span>
-                    <Badge variant="secondary">{currentWarehousePlace.group.name}</Badge>
+                    <Badge variant="secondary">{currentWarehouseData?.group.name}</Badge>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Lagerplatz</span>
                     <span className="font-medium">{currentWarehousePlace.name}</span>
                   </div>
-                  {currentWarehousePlace.group.description && (
+                  {currentWarehouseData?.group.description && (
                     <div className="pt-2 text-xs text-muted-foreground border-t">
-                      {currentWarehousePlace.group.description}
+                      {currentWarehouseData.group.description}
                     </div>
                   )}
                 </div>
