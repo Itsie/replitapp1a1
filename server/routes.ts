@@ -1070,10 +1070,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ===== TimeSlot Action Routes (ADMIN or PROD_RUN only) =====
+  // ===== TimeSlot Action Routes (ADMIN, PROD_PLAN or PROD_RUN) =====
 
-  // POST /api/timeslots/:id/start - Start a time slot (ADMIN or PROD_RUN only)
-  app.post("/api/timeslots/:id/start", requireRole('ADMIN', 'PROD_RUN'), async (req, res) => {
+  // POST /api/timeslots/:id/start - Start a time slot (ADMIN, PROD_PLAN or PROD_RUN)
+  app.post("/api/timeslots/:id/start", requireRole('ADMIN', 'PROD_PLAN', 'PROD_RUN'), async (req, res) => {
     try {
       const timeSlot = await storage.startTimeSlot(req.params.id);
       res.json(timeSlot);
@@ -1094,8 +1094,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/timeslots/:id/pause - Pause a time slot (ADMIN or PROD_RUN only)
-  app.post("/api/timeslots/:id/pause", requireRole('ADMIN', 'PROD_RUN'), async (req, res) => {
+  // POST /api/timeslots/:id/pause - Pause a time slot (ADMIN, PROD_PLAN or PROD_RUN)
+  app.post("/api/timeslots/:id/pause", requireRole('ADMIN', 'PROD_PLAN', 'PROD_RUN'), async (req, res) => {
     try {
       const timeSlot = await storage.pauseTimeSlot(req.params.id);
       res.json(timeSlot);
@@ -1113,8 +1113,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/timeslots/:id/stop - Stop a time slot (ADMIN or PROD_RUN only)
-  app.post("/api/timeslots/:id/stop", requireRole('ADMIN', 'PROD_RUN'), async (req, res) => {
+  // POST /api/timeslots/:id/stop - Stop a time slot (ADMIN, PROD_PLAN or PROD_RUN)
+  app.post("/api/timeslots/:id/stop", requireRole('ADMIN', 'PROD_PLAN', 'PROD_RUN'), async (req, res) => {
     try {
       const timeSlot = await storage.stopTimeSlot(req.params.id);
       res.json(timeSlot);
@@ -1132,8 +1132,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/timeslots/:id/qc - Set QC for a time slot (ADMIN or PROD_RUN only)
-  app.post("/api/timeslots/:id/qc", requireRole('ADMIN', 'PROD_RUN'), async (req, res) => {
+  // POST /api/timeslots/:id/qc - Set QC for a time slot (ADMIN, PROD_PLAN or PROD_RUN)
+  app.post("/api/timeslots/:id/qc", requireRole('ADMIN', 'PROD_PLAN', 'PROD_RUN'), async (req, res) => {
     try {
       const validated = timeSlotQCSchema.parse(req.body);
       const timeSlot = await storage.setTimeSlotQC(req.params.id, validated.qc, validated.note);
@@ -1155,8 +1155,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/timeslots/:id/missing-parts - Mark time slot as having missing parts (ADMIN or PROD_RUN only)
-  app.post("/api/timeslots/:id/missing-parts", requireRole('ADMIN', 'PROD_RUN'), async (req, res) => {
+  // POST /api/timeslots/:id/missing-parts - Mark time slot as having missing parts (ADMIN, PROD_PLAN or PROD_RUN)
+  app.post("/api/timeslots/:id/missing-parts", requireRole('ADMIN', 'PROD_PLAN', 'PROD_RUN'), async (req, res) => {
     try {
       const validated = timeSlotMissingPartsSchema.parse(req.body);
       const timeSlot = await storage.setTimeSlotMissingParts(

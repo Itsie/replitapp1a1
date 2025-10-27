@@ -135,7 +135,12 @@ export default function ProductionToday() {
       await apiRequest('POST', `/api/timeslots/${slotId}/start`, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/timeslots'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/timeslots');
+        }
+      });
       toast({
         title: "Erfolgreich",
         description: "Arbeitsschritt gestartet",
@@ -155,7 +160,12 @@ export default function ProductionToday() {
       await apiRequest('POST', `/api/timeslots/${slotId}/pause`, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/timeslots'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/timeslots');
+        }
+      });
       toast({
         title: "Erfolgreich",
         description: "Arbeitsschritt pausiert",
@@ -175,7 +185,12 @@ export default function ProductionToday() {
       await apiRequest('POST', `/api/timeslots/${slotId}/stop`, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/timeslots'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/timeslots');
+        }
+      });
       toast({
         title: "Erfolgreich",
         description: "Arbeitsschritt beendet",
@@ -198,8 +213,21 @@ export default function ProductionToday() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/timeslots'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      // Invalidate all timeslots queries (including those with date parameters)
+      // Invalidate all timeslots queries (including those with date parameters)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/timeslots');
+        }
+      });
+      // Invalidate all orders queries (including those with workflow parameters)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/orders');
+        }
+      });
       setProblemDialogOpen(false);
       setProblemSlotId(null);
       setProblemNote("");
@@ -295,6 +323,9 @@ export default function ProductionToday() {
   if (selectedDepartment !== "all") {
     filteredSlots = filteredSlots.filter(s => s.workCenter.department === selectedDepartment);
   }
+  
+  // Always hide BLOCKED slots (they can't be worked on and should go to missing parts)
+  filteredSlots = filteredSlots.filter(s => s.status !== 'BLOCKED');
   
   if (hideCompleted) {
     filteredSlots = filteredSlots.filter(s => s.status !== 'DONE');
@@ -741,9 +772,6 @@ function TimeSlotRow({
   
   // For very short slots (< 40 px = ~30 min), use compact display
   const isCompact = slotHeight < 40;
-  
-  // Show actions by default for non-compact slots, hidden for compact slots
-  const [showActions, setShowActions] = useState(!isCompact);
 
   useEffect(() => {
     if (slot.status === 'RUNNING') {
@@ -773,9 +801,7 @@ function TimeSlotRow({
         ${isRunning ? 'border-l-4 border-l-green-600 bg-green-50/5' : ''}
         ${isBlocked ? 'border-l-4 border-l-red-600 bg-red-50/5' : ''}
         ${isPaused ? 'border-l-4 border-l-yellow-600 bg-yellow-50/5' : ''}
-        ${isCompact && !isDone ? 'cursor-pointer hover-elevate' : ''}
       `}
-      onClick={isCompact && !isDone ? () => setShowActions(!showActions) : undefined}
       data-testid={`card-slot-${slot.id}`}
     >
       <div className="flex items-start justify-between gap-2 flex-shrink-0">
@@ -825,9 +851,6 @@ function TimeSlotRow({
                 <span className="text-xs font-medium truncate">
                   {slot.order ? slot.order.title : 'Blockiert'}
                 </span>
-                {!isDone && showActions && (
-                  <span className="text-xs text-muted-foreground ml-auto">(Klicken zum Schließen)</span>
-                )}
               </div>
             </>
           )}
@@ -842,19 +865,7 @@ function TimeSlotRow({
             </div>
           )}
 
-          {/* Expand/collapse - only for non-compact slots */}
-          {!isCompact && !isDone && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowActions(!showActions)}
-              data-testid={`button-actions-${slot.id}`}
-              className="h-7 w-7 p-0"
-            >
-              {showActions ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            </Button>
-          )}
-
+          {/* Collapse toggle - only for DONE slots */}
           {!isCompact && isDone && (
             <Button
               variant="ghost"
@@ -869,8 +880,8 @@ function TimeSlotRow({
         </div>
       </div>
 
-      {/* Expanded details - for non-compact slots OR compact slots with showActions */}
-      {((!isDone && showActions) || (isDone && !isCollapsed)) && (
+      {/* Details section - always show for active slots, collapsible for DONE slots */}
+      {(!isDone || !isCollapsed) && (
         <div className={`mt-2 pt-2 border-t space-y-1.5 flex-shrink-0 ${isCompact ? 'text-xs' : 'text-xs'}`}>
           {!isCompact && slot.note && (
             <div>

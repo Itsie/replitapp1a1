@@ -232,6 +232,14 @@ async function main() {
       startedAt: new Date(today.getTime() + 11 * 60 * 60 * 1000),
       stoppedAt: new Date(today.getTime() + 12 * 60 * 60 * 1000),
     },
+    {
+      date: today,
+      startMin: 780, // 13:00
+      lengthMin: 90,
+      workCenter: 'Druck-Station 2',
+      order: 'FC Bayern Trikots 2025',
+      status: 'PLANNED' as const,
+    },
     
     // Tomorrow - various planned slots
     {

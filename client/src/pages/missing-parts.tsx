@@ -36,20 +36,26 @@ export default function MissingPartsPage() {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderWithMissingParts | null>(null);
 
-  const { data: response, isLoading } = useQuery<{ orders: OrderWithMissingParts[] }>({
-    queryKey: ['/api/orders', { workflow: 'WARTET_FEHLTEILE' }],
+  const queryUrl = '/api/orders?workflow=WARTET_FEHLTEILE';
+  
+  const { data: response, isLoading } = useQuery<OrderWithMissingParts[]>({
+    queryKey: [queryUrl],
   });
 
-  const orders = response?.orders ?? [];
+  const orders = response ?? [];
 
   const releaseMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      return apiRequest(`/api/orders/${orderId}/release-from-missing-parts`, {
-        method: 'POST',
-      });
+      return apiRequest('POST', `/api/orders/${orderId}/release-from-missing-parts`, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      // Invalidate all orders queries (including those with workflow parameters)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/orders');
+        }
+      });
       toast({
         title: "Auftrag freigegeben",
         description: "Der Auftrag wurde zurück zur Planung geschickt.",
