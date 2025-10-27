@@ -30,6 +30,26 @@ export interface TimeSlotWithOrder extends TimeSlot {
     department: Department;
     workflow: WorkflowState;
     dueDate: Date | null;
+    notes: string | null;
+    printAssets: Array<{
+      id: string;
+      label: string;
+      url: string;
+      required: boolean;
+    }>;
+    sizeTable: {
+      scheme: string;
+      rowsJson: any[];
+      comment: string | null;
+    } | null;
+    positions: Array<{
+      id: string;
+      articleName: string;
+      articleNumber: string | null;
+      qty: number;
+      unit: string;
+      unitPriceNet: number;
+    }>;
   } | null;
   workCenter: {
     id: string;
@@ -1220,6 +1240,32 @@ export class PrismaStorage implements IStorage {
             department: true,
             workflow: true,
             dueDate: true,
+            notes: true,
+            printAssets: {
+              select: {
+                id: true,
+                label: true,
+                url: true,
+                required: true,
+              },
+            },
+            sizeTable: {
+              select: {
+                scheme: true,
+                rowsJson: true,
+                comment: true,
+              },
+            },
+            positions: {
+              select: {
+                id: true,
+                articleName: true,
+                articleNumber: true,
+                qty: true,
+                unit: true,
+                unitPriceNet: true,
+              },
+            },
           },
         },
         workCenter: {

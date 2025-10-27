@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Play, Pause, Square, AlertCircle, Clock, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { Play, Pause, Square, AlertCircle, Clock, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, FileText, Download, Table2, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { WorkCenter, Department, WorkflowState } from "@prisma/client";
@@ -54,6 +54,26 @@ interface TimeSlotWithOrder {
     department: Department;
     workflow: WorkflowState;
     dueDate: Date | null;
+    notes: string | null;
+    printAssets?: Array<{
+      id: string;
+      label: string;
+      url: string;
+      required: boolean;
+    }>;
+    sizeTable?: {
+      scheme: string;
+      rowsJson: any[];
+      comment: string | null;
+    } | null;
+    positions?: Array<{
+      id: string;
+      articleName: string;
+      articleNumber: string | null;
+      qty: number;
+      unit: string;
+      unitPriceNet: number;
+    }>;
   } | null;
   workCenter: {
     id: string;
@@ -894,6 +914,134 @@ function TimeSlotRow({
               <span className="text-muted-foreground">Tatsächlich:</span>{' '}
               <span className="font-medium">{formatDuration(slot.actualDurationMin)}</span>
             </div>
+          )}
+
+          {/* Order Production Information */}
+          {!isCompact && slot.order && (
+            <>
+              {/* Order Note */}
+              {slot.order.notes && (
+                <div className="bg-muted/30 p-2 rounded text-xs">
+                  <span className="font-medium text-muted-foreground">Auftragsnotiz:</span>
+                  <p className="mt-0.5">{slot.order.notes}</p>
+                </div>
+              )}
+
+              {/* Print Assets */}
+              {slot.order.printAssets && slot.order.printAssets.length > 0 && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-muted-foreground font-medium">
+                    <FileText className="h-3.5 w-3.5" />
+                    <span>Druckdaten ({slot.order.printAssets.length})</span>
+                  </div>
+                  <div className="space-y-1 pl-5">
+                    {slot.order.printAssets.map((asset) => (
+                      <a
+                        key={asset.id}
+                        href={asset.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-testid={`link-download-${asset.id}`}
+                        className="flex items-center gap-2 text-xs hover-elevate active-elevate-2 p-1.5 rounded bg-card border"
+                      >
+                        <Download className="h-3 w-3 flex-shrink-0" />
+                        <span className="truncate flex-1">{asset.label}</span>
+                        {asset.required && (
+                          <span className="text-xs text-red-600">*</span>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Size Table */}
+              {slot.order.sizeTable && slot.order.sizeTable.rowsJson.length > 0 && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-muted-foreground font-medium">
+                    <Table2 className="h-3.5 w-3.5" />
+                    <span>Größentabelle</span>
+                  </div>
+                  <div className="pl-5">
+                    <div className="bg-card border rounded p-2 text-xs overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b">
+                            {slot.order.sizeTable.scheme === 'simple' ? (
+                              <>
+                                <th className="text-left p-1">Größe</th>
+                                <th className="text-right p-1">Anzahl</th>
+                              </>
+                            ) : (
+                              <>
+                                <th className="text-left p-1">Größe</th>
+                                <th className="text-left p-1">Farbe</th>
+                                <th className="text-right p-1">Anzahl</th>
+                              </>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {slot.order.sizeTable.rowsJson.map((row: any, idx: number) => (
+                            <tr key={idx} className="border-b last:border-0">
+                              {slot.order?.sizeTable?.scheme === 'simple' ? (
+                                <>
+                                  <td className="p-1">{row.size}</td>
+                                  <td className="text-right p-1 font-medium">{row.quantity}</td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="p-1">{row.size}</td>
+                                  <td className="p-1">{row.color}</td>
+                                  <td className="text-right p-1 font-medium">{row.quantity}</td>
+                                </>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {slot.order.sizeTable.comment && (
+                      <p className="text-xs text-muted-foreground mt-1 pl-2">
+                        {slot.order.sizeTable.comment}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Order Positions */}
+              {slot.order.positions && slot.order.positions.length > 0 && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-muted-foreground font-medium">
+                    <Package className="h-3.5 w-3.5" />
+                    <span>Positionen ({slot.order.positions.length})</span>
+                  </div>
+                  <div className="space-y-1 pl-5">
+                    {slot.order.positions.map((pos) => (
+                      <div
+                        key={pos.id}
+                        data-testid={`position-${pos.id}`}
+                        className="bg-card border rounded p-2 text-xs"
+                      >
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="font-medium">{pos.articleName}</span>
+                          <span className="text-muted-foreground">{Number(pos.qty)} {pos.unit}</span>
+                        </div>
+                        {pos.articleNumber && (
+                          <div className="text-muted-foreground mt-0.5 text-xs">
+                            Art.-Nr.: {pos.articleNumber}
+                          </div>
+                        )}
+                        <div className="text-muted-foreground mt-0.5 text-xs">
+                          € {Number(pos.unitPriceNet).toFixed(2)} / {pos.unit}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Action buttons - compact or full size */}
