@@ -166,6 +166,7 @@ export default function OrderDetail() {
       department: order.department,
       dueDate: order.dueDate ? new Date(order.dueDate).toISOString().split('T')[0] : "",
       location: order.location || "",
+      locationPlaceId: (order as any).locationPlaceId || "",
       notes: order.notes || "",
     });
     setIsEditing(true);
@@ -197,7 +198,15 @@ export default function OrderDetail() {
     if (editForm.shipCity !== undefined && editForm.shipCity !== order?.shipCity) updateData.shipCity = editForm.shipCity || null;
     if (editForm.shipCountry !== undefined && editForm.shipCountry !== order?.shipCountry) updateData.shipCountry = editForm.shipCountry || null;
     if (editForm.title !== order?.title) updateData.title = editForm.title;
-    if (editForm.customer !== order?.customer) updateData.customer = editForm.customer;
+    
+    // Auto-generate customer display name from company OR firstName + lastName
+    const newCustomer = editForm.company 
+      ? editForm.company 
+      : (editForm.contactFirstName && editForm.contactLastName)
+        ? `${editForm.contactFirstName} ${editForm.contactLastName}`
+        : "Unbekannt";
+    if (newCustomer !== order?.customer) updateData.customer = newCustomer;
+    
     if (editForm.department !== order?.department) updateData.department = editForm.department;
     
     // Handle dueDate properly: convert YYYY-MM-DD to ISO datetime string
@@ -212,6 +221,7 @@ export default function OrderDetail() {
     }
     
     if (editForm.location !== undefined && editForm.location !== order?.location) updateData.location = editForm.location || null;
+    if (editForm.locationPlaceId !== undefined && editForm.locationPlaceId !== (order as any)?.locationPlaceId) updateData.locationPlaceId = editForm.locationPlaceId || null;
     if (editForm.notes !== undefined && editForm.notes !== order?.notes) updateData.notes = editForm.notes || null;
     
     updateMutation.mutate(updateData);
@@ -1575,6 +1585,17 @@ function OrderEditDialog({ order, isOpen, onClose, onSave, editForm, setEditForm
   setEditForm: (form: any) => void;
 }) {
   const hasShippingAddress = !!(editForm.shipStreet || editForm.shipZip || editForm.shipCity || editForm.shipCountry);
+  
+  // Fetch all warehouse places for location selection
+  const { data: warehousePlaces = [] } = useQuery<WarehousePlaceWithRelations[]>({
+    queryKey: ["/api/warehouse/places"],
+    queryFn: async () => {
+      const res = await fetch("/api/warehouse/places");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: isOpen,
+  });
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -1781,15 +1802,6 @@ function OrderEditDialog({ order, isOpen, onClose, onSave, editForm, setEditForm
                 />
               </div>
               <div>
-                <Label>Kunde (Anzeigename) *</Label>
-                <Input
-                  value={editForm.customer || ""}
-                  onChange={(e) => setEditForm({...editForm, customer: e.target.value})}
-                  placeholder="Name für Auftragsübersicht"
-                  data-testid="input-edit-customer"
-                />
-              </div>
-              <div>
                 <Label>Abteilung *</Label>
                 <Select 
                   value={editForm.department || "TEAMSPORT"} 
@@ -1817,13 +1829,23 @@ function OrderEditDialog({ order, isOpen, onClose, onSave, editForm, setEditForm
                 />
               </div>
               <div>
-                <Label>Standort</Label>
-                <Input
-                  value={editForm.location || ""}
-                  onChange={(e) => setEditForm({...editForm, location: e.target.value})}
-                  placeholder="z.B. Regal A3"
-                  data-testid="input-edit-location"
-                />
+                <Label>Lagerplatz</Label>
+                <Select
+                  value={editForm.locationPlaceId || ""}
+                  onValueChange={(value) => setEditForm({...editForm, locationPlaceId: value || null})}
+                >
+                  <SelectTrigger data-testid="select-edit-locationPlace">
+                    <SelectValue placeholder="Bitte wählen..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Kein Lagerplatz</SelectItem>
+                    {warehousePlaces.map((place) => (
+                      <SelectItem key={place.id} value={place.id}>
+                        {place.group.name} - {place.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="col-span-2">
                 <Label>Notizen</Label>

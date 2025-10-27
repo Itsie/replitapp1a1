@@ -95,6 +95,8 @@ model Order {
   workflow            WorkflowState      @default(NEU)
   qc                  QCState            @default(UNGEPRUEFT)
   location            String?
+  locationPlaceId     String?
+  locationPlace       WarehousePlace?    @relation("OrderLocation", fields: [locationPlaceId], references: [id], onDelete: SetNull)
   company             String?
   contactFirstName    String?
   contactLastName     String?
@@ -256,6 +258,7 @@ model WarehousePlace {
   name              String
   occupiedByOrderId String?         @unique
   occupiedByOrder   Order?          @relation(fields: [occupiedByOrderId], references: [id], onDelete: SetNull)
+  ordersAtLocation  Order[]         @relation("OrderLocation")
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 

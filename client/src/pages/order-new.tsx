@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
@@ -31,22 +31,39 @@ type LocalPosition = {
   lineGross?: number;
 };
 
+type WarehousePlace = {
+  id: string;
+  name: string;
+  group: { id: string; name: string };
+};
+
 export default function OrderNew() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [useAlternateShipping, setUseAlternateShipping] = useState(false);
   const [positions, setPositions] = useState<LocalPosition[]>([]);
   
+  // Fetch all warehouse places for location selection
+  const { data: warehousePlaces = [] } = useQuery<WarehousePlace[]>({
+    queryKey: ["/api/warehouse/places"],
+    queryFn: async () => {
+      const res = await fetch("/api/warehouse/places");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+  
   const form = useForm<InsertOrder>({
     resolver: zodResolver(insertOrderSchema),
     mode: "onChange",
     defaultValues: {
       title: "",
-      customer: "",
+      customer: "", // Will be auto-generated
       department: "TEAMSPORT",
       dueDate: null,
       notes: null,
       location: null,
+      locationPlaceId: null,
       company: null,
       contactFirstName: null,
       contactLastName: null,
@@ -124,6 +141,16 @@ export default function OrderNew() {
       data.shipCountry = null;
     }
     
+    // Auto-generate customer display name from company OR firstName + lastName
+    if (data.company) {
+      data.customer = data.company;
+    } else if (data.contactFirstName && data.contactLastName) {
+      data.customer = `${data.contactFirstName} ${data.contactLastName}`;
+    } else {
+      // This should not happen due to form validation, but fallback just in case
+      data.customer = "Unbekannt";
+    }
+    
     createMutation.mutate(data);
   };
 
@@ -137,7 +164,7 @@ export default function OrderNew() {
     const errors = form.formState.errors;
     
     if (errors.title) missing.push("Titel");
-    if (errors.customer) missing.push("Kunde (Anzeigename)");
+    if (errors.company) missing.push("Firma ODER Vor- und Nachname");
     if (errors.customerEmail) missing.push("E-Mail");
     if (errors.customerPhone) missing.push("Telefon");
     if (errors.billStreet) missing.push("Rechnungsadresse: Straße");
@@ -512,24 +539,6 @@ export default function OrderNew() {
                       
                       <FormField
                         control={form.control}
-                        name="customer"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Kunde (Anzeigename) *</FormLabel>
-                            <FormControl>
-                              <Input
-                                data-testid="input-customer"
-                                placeholder="Name für Auftragsübersicht"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={form.control}
                         name="department"
                         render={({ field }) => (
                           <FormItem>
@@ -584,18 +593,28 @@ export default function OrderNew() {
                       
                       <FormField
                         control={form.control}
-                        name="location"
+                        name="locationPlaceId"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Standort</FormLabel>
-                            <FormControl>
-                              <Input
-                                data-testid="input-location"
-                                placeholder="z.B. Regal A3"
-                                {...field}
-                                value={field.value || ""}
-                              />
-                            </FormControl>
+                            <FormLabel>Lagerplatz</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || ""}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-locationPlace">
+                                  <SelectValue placeholder="Bitte wählen..." />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="">Kein Lagerplatz</SelectItem>
+                                {warehousePlaces.map((place) => (
+                                  <SelectItem key={place.id} value={place.id}>
+                                    {place.group.name} - {place.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>
+                              Wählen Sie einen Lagerplatz aus, wo dieser Auftrag gelagert werden soll.
+                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}

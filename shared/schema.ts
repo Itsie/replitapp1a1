@@ -75,11 +75,12 @@ export function getWorkflowBadgeColor(workflow: WorkflowState): string {
 // Insert schemas for creating new records
 export const insertOrderSchema = z.object({
   title: z.string().min(1, "Title is required"),
-  customer: z.string().min(1, "Customer is required"),
+  customer: z.string().optional(),
   department: departmentSchema,
   dueDate: z.string().datetime().optional().nullable().transform(val => val || null),
   notes: z.string().optional().nullable().transform(val => val || null),
   location: z.string().optional().nullable().transform(val => val || null),
+  locationPlaceId: z.string().optional().nullable().transform(val => val || null),
   company: z.string().optional().nullable().transform(val => val || null),
   contactFirstName: z.string().optional().nullable().transform(val => val || null),
   contactLastName: z.string().optional().nullable().transform(val => val || null),

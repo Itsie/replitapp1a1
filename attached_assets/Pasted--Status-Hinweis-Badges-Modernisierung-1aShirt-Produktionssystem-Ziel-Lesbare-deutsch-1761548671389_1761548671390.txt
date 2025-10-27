@@ -1,0 +1,100 @@
+# Status- & Hinweis-Badges Modernisierung
+## 1aShirt – Produktionssystem
+
+## 🎯 Ziel
+Lesbare deutsche Statuslabels + automatische Hinweis-Badges,
+damit Nutzer sofort erkennen:
+✅ was möglich ist  
+❌ was fehlt  
+⚠️ was dringend wird
+
+Backend-ENUMS bleiben **unverändert**,
+Mapping erfolgt **nur im UI**.
+
+---
+
+## 🧩 Primäre Status (DB → UI Mapping)
+
+| DB ENUM | Neues Label im UI | Bedeutung Kurzbeschreibung | Badge Farbe / Style |
+|--------|------------------|---------------------------|-------------------|
+| NEW | Neu | Auftrag angelegt, unvollständig | Grau |
+| FUER_PROD | Bereit für Produktion | Daten vollständig – einplanbar | Blau |
+| PLANNED | Geplant | Slot zugewiesen – noch nicht gestartet | Indigo |
+| IN_PROD | In Produktion | Timer aktiv – Bearbeitung läuft | Grün |
+| PAUSED | Pause | Bearbeitung unterbrochen | Gelb / Text dunkel |
+| WARTET_FEHLTEILE | Warten auf Fehlteile | Produktion blockiert | Orange |
+| FERTIG | Fertig produziert | Produktion abgeschlossen | Türkis |
+| ZUR_ABRECHNUNG | Warten auf Abrechnung | Ausgabe erfolgt – Buchhaltung dran | Slate (Blaugrau) |
+| ABGERECHNET | Abgerechnet | Vollständig abgeschlossen | Grau Outline |
+
+✨ Tooltip auf jedem Badge:  
+`Status: <Label>`
+
+---
+
+## 🔍 Auto-Hinweis-Badges (zusätzlich zum primären Status)
+
+Diese erscheinen *immer dann, wenn das Problem real existiert.*
+Blockieren ggf. Workflow-Buttons.
+
+| Trigger | UI Badge-Text | Farbe |
+|--------|----------------|------|
+| Keine Druckdaten (`printAssets.required == 0`) | **Druckdaten fehlen** | Rot |
+| TEAMSPORT & keine SizeTable vorhanden | **Größentabelle fehlt** | Orange |
+| dueDate < heute & Status nicht FERTIG/ABGERECHNET | **Überfällig** | Dunkelrot |
+| Status FUER_PROD & keine TimeSlots | **Nicht eingeplant** | Orange Outline |
+| PLANNED & Slot liegt nach heutigem Datum | **Geplant für später** | Indigo Outline |
+
+✨ Tooltip:  
+`Hinweis: <Label>`
+
+---
+
+## 🧠 UI-Filterlogik pro Seite
+
+| Seite | Welche Status anzeigen? | Warum |
+|------|-----------------------|------|
+| `/orders` | ALLE | Komplette Übersicht |
+| `/planning` | nur FUER_PROD | Planbare Aufträge |
+| `/production-today` | PLANNED, IN_PROD, PAUSED | Heute abzuarbeiten |
+| `/fehlteile` | WARTET_FEHLTEILE | Blockierte Aufträge |
+| `/abrechnung` | ZUR_ABRECHNUNG, ABGERECHNET | Buchhaltung-Fokus |
+
+---
+
+## ✅ UI-Verhalten (Workflow Guards)
+
+| Phase | Muss vor dem Statuswechsel erfüllt sein |
+|------|-----------------------------------------|
+| FUER_PROD → PLANNED | Druckdaten OK + ggf. Größentabelle OK |
+| PLANNED → IN_PROD | Timer starten auf TimeSlot |
+| IN_PROD → PAUSED / FERTIG | Slot-Logik ok |
+| FERTIG → ZUR_ABRECHNUNG | Ausgabe erfasst |
+| ZUR_ABRECHNUNG → ABGERECHNET | Rechnungsdaten hinterlegt |
+
+Button auf disabled + Tooltip anzeigen, wenn Bedingung **nicht** erfüllt.
+
+---
+
+## 🎨 UI-Style-Vorgaben
+
+- Shadcn Badge verwenden (`variant="default"` etc.)
+- Farbpalette kompatibel mit **Dark Mode**
+- Platz in Tabellen **nicht abschneiden**
+- Badges **wrap-fähig** machen (mehrere Hinweis-Badges!)
+
+---
+
+## ✅ Acceptance Criteria
+
+- Alle Status korrekt angezeigt ✔️
+- Auto-Hinweise logisch getestet ✔️
+- Seite zeigt nur relevante Status ✔️
+- Tooltips überall vorhanden ✔️
+- Workflows lassen sich *nur* korrekt durchlaufen ✔️
+
+Nach Umsetzung bitte Test-Screenshots liefern:
+- 1 Auftrag je Status inkl. Hinweis-Badges
+- Dark Mode Kontrastcheck
+- Planung & Produktion Today Kontrolle
+

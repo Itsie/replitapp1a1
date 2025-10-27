@@ -298,9 +298,17 @@ export class PrismaStorage implements IStorage {
     // Generate display order number for INTERNAL orders
     const displayOrderNumber = await this.generateDisplayOrderNumber();
     
+    // Auto-generate customer display name if not provided
+    const customer = orderData.customer || 
+      orderData.company || 
+      (orderData.contactFirstName && orderData.contactLastName 
+        ? `${orderData.contactFirstName} ${orderData.contactLastName}` 
+        : "Unbekannt");
+    
     const order = await prisma.order.create({
       data: {
         ...orderData,
+        customer,
         source: 'INTERNAL',
         workflow: 'NEU',
         displayOrderNumber,
@@ -330,7 +338,7 @@ export class PrismaStorage implements IStorage {
     // Prepare update data
     const data: any = {};
     
-    // Rules for JTL orders: only allow dueDate, location, notes
+    // Rules for JTL orders: only allow dueDate, location, locationPlaceId, notes
     if (existingOrder.source === 'JTL') {
       // Check if trying to update restricted fields
       const restrictedFields = ['company', 'contactFirstName', 'contactLastName', 'customerEmail', 'customerPhone',
@@ -346,6 +354,7 @@ export class PrismaStorage implements IStorage {
       // Only allow these fields for JTL orders
       if (updateData.dueDate !== undefined) data.dueDate = updateData.dueDate ? new Date(updateData.dueDate) : null;
       if (updateData.location !== undefined) data.location = updateData.location;
+      if (updateData.locationPlaceId !== undefined) data.locationPlaceId = updateData.locationPlaceId;
       if (updateData.notes !== undefined) data.notes = updateData.notes;
     } 
     // Rules for IN_PROD orders: only allow notes
@@ -371,11 +380,25 @@ export class PrismaStorage implements IStorage {
       if (updateData.shipCity !== undefined) data.shipCity = updateData.shipCity;
       if (updateData.shipCountry !== undefined) data.shipCountry = updateData.shipCountry;
       if (updateData.title !== undefined) data.title = updateData.title;
-      if (updateData.customer !== undefined) data.customer = updateData.customer;
+      
+      // Auto-generate customer display name if company/contact fields are being updated
+      if (updateData.customer !== undefined) {
+        data.customer = updateData.customer;
+      } else if (updateData.company !== undefined || updateData.contactFirstName !== undefined || updateData.contactLastName !== undefined) {
+        // Merge with existing data to generate customer name
+        const company = updateData.company !== undefined ? updateData.company : existingOrder.company;
+        const firstName = updateData.contactFirstName !== undefined ? updateData.contactFirstName : existingOrder.contactFirstName;
+        const lastName = updateData.contactLastName !== undefined ? updateData.contactLastName : existingOrder.contactLastName;
+        
+        data.customer = company || 
+          (firstName && lastName ? `${firstName} ${lastName}` : "Unbekannt");
+      }
+      
       if (updateData.department !== undefined) data.department = updateData.department;
       if (updateData.workflow !== undefined) data.workflow = updateData.workflow;
       if (updateData.dueDate !== undefined) data.dueDate = updateData.dueDate ? new Date(updateData.dueDate) : null;
       if (updateData.location !== undefined) data.location = updateData.location;
+      if (updateData.locationPlaceId !== undefined) data.locationPlaceId = updateData.locationPlaceId;
       if (updateData.notes !== undefined) data.notes = updateData.notes;
     }
     
