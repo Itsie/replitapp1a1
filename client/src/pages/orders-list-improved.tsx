@@ -60,8 +60,16 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table";
-import type { OrderWithRelations, OrderSource, WorkflowState } from "@shared/schema";
-import { WORKFLOW_LABELS, getWorkflowBadgeColor, getOrderHints } from "@shared/schema";
+import type { OrderWithRelations, OrderSource, WorkflowState, Department } from "@shared/schema";
+import { 
+  WORKFLOW_LABELS, 
+  DEPARTMENT_LABELS,
+  SOURCE_LABELS,
+  getWorkflowBadgeClass, 
+  getDepartmentBadgeClass,
+  getSourceBadgeClass,
+  getOrderHints 
+} from "@shared/schema";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/hooks/use-toast";
 
@@ -78,7 +86,7 @@ function OrderStatusBadge({ order }: { order: OrderWithRelations }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge className={getWorkflowBadgeColor(order.workflow)} data-testid="badge-status">
+        <Badge className={getWorkflowBadgeClass(order.workflow)} data-testid="badge-status">
           {statusLabel}
         </Badge>
       </TooltipTrigger>

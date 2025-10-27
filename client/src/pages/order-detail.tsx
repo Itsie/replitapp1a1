@@ -18,7 +18,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import type { OrderWithRelations, SizeTableResponse, SizeTableRow, OrderAsset, WarehouseGroupWithRelations, WarehousePlaceWithRelations } from "@shared/schema";
-import { WORKFLOW_LABELS, getWorkflowBadgeColor, getOrderHints } from "@shared/schema";
+import { 
+  WORKFLOW_LABELS, 
+  DEPARTMENT_LABELS,
+  SOURCE_LABELS,
+  getWorkflowBadgeClass, 
+  getDepartmentBadgeClass,
+  getSourceBadgeClass,
+  getOrderHints 
+} from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SizeTableEditor } from "@/components/size-table-editor";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -346,7 +354,7 @@ export default function OrderDetail() {
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge className={getWorkflowBadgeColor(order.workflow)} data-testid="badge-workflow">
+                    <Badge className={getWorkflowBadgeClass(order.workflow)} data-testid="badge-workflow">
                       {WORKFLOW_LABELS[order.workflow]}
                     </Badge>
                   </TooltipTrigger>

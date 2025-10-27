@@ -26,7 +26,14 @@ import { Play, Pause, Square, AlertCircle, Clock, ChevronDown, ChevronUp, Chevro
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { WorkCenter, Department, WorkflowState } from "@prisma/client";
-import { WORKFLOW_LABELS } from "@shared/schema";
+import { 
+  WORKFLOW_LABELS, 
+  DEPARTMENT_LABELS,
+  getWorkflowBadgeClass,
+  getDepartmentBadgeClass,
+  getTimeSlotBadgeClass,
+  TIMESLOT_STATUS_LABELS
+} from "@shared/schema";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format, addDays, subDays, startOfDay, isSameDay } from "date-fns";
@@ -596,8 +603,8 @@ export default function ProductionToday() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Status:</span>
-                    <Badge variant={selectedSlot.status === 'RUNNING' ? 'default' : 'outline'}>
-                      {selectedSlot.status}
+                    <Badge className={getTimeSlotBadgeClass(selectedSlot.status)}>
+                      {TIMESLOT_STATUS_LABELS[selectedSlot.status as keyof typeof TIMESLOT_STATUS_LABELS] || selectedSlot.status}
                     </Badge>
                   </div>
                 </CardContent>
@@ -615,11 +622,15 @@ export default function ProductionToday() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Abteilung:</span>
-                    <Badge variant="outline">{selectedSlot.order.department}</Badge>
+                    <Badge className={getDepartmentBadgeClass(selectedSlot.order.department)}>
+                      {DEPARTMENT_LABELS[selectedSlot.order.department]}
+                    </Badge>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Workflow:</span>
-                    <Badge variant="outline">{WORKFLOW_LABELS[selectedSlot.order.workflow]}</Badge>
+                    <Badge className={getWorkflowBadgeClass(selectedSlot.order.workflow)}>
+                      {WORKFLOW_LABELS[selectedSlot.order.workflow]}
+                    </Badge>
                   </div>
                   {selectedSlot.order.dueDate && (
                     <div className="flex justify-between">

@@ -1,0 +1,89 @@
+// @shared/schema.ts
+// Ergänzen oder ersetzen, wo sinnvoll
+
+export type WorkflowState =
+  | "ENTWURF"
+  | "NEU"
+  | "PRUEFUNG"
+  | "FUER_PROD"
+  | "IN_PROD"
+  | "WARTET_FEHLTEILE"
+  | "FERTIG"
+  | "ZUR_ABRECHNUNG"
+  | "ABGERECHNET";
+
+export const WORKFLOW_LABELS: Record<WorkflowState, string> = {
+  ENTWURF: "Entwurf",
+  NEU: "Neu",
+  PRUEFUNG: "Prüfung",
+  FUER_PROD: "Bereit für Produktion",
+  IN_PROD: "In Produktion",
+  WARTET_FEHLTEILE: "Wartet auf Fehlteile",
+  FERTIG: "Fertig produziert",
+  ZUR_ABRECHNUNG: "Zur Abrechnung",
+  ABGERECHNET: "Abgerechnet",
+};
+
+// Kontrastsichere Badge-Styles (solid), Dunkel/Hell tauglich
+export const WORKFLOW_BADGE_CLASSES: Record<WorkflowState, string> = {
+  ENTWURF:
+    "bg-slate-500 text-white border-transparent dark:bg-slate-600",
+  NEU:
+    "bg-cyan-600 text-white border-transparent dark:bg-cyan-500",
+  PRUEFUNG:
+    "bg-amber-600 text-white border-transparent dark:bg-amber-500",
+  FUER_PROD:
+    "bg-indigo-600 text-white border-transparent dark:bg-indigo-500",
+  IN_PROD:
+    "bg-blue-600 text-white border-transparent dark:bg-blue-500",
+  WARTET_FEHLTEILE:
+    "bg-orange-600 text-white border-transparent dark:bg-orange-500",
+  FERTIG:
+    "bg-emerald-600 text-white border-transparent dark:bg-emerald-500",
+  ZUR_ABRECHNUNG:
+    "bg-fuchsia-600 text-white border-transparent dark:bg-fuchsia-500",
+  ABGERECHNET:
+    "bg-zinc-700 text-white border-transparent dark:bg-zinc-600",
+};
+
+// Departments auch solide färben, statt Outline-Mimimi
+export type Department =
+  | "TEAMSPORT"
+  | "TEXTILVEREDELUNG"
+  | "STICKEREI"
+  | "DRUCK"
+  | "SONSTIGES";
+
+export const DEPARTMENT_LABELS: Record<Department, string> = {
+  TEAMSPORT: "Teamsport",
+  TEXTILVEREDELUNG: "Textilveredelung",
+  STICKEREI: "Stickerei",
+  DRUCK: "Druck",
+  SONSTIGES: "Sonstiges",
+};
+
+export const DEPARTMENT_BADGE_CLASSES: Record<Department, string> = {
+  TEAMSPORT: "bg-blue-500 text-white border-transparent dark:bg-blue-600",
+  TEXTILVEREDELUNG: "bg-purple-500 text-white border-transparent dark:bg-purple-600",
+  STICKEREI: "bg-pink-500 text-white border-transparent dark:bg-pink-600",
+  DRUCK: "bg-green-600 text-white border-transparent dark:bg-green-500",
+  SONSTIGES: "bg-gray-500 text-white border-transparent dark:bg-gray-600",
+};
+
+// Quellen (JTL/Intern) – auch solide
+export type OrderSource = "JTL" | "INTERNAL";
+export const SOURCE_BADGE_CLASSES: Record<OrderSource, string> = {
+  JTL: "bg-sky-600 text-white border-transparent dark:bg-sky-500",
+  INTERNAL: "bg-emerald-600 text-white border-transparent dark:bg-emerald-500",
+};
+
+// Convenience-Getter
+export function getWorkflowBadgeClass(wf: WorkflowState): string {
+  return WORKFLOW_BADGE_CLASSES[wf] ?? "bg-slate-500 text-white";
+}
+export function getDepartmentBadgeClass(dep: Department): string {
+  return DEPARTMENT_BADGE_CLASSES[dep] ?? "bg-gray-500 text-white";
+}
+export function getSourceBadgeClass(src: OrderSource): string {
+  return SOURCE_BADGE_CLASSES[src] ?? "bg-gray-500 text-white";
+}

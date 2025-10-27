@@ -18,10 +18,25 @@ export const WORKFLOW_LABELS: Record<WorkflowState, string> = {
   PRUEFUNG: "Prüfung",
   FUER_PROD: "Bereit für Produktion",
   IN_PROD: "In Produktion",
-  WARTET_FEHLTEILE: "Warten auf Fehlteile",
+  WARTET_FEHLTEILE: "Wartet auf Fehlteile",
   FERTIG: "Fertig produziert",
-  ZUR_ABRECHNUNG: "Warten auf Abrechnung",
+  ZUR_ABRECHNUNG: "Zur Abrechnung",
   ABGERECHNET: "Abgerechnet",
+};
+
+// Department labels
+export const DEPARTMENT_LABELS: Record<Department, string> = {
+  TEAMSPORT: "Teamsport",
+  TEXTILVEREDELUNG: "Textilveredelung",
+  STICKEREI: "Stickerei",
+  DRUCK: "Druck",
+  SONSTIGES: "Sonstiges",
+};
+
+// Source labels
+export const SOURCE_LABELS: Record<OrderSource, string> = {
+  JTL: "JTL",
+  INTERNAL: "Intern",
 };
 
 // TimeSlot Status Labels (for production view)
@@ -33,71 +48,58 @@ export const TIMESLOT_STATUS_LABELS = {
   BLOCKED: "Blockiert",
 } as const;
 
-export function getWorkflowBadgeVariant(workflow: WorkflowState): "default" | "secondary" | "destructive" | "outline" {
-  switch (workflow) {
-    case "ENTWURF":
-    case "NEU":
-      return "secondary";
-    case "PRUEFUNG":
-      return "secondary";
-    case "FUER_PROD":
-      return "default";
-    case "IN_PROD":
-      return "default";
-    case "WARTET_FEHLTEILE":
-      return "destructive";
-    case "FERTIG":
-      return "default";
-    case "ZUR_ABRECHNUNG":
-      return "outline";
-    case "ABGERECHNET":
-      return "outline";
-    default:
-      return "secondary";
-  }
+// Kontrastsichere Badge-Styles (solid), Dunkel/Hell tauglich
+export const WORKFLOW_BADGE_CLASSES: Record<WorkflowState, string> = {
+  ENTWURF: "bg-slate-500 text-white border-transparent dark:bg-slate-600",
+  NEU: "bg-cyan-600 text-white border-transparent dark:bg-cyan-500",
+  PRUEFUNG: "bg-amber-600 text-white border-transparent dark:bg-amber-500",
+  FUER_PROD: "bg-indigo-600 text-white border-transparent dark:bg-indigo-500",
+  IN_PROD: "bg-blue-600 text-white border-transparent dark:bg-blue-500",
+  WARTET_FEHLTEILE: "bg-orange-600 text-white border-transparent dark:bg-orange-500",
+  FERTIG: "bg-emerald-600 text-white border-transparent dark:bg-emerald-500",
+  ZUR_ABRECHNUNG: "bg-fuchsia-600 text-white border-transparent dark:bg-fuchsia-500",
+  ABGERECHNET: "bg-zinc-700 text-white border-transparent dark:bg-zinc-600",
+};
+
+// Department Badge Classes (solid colors)
+export const DEPARTMENT_BADGE_CLASSES: Record<Department, string> = {
+  TEAMSPORT: "bg-blue-500 text-white border-transparent dark:bg-blue-600",
+  TEXTILVEREDELUNG: "bg-purple-500 text-white border-transparent dark:bg-purple-600",
+  STICKEREI: "bg-pink-500 text-white border-transparent dark:bg-pink-600",
+  DRUCK: "bg-green-600 text-white border-transparent dark:bg-green-500",
+  SONSTIGES: "bg-gray-500 text-white border-transparent dark:bg-gray-600",
+};
+
+// Source Badge Classes (solid colors)
+export const SOURCE_BADGE_CLASSES: Record<OrderSource, string> = {
+  JTL: "bg-sky-600 text-white border-transparent dark:bg-sky-500",
+  INTERNAL: "bg-emerald-600 text-white border-transparent dark:bg-emerald-500",
+};
+
+// TimeSlot Status Colors (for production views - solid colors)
+export const TIMESLOT_BADGE_CLASSES: Record<string, string> = {
+  PLANNED: "bg-indigo-600 text-white border-transparent dark:bg-indigo-500",
+  RUNNING: "bg-emerald-600 text-white border-transparent dark:bg-emerald-500",
+  PAUSED: "bg-amber-600 text-white border-transparent dark:bg-amber-500",
+  DONE: "bg-teal-600 text-white border-transparent dark:bg-teal-500",
+  BLOCKED: "bg-red-600 text-white border-transparent dark:bg-red-500",
+};
+
+// Convenience-Getter
+export function getWorkflowBadgeClass(wf: WorkflowState): string {
+  return WORKFLOW_BADGE_CLASSES[wf] ?? "bg-slate-500 text-white border-transparent";
 }
 
-export function getWorkflowBadgeColor(workflow: WorkflowState): string {
-  switch (workflow) {
-    case "ENTWURF":
-      return "bg-slate-200 text-slate-900 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600";
-    case "NEU":
-      return "bg-slate-200 text-slate-900 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600";
-    case "PRUEFUNG":
-      return "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-700 dark:text-amber-100 dark:border-amber-600";
-    case "FUER_PROD":
-      return "bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-700 dark:text-blue-100 dark:border-blue-600";
-    case "IN_PROD":
-      return "bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-700 dark:text-emerald-100 dark:border-emerald-600";
-    case "WARTET_FEHLTEILE":
-      return "bg-orange-100 text-orange-900 border-orange-300 dark:bg-orange-700 dark:text-orange-100 dark:border-orange-600";
-    case "FERTIG":
-      return "bg-teal-100 text-teal-900 border-teal-300 dark:bg-teal-700 dark:text-teal-100 dark:border-teal-600";
-    case "ZUR_ABRECHNUNG":
-      return "bg-violet-100 text-violet-900 border-violet-300 dark:bg-violet-700 dark:text-violet-100 dark:border-violet-600";
-    case "ABGERECHNET":
-      return "bg-gray-200 text-gray-900 border-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600";
-    default:
-      return "bg-slate-200 text-slate-900 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600";
-  }
+export function getDepartmentBadgeClass(dep: Department): string {
+  return DEPARTMENT_BADGE_CLASSES[dep] ?? "bg-gray-500 text-white border-transparent";
 }
 
-// TimeSlot Status Colors (for production views)
-export function getTimeSlotBadgeColor(status: string): string {
-  switch (status) {
-    case "PLANNED":
-      return "bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-700 dark:text-indigo-100 dark:border-indigo-600";
-    case "RUNNING":
-      return "bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-700 dark:text-emerald-100 dark:border-emerald-600";
-    case "PAUSED":
-      return "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-700 dark:text-amber-100 dark:border-amber-600";
-    case "DONE":
-      return "bg-teal-100 text-teal-900 border-teal-300 dark:bg-teal-700 dark:text-teal-100 dark:border-teal-600";
-    case "BLOCKED":
-      return "bg-red-100 text-red-900 border-red-300 dark:bg-red-700 dark:text-red-100 dark:border-red-600";
-    default:
-      return "bg-slate-200 text-slate-900 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600";
-  }
+export function getSourceBadgeClass(src: OrderSource): string {
+  return SOURCE_BADGE_CLASSES[src] ?? "bg-gray-500 text-white border-transparent";
+}
+
+export function getTimeSlotBadgeClass(status: string): string {
+  return TIMESLOT_BADGE_CLASSES[status] ?? "bg-slate-500 text-white border-transparent";
 }
 
 // ===== ORDER HINTS =====

@@ -9,7 +9,12 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { OrderWithRelations, Department, OrderSource, WorkflowState } from "@shared/schema";
 import { useDebounce } from "@/hooks/use-debounce";
-import { WORKFLOW_LABELS, getWorkflowBadgeColor } from "@shared/schema";
+import { 
+  WORKFLOW_LABELS, 
+  getWorkflowBadgeClass,
+  getSourceBadgeClass,
+  SOURCE_LABELS 
+} from "@shared/schema";
 
 export default function OrdersList() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -38,11 +43,6 @@ export default function OrdersList() {
     return new Date(date).toLocaleDateString("de-DE");
   };
   
-  const getSourceBadgeColor = (source: OrderSource) => {
-    return source === "JTL" 
-      ? "bg-blue-500 text-white dark:bg-blue-600 dark:text-white border-blue-600 dark:border-blue-700" 
-      : "bg-emerald-500 text-white dark:bg-emerald-600 dark:text-white border-emerald-600 dark:border-emerald-700";
-  };
   
   return (
     <div className="w-full">
@@ -155,8 +155,8 @@ export default function OrdersList() {
                         {order.customer}
                       </p>
                     </div>
-                    <Badge variant="outline" className={getSourceBadgeColor(order.source)} data-testid={`badge-source-${order.id}`}>
-                      {order.source}
+                    <Badge className={getSourceBadgeClass(order.source)} data-testid={`badge-source-${order.id}`}>
+                      {SOURCE_LABELS[order.source]}
                     </Badge>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -164,8 +164,8 @@ export default function OrdersList() {
                       <Badge variant="outline" data-testid={`badge-department-${order.id}`}>
                         {order.department}
                       </Badge>
-                      <Badge className={getWorkflowBadgeColor(order.workflow)} data-testid={`badge-workflow-${order.id}`}>
-                        {order.workflow}
+                      <Badge className={getWorkflowBadgeClass(order.workflow)} data-testid={`badge-workflow-${order.id}`}>
+                        {WORKFLOW_LABELS[order.workflow]}
                       </Badge>
                     </div>
                     

@@ -22,7 +22,12 @@ import { useState } from "react";
 import { CheckCircle2, AlertCircle, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { getWorkflowBadgeColor, WORKFLOW_LABELS } from "@shared/schema";
+import { 
+  getWorkflowBadgeClass, 
+  getDepartmentBadgeClass,
+  WORKFLOW_LABELS,
+  DEPARTMENT_LABELS 
+} from "@shared/schema";
 import type { Order, Department } from "@prisma/client";
 
 interface OrderWithMissingParts extends Order {
@@ -147,7 +152,7 @@ export default function MissingPartsPage() {
                       <Badge variant="outline">{order.department}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getWorkflowBadgeColor(order.workflow)}>
+                      <Badge className={getWorkflowBadgeClass(order.workflow)}>
                         {WORKFLOW_LABELS[order.workflow]}
                       </Badge>
                     </TableCell>
