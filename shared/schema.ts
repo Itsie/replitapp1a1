@@ -10,18 +10,28 @@ export const departmentSchema = z.enum(["TEAMSPORT", "TEXTILVEREDELUNG", "STICKE
 export const workflowStateSchema = z.enum(["ENTWURF", "NEU", "PRUEFUNG", "FUER_PROD", "IN_PROD", "WARTET_FEHLTEILE", "FERTIG", "ZUR_ABRECHNUNG", "ABGERECHNET"]);
 export const qcStateSchema = z.enum(["IO", "NIO", "UNGEPRUEFT"]);
 
-// German workflow labels and colors
+// ===== MODERNIZED STATUS LABELS & COLORS =====
+// German workflow labels (Order Status)
 export const WORKFLOW_LABELS: Record<WorkflowState, string> = {
   ENTWURF: "Entwurf",
-  NEU: "Entwurf",
+  NEU: "Neu",
   PRUEFUNG: "Prüfung",
-  FUER_PROD: "Für Produktion",
+  FUER_PROD: "Bereit für Produktion",
   IN_PROD: "In Produktion",
-  WARTET_FEHLTEILE: "Wartet auf Fehlteile",
-  FERTIG: "Produktion fertig",
-  ZUR_ABRECHNUNG: "Ausgabe erfolgt",
+  WARTET_FEHLTEILE: "Warten auf Fehlteile",
+  FERTIG: "Fertig produziert",
+  ZUR_ABRECHNUNG: "Warten auf Abrechnung",
   ABGERECHNET: "Abgerechnet",
 };
+
+// TimeSlot Status Labels (for production view)
+export const TIMESLOT_STATUS_LABELS = {
+  PLANNED: "Geplant",
+  RUNNING: "In Produktion",
+  PAUSED: "Pause",
+  DONE: "Fertig",
+  BLOCKED: "Blockiert",
+} as const;
 
 export function getWorkflowBadgeVariant(workflow: WorkflowState): "default" | "secondary" | "destructive" | "outline" {
   switch (workflow) {
@@ -52,17 +62,17 @@ export function getWorkflowBadgeColor(workflow: WorkflowState): string {
     case "ENTWURF":
       return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600";
     case "NEU":
-      return "bg-primary text-primary-foreground border-primary";
+      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600";
     case "PRUEFUNG":
       return "bg-amber-500 text-black dark:bg-amber-600 dark:text-black border-amber-600 dark:border-amber-700";
     case "FUER_PROD":
       return "bg-blue-600 text-white dark:bg-blue-700 dark:text-white border-blue-700 dark:border-blue-800";
     case "IN_PROD":
-      return "bg-violet-600 text-white dark:bg-violet-700 dark:text-white border-violet-700 dark:border-violet-800";
+      return "bg-green-600 text-white dark:bg-green-700 dark:text-white border-green-700 dark:border-green-800";
     case "WARTET_FEHLTEILE":
       return "bg-orange-500 text-black dark:bg-orange-600 dark:text-black border-orange-600 dark:border-orange-700";
     case "FERTIG":
-      return "bg-emerald-600 text-white dark:bg-emerald-700 dark:text-white border-emerald-700 dark:border-emerald-800";
+      return "bg-cyan-600 text-white dark:bg-cyan-700 dark:text-white border-cyan-700 dark:border-cyan-800";
     case "ZUR_ABRECHNUNG":
       return "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700";
     case "ABGERECHNET":
@@ -70,6 +80,127 @@ export function getWorkflowBadgeColor(workflow: WorkflowState): string {
     default:
       return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600";
   }
+}
+
+// TimeSlot Status Colors (for production views)
+export function getTimeSlotBadgeColor(status: string): string {
+  switch (status) {
+    case "PLANNED":
+      return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 border-indigo-300 dark:border-indigo-700";
+    case "RUNNING":
+      return "bg-green-600 text-white dark:bg-green-700 dark:text-white border-green-700 dark:border-green-800";
+    case "PAUSED":
+      return "bg-yellow-500 text-black dark:bg-yellow-600 dark:text-black border-yellow-600 dark:border-yellow-700";
+    case "DONE":
+      return "bg-cyan-600 text-white dark:bg-cyan-700 dark:text-white border-cyan-700 dark:border-cyan-800";
+    case "BLOCKED":
+      return "bg-red-600 text-white dark:bg-red-700 dark:text-white border-red-700 dark:border-red-800";
+    default:
+      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600";
+  }
+}
+
+// ===== AUTO-NOTIFICATION BADGES =====
+// These badges appear when specific conditions are met
+
+export type NotificationBadgeType = 
+  | "MISSING_PRINT_ASSETS"
+  | "MISSING_SIZE_TABLE"
+  | "OVERDUE"
+  | "NOT_PLANNED"
+  | "PLANNED_FUTURE";
+
+export interface NotificationBadge {
+  type: NotificationBadgeType;
+  label: string;
+  color: string;
+  tooltip: string;
+}
+
+export const NOTIFICATION_BADGE_CONFIG: Record<NotificationBadgeType, Omit<NotificationBadge, 'type'>> = {
+  MISSING_PRINT_ASSETS: {
+    label: "Druckdaten fehlen",
+    color: "bg-red-600 text-white dark:bg-red-700 dark:text-white border-red-700 dark:border-red-800",
+    tooltip: "Hinweis: Es wurden noch keine erforderlichen Druckdaten hochgeladen"
+  },
+  MISSING_SIZE_TABLE: {
+    label: "Größentabelle fehlt",
+    color: "bg-orange-500 text-black dark:bg-orange-600 dark:text-black border-orange-600 dark:border-orange-700",
+    tooltip: "Hinweis: Für TEAMSPORT-Aufträge ist eine Größentabelle erforderlich"
+  },
+  OVERDUE: {
+    label: "Überfällig",
+    color: "bg-red-800 text-white dark:bg-red-900 dark:text-white border-red-900 dark:border-red-950",
+    tooltip: "Hinweis: Fälligkeitsdatum wurde überschritten"
+  },
+  NOT_PLANNED: {
+    label: "Nicht eingeplant",
+    color: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 border-orange-400 dark:border-orange-700",
+    tooltip: "Hinweis: Auftrag ist bereit, aber noch nicht in der Produktion eingeplant"
+  },
+  PLANNED_FUTURE: {
+    label: "Geplant für später",
+    color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 border-indigo-400 dark:border-indigo-700",
+    tooltip: "Hinweis: Produktion ist für einen zukünftigen Termin geplant"
+  }
+};
+
+// Calculate which notification badges to show for an order
+export function getOrderNotificationBadges(order: OrderWithRelations): NotificationBadge[] {
+  const badges: NotificationBadge[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Check for missing print assets (required printAssets or orderAssets)
+  const hasRequiredAssets = (order.printAssets && order.printAssets.some(a => a.required)) || 
+                            (order.orderAssets && order.orderAssets.some(a => a.required));
+  if (!hasRequiredAssets) {
+    badges.push({
+      type: "MISSING_PRINT_ASSETS",
+      ...NOTIFICATION_BADGE_CONFIG.MISSING_PRINT_ASSETS
+    });
+  }
+
+  // Check for missing size table (TEAMSPORT only)
+  if (order.department === "TEAMSPORT" && !order.sizeTable) {
+    badges.push({
+      type: "MISSING_SIZE_TABLE",
+      ...NOTIFICATION_BADGE_CONFIG.MISSING_SIZE_TABLE
+    });
+  }
+
+  // Check for overdue
+  if (order.dueDate && order.workflow !== "FERTIG" && order.workflow !== "ABGERECHNET") {
+    const dueDate = new Date(order.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    if (dueDate < today) {
+      badges.push({
+        type: "OVERDUE",
+        ...NOTIFICATION_BADGE_CONFIG.OVERDUE
+      });
+    }
+  }
+
+  // Check for not planned (FUER_PROD but no timeslots)
+  if (order.workflow === "FUER_PROD" && (!order.timeSlots || order.timeSlots.length === 0)) {
+    badges.push({
+      type: "NOT_PLANNED",
+      ...NOTIFICATION_BADGE_CONFIG.NOT_PLANNED
+    });
+  }
+
+  // Check for planned future (has PLANNED timeslot in future)
+  if (order.timeSlots && order.timeSlots.length > 0) {
+    const hasPlannedSlot = order.timeSlots.some((slot: any) => slot.status === "PLANNED");
+    if (hasPlannedSlot) {
+      badges.push({
+        type: "PLANNED_FUTURE",
+        ...NOTIFICATION_BADGE_CONFIG.PLANNED_FUTURE
+      });
+    }
+  }
+
+  return badges;
 }
 
 // Insert schemas for creating new records

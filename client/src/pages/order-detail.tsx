@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import type { OrderWithRelations, SizeTableResponse, SizeTableRow, OrderAsset, WarehouseGroupWithRelations, WarehousePlaceWithRelations } from "@shared/schema";
+import { WORKFLOW_LABELS, getWorkflowBadgeColor, getOrderNotificationBadges } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SizeTableEditor } from "@/components/size-table-editor";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -298,7 +299,10 @@ export default function OrderDetail() {
     return source === "JTL" ? "secondary" : "default";
   };
 
-  const hasShippingAddress = !!(order.shipStreet || order.shipZip || order.shipCity || order.shipCountry);
+  // Get notification badges for the order (order is guaranteed to be defined here after the checks above)
+  const notificationBadges = getOrderNotificationBadges(order!);
+
+  const hasShippingAddress = !!(order!.shipStreet || order!.shipZip || order!.shipCity || order!.shipCountry);
   const hasPositions = (order.positions?.length || 0) > 0;
   const hasRequiredAssets = order.printAssets.some(a => a.required);
   const hasSizeTable = !!order.sizeTable;
@@ -337,12 +341,33 @@ export default function OrderDetail() {
                   </Button>
                 )}
               </div>
-              <div className="flex items-center gap-2 mt-2">
-                <Badge variant={getWorkflowBadgeVariant(order.workflow)} data-testid="badge-workflow">
-                  {order.workflow}
-                </Badge>
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className={getWorkflowBadgeColor(order.workflow)} data-testid="badge-workflow">
+                      {WORKFLOW_LABELS[order.workflow]}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Status: {WORKFLOW_LABELS[order.workflow]}</p>
+                  </TooltipContent>
+                </Tooltip>
+                
+                {notificationBadges.map((notification) => (
+                  <Tooltip key={notification.type}>
+                    <TooltipTrigger asChild>
+                      <Badge variant="outline" className={notification.color} data-testid={`badge-${notification.type.toLowerCase()}`}>
+                        {notification.label}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{notification.tooltip}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+                
                 <Badge variant={getSourceBadgeVariant(order.source)} data-testid="badge-source">
-                  {order.source}
+                  {order.source === "JTL" ? "JTL" : "Intern"}
                 </Badge>
               </div>
             </div>

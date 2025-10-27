@@ -61,7 +61,7 @@ import {
   VisibilityState,
 } from "@tanstack/react-table";
 import type { OrderWithRelations, OrderSource, WorkflowState } from "@shared/schema";
-import { WORKFLOW_LABELS, getWorkflowBadgeColor } from "@shared/schema";
+import { WORKFLOW_LABELS, getWorkflowBadgeColor, getOrderNotificationBadges } from "@shared/schema";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/hooks/use-toast";
 
@@ -70,6 +70,40 @@ type DensityMode = 'comfort' | 'compact';
 type QuickFilter = 'dueToday' | 'overdue' | 'noAssets' | 'noSize';
 
 const MAX_ROWS = 500;
+
+// StatusBadges Component with Tooltips and Notification Badges
+function OrderStatusBadges({ order }: { order: OrderWithRelations }) {
+  const statusLabel = WORKFLOW_LABELS[order.workflow];
+  const notifications = getOrderNotificationBadges(order);
+  
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge variant="outline" className={getWorkflowBadgeColor(order.workflow)} data-testid="badge-status">
+            {statusLabel}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Status: {statusLabel}</p>
+        </TooltipContent>
+      </Tooltip>
+      
+      {notifications.map((notification) => (
+        <Tooltip key={notification.type}>
+          <TooltipTrigger asChild>
+            <Badge variant="outline" className={notification.color} data-testid={`badge-${notification.type.toLowerCase()}`}>
+              {notification.label}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{notification.tooltip}</p>
+          </TooltipContent>
+        </Tooltip>
+      ))}
+    </div>
+  );
+}
 
 export default function OrdersList() {
   const [location, setLocation] = useLocation();
@@ -382,30 +416,12 @@ export default function OrdersList() {
     },
     {
       accessorKey: "workflow",
-      header: () => <div className="px-3 py-2 w-56">Status</div>,
-      cell: ({ row }) => {
-        const order = row.original;
-        let label = WORKFLOW_LABELS[order.workflow];
-        
-        // For IN_PROD, show "seit HH:MM" if there's a running time slot
-        if (order.workflow === 'IN_PROD' && order.timeSlots && order.timeSlots.length > 0) {
-          const runningSlot = order.timeSlots[0];
-          if (runningSlot.startedAt) {
-            const startTime = new Date(runningSlot.startedAt);
-            const hours = startTime.getHours().toString().padStart(2, '0');
-            const minutes = startTime.getMinutes().toString().padStart(2, '0');
-            label = `${label} (seit ${hours}:${minutes})`;
-          }
-        }
-        
-        return (
-          <div className={`${cellBase} w-56`}>
-            <Badge variant="outline" className={getWorkflowBadgeColor(order.workflow)}>
-              {label}
-            </Badge>
-          </div>
-        );
-      },
+      header: () => <div className="px-3 py-2 min-w-[16rem]">Status & Hinweise</div>,
+      cell: ({ row }) => (
+        <div className={`${cellBase} min-w-[16rem] max-w-md`}>
+          <OrderStatusBadges order={row.original} />
+        </div>
+      ),
       enableSorting: true,
     },
     {
@@ -1019,9 +1035,10 @@ export default function OrdersList() {
                         <Badge variant={getSourceBadgeVariant(order.source)}>
                           {order.source === "INTERNAL" ? "Intern" : order.source}
                         </Badge>
-                        <Badge variant="outline" className={getWorkflowBadgeColor(order.workflow)}>
-                          {WORKFLOW_LABELS[order.workflow]}
-                        </Badge>
+                      </div>
+                      
+                      <div className="mt-2">
+                        <OrderStatusBadges order={order} />
                       </div>
                       
                       <div className="mt-3">
