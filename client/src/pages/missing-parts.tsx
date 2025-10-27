@@ -79,14 +79,14 @@ export default function MissingPartsPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
+      <div className="w-full px-4 md:px-6 py-6">
         <div className="text-center py-12 text-muted-foreground">Lädt...</div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
+    <div className="w-full px-4 md:px-6 py-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Fehlteile-Management</h1>
         <p className="text-muted-foreground">

@@ -45,8 +45,8 @@ export default function OrdersList() {
   };
   
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
+    <div className="w-full">
+      <div className="w-full px-4 md:px-6 py-6">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-semibold">Aufträge</h1>

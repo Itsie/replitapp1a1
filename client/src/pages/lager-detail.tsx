@@ -357,7 +357,7 @@ export default function LagerDetail() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
+      <div className="w-full px-4 md:px-6 py-6">
         <Skeleton className="h-8 w-64 mb-6" />
         <Skeleton className="h-96 w-full" />
       </div>
@@ -366,7 +366,7 @@ export default function LagerDetail() {
 
   if (!group) {
     return (
-      <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
+      <div className="w-full px-4 md:px-6 py-6">
         <Button variant="ghost" onClick={() => setLocation("/lager")}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Zurück
@@ -385,7 +385,7 @@ export default function LagerDetail() {
   };
 
   return (
-    <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
+    <div className="w-full px-4 md:px-6 py-6">
       <div className="mb-6">
         <Button variant="ghost" onClick={() => setLocation("/lager")} data-testid="button-back">
           <ArrowLeft className="h-4 w-4 mr-2" />

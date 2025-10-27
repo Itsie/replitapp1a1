@@ -204,7 +204,7 @@ export default function Lager() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
+      <div className="w-full px-4 md:px-6 py-6">
         <div className="mb-6">
           <h1 className="text-3xl font-bold tracking-tight">Lager</h1>
           <p className="text-muted-foreground mt-1">Lagerverwaltung nach Bereichen</p>
@@ -215,7 +215,7 @@ export default function Lager() {
   }
 
   return (
-    <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
+    <div className="w-full px-4 md:px-6 py-6">
       <div className="mb-6">
         <div className="flex items-center justify-between">
           <div>

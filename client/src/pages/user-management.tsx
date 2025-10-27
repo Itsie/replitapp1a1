@@ -203,7 +203,7 @@ export default function UserManagementPage() {
   // Check if current user is ADMIN
   if (!currentUser || currentUser.role !== 'ADMIN') {
     return (
-      <div className="container max-w-4xl py-8">
+      <div className="w-full px-4 md:px-6 py-8">
         <Card>
           <CardContent className="py-8 text-center">
             <Shield className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -218,7 +218,7 @@ export default function UserManagementPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-[1600px] px-4 md:px-6 py-6">
+    <div className="w-full px-4 md:px-6 py-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Benutzerverwaltung</h1>
