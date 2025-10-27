@@ -626,25 +626,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/orders/:id/release-from-missing-parts - Release order from missing parts back to planning (ADMIN or PROD_PLAN only)
-  app.post("/api/orders/:id/release-from-missing-parts", requireAuth, requireRole(['ADMIN', 'PROD_PLAN']), async (req, res) => {
-    try {
-      const order = await storage.releaseOrderFromMissingParts(req.params.id);
-      res.json(order);
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message === "Order not found") {
-          return res.status(404).json({ error: "Order not found" });
-        }
-        if (error.message.includes("must have workflow WARTET_FEHLTEILE")) {
-          return res.status(400).json({ error: error.message });
-        }
-      }
-      console.error("Error releasing order from missing parts:", error);
-      res.status(500).json({ error: "Failed to release order" });
-    }
-  });
-
   // GET /api/orders/:id/positions - List positions for order (requires authentication)
   app.get("/api/orders/:id/positions", requireAuth, async (req, res) => {
     try {

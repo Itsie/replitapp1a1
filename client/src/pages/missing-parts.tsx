@@ -49,11 +49,14 @@ export default function MissingPartsPage() {
       return apiRequest('POST', `/api/orders/${orderId}/release-from-missing-parts`, {});
     },
     onSuccess: () => {
-      // Invalidate all orders queries (including those with workflow parameters)
-      queryClient.invalidateQueries({ 
+      // Refetch all orders and timeslots queries
+      queryClient.refetchQueries({ 
         predicate: (query) => {
           const key = query.queryKey[0];
-          return typeof key === 'string' && key.startsWith('/api/orders');
+          return typeof key === 'string' && (
+            key.startsWith('/api/orders') || 
+            key.startsWith('/api/timeslots')
+          );
         }
       });
       toast({
