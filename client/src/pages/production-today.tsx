@@ -194,11 +194,12 @@ export default function ProductionToday() {
     mutationFn: async ({ slotId, note, escalate }: { slotId: string; note: string; escalate: boolean }) => {
       await apiRequest('POST', `/api/timeslots/${slotId}/missing-parts`, {
         note,
-        escalateWorkflow: escalate,
+        updateOrderWorkflow: escalate,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/timeslots'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       setProblemDialogOpen(false);
       setProblemSlotId(null);
       setProblemNote("");
