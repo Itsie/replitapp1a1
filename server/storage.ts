@@ -696,12 +696,11 @@ export class PrismaStorage implements IStorage {
       throw new Error('Order must have workflow WARTET_FEHLTEILE to be released');
     }
 
-    // Delete any BLOCKED time slots for this order
+    // Delete ALL time slots for this order
     // This allows the order to be re-planned from scratch
     await prisma.timeSlot.deleteMany({
       where: {
         orderId: orderId,
-        status: 'BLOCKED',
       },
     });
 
@@ -1836,6 +1835,14 @@ export class PrismaStorage implements IStorage {
     if (order.workflow !== 'WARTET_FEHLTEILE') {
       throw new Error('Order is not in WARTET_FEHLTEILE status');
     }
+
+    // Delete ALL time slots for this order
+    // This allows the order to be re-planned from scratch
+    await prisma.timeSlot.deleteMany({
+      where: {
+        orderId: orderId,
+      },
+    });
 
     // Update order workflow to FUER_PROD
     return await this.updateOrder(orderId, {
