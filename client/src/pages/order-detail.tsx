@@ -303,9 +303,6 @@ export default function OrderDetail() {
     return map[workflow] || "outline";
   };
 
-  const getSourceBadgeVariant = (source: string): "default" | "secondary" => {
-    return source === "JTL" ? "secondary" : "default";
-  };
 
   // Get hints for the order (order is guaranteed to be defined here after the checks above)
   const hints = getOrderHints(order!);
@@ -354,7 +351,7 @@ export default function OrderDetail() {
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge className={getWorkflowBadgeClass(order.workflow)} data-testid="badge-workflow">
+                    <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getWorkflowBadgeClass(order.workflow)}`} data-testid="badge-workflow">
                       {WORKFLOW_LABELS[order.workflow]}
                     </Badge>
                   </TooltipTrigger>
@@ -363,8 +360,12 @@ export default function OrderDetail() {
                   </TooltipContent>
                 </Tooltip>
                 
-                <Badge variant={getSourceBadgeVariant(order.source)} data-testid="badge-source">
-                  {order.source === "JTL" ? "JTL" : "Intern"}
+                <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getSourceBadgeClass(order.source)}`} data-testid="badge-source">
+                  {SOURCE_LABELS[order.source]}
+                </Badge>
+                
+                <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getDepartmentBadgeClass(order.department)}`} data-testid="badge-department">
+                  {DEPARTMENT_LABELS[order.department]}
                 </Badge>
               </div>
               
@@ -576,20 +577,26 @@ export default function OrderDetail() {
                             <div>
                               <Label className="text-xs text-muted-foreground">ABTEILUNG</Label>
                               <div>
-                                <Badge variant="outline" data-testid="badge-department">{order.department}</Badge>
+                                <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getDepartmentBadgeClass(order.department)}`} data-testid="badge-department">
+                                  {DEPARTMENT_LABELS[order.department]}
+                                </Badge>
                               </div>
                             </div>
                             <div>
                               <Label className="text-xs text-muted-foreground">QUELLE</Label>
                               <div>
-                                <Badge variant={getSourceBadgeVariant(order.source)} data-testid="badge-source-detail">
-                                  {order.source}
+                                <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getSourceBadgeClass(order.source)}`} data-testid="badge-source-detail">
+                                  {SOURCE_LABELS[order.source]}
                                 </Badge>
                               </div>
                             </div>
                             <div>
                               <Label className="text-xs text-muted-foreground">WORKFLOW</Label>
-                              <p data-testid="text-workflow">{WORKFLOW_LABELS[order.workflow]}</p>
+                              <div>
+                                <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getWorkflowBadgeClass(order.workflow)}`} data-testid="badge-workflow-detail">
+                                  {WORKFLOW_LABELS[order.workflow]}
+                                </Badge>
+                              </div>
                             </div>
                             <div>
                               <Label className="text-xs text-muted-foreground">FÄLLIG AM</Label>

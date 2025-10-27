@@ -86,7 +86,7 @@ function OrderStatusBadge({ order }: { order: OrderWithRelations }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge className={getWorkflowBadgeClass(order.workflow)} data-testid="badge-status">
+        <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getWorkflowBadgeClass(order.workflow)}`} data-testid="badge-status">
           {statusLabel}
         </Badge>
       </TooltipTrigger>
@@ -258,9 +258,6 @@ export default function OrdersList() {
     }
   };
   
-  const getSourceBadgeVariant = (source: OrderSource) => {
-    return source === "JTL" ? "default" : "secondary";
-  };
   
   const toggleQuickFilter = (filter: QuickFilter) => {
     setActiveQuickFilters(prev => {
@@ -403,21 +400,26 @@ export default function OrdersList() {
     {
       accessorKey: "department",
       header: () => <div className="px-3 py-2 w-44">Abteilung</div>,
-      cell: ({ row }) => (
-        <div className={`${cellBase} w-44`}>
-          <Badge variant="outline">{row.original.department}</Badge>
-        </div>
-      ),
+      cell: ({ row }) => {
+        const dep = row.original.department;
+        return (
+          <div className={`${cellBase} w-44`}>
+            <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getDepartmentBadgeClass(dep)}`}>
+              {DEPARTMENT_LABELS[dep] ?? dep}
+            </Badge>
+          </div>
+        );
+      },
     },
     {
       accessorKey: "source",
       header: () => <div className="px-3 py-2 w-28">Quelle</div>,
       cell: ({ row }) => {
-        const sourceLabel = row.original.source === "INTERNAL" ? "Intern" : row.original.source;
+        const src = row.original.source;
         return (
           <div className={`${cellBase} w-28`}>
-            <Badge variant={getSourceBadgeVariant(row.original.source)}>
-              {sourceLabel}
+            <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getSourceBadgeClass(src)}`}>
+              {SOURCE_LABELS[src] ?? src}
             </Badge>
           </div>
         );
@@ -1049,9 +1051,11 @@ export default function OrdersList() {
                       </div>
                       
                       <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                        <Badge variant="outline">{order.department}</Badge>
-                        <Badge variant={getSourceBadgeVariant(order.source)}>
-                          {order.source === "INTERNAL" ? "Intern" : order.source}
+                        <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getDepartmentBadgeClass(order.department)}`}>
+                          {DEPARTMENT_LABELS[order.department] ?? order.department}
+                        </Badge>
+                        <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getSourceBadgeClass(order.source)}`}>
+                          {SOURCE_LABELS[order.source] ?? order.source}
                         </Badge>
                       </div>
                       

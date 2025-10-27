@@ -149,10 +149,12 @@ export default function MissingPartsPage() {
                     <TableCell className="font-medium">{order.title}</TableCell>
                     <TableCell>{order.customer}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{order.department}</Badge>
+                      <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getDepartmentBadgeClass(order.department)}`}>
+                        {DEPARTMENT_LABELS[order.department]}
+                      </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getWorkflowBadgeClass(order.workflow)}>
+                      <Badge className={`text-[11px] leading-4 px-2 py-0.5 ${getWorkflowBadgeClass(order.workflow)}`}>
                         {WORKFLOW_LABELS[order.workflow]}
                       </Badge>
                     </TableCell>
