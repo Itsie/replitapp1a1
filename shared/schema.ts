@@ -60,25 +60,25 @@ export function getWorkflowBadgeVariant(workflow: WorkflowState): "default" | "s
 export function getWorkflowBadgeColor(workflow: WorkflowState): string {
   switch (workflow) {
     case "ENTWURF":
-      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600";
+      return "bg-slate-200 text-slate-900 border-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600";
     case "NEU":
-      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600";
+      return "bg-slate-200 text-slate-900 border-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600";
     case "PRUEFUNG":
-      return "bg-amber-500 text-black dark:bg-amber-600 dark:text-black border-amber-600 dark:border-amber-700";
+      return "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700";
     case "FUER_PROD":
-      return "bg-blue-600 text-white dark:bg-blue-700 dark:text-white border-blue-700 dark:border-blue-800";
+      return "bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700";
     case "IN_PROD":
-      return "bg-green-600 text-white dark:bg-green-700 dark:text-white border-green-700 dark:border-green-800";
+      return "bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-700";
     case "WARTET_FEHLTEILE":
-      return "bg-orange-500 text-black dark:bg-orange-600 dark:text-black border-orange-600 dark:border-orange-700";
+      return "bg-orange-100 text-orange-900 border-orange-300 dark:bg-orange-900/40 dark:text-orange-200 dark:border-orange-700";
     case "FERTIG":
-      return "bg-cyan-600 text-white dark:bg-cyan-700 dark:text-white border-cyan-700 dark:border-cyan-800";
+      return "bg-teal-100 text-teal-900 border-teal-300 dark:bg-teal-900/40 dark:text-teal-200 dark:border-teal-700";
     case "ZUR_ABRECHNUNG":
-      return "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700";
+      return "bg-violet-100 text-violet-900 border-violet-300 dark:bg-violet-900/40 dark:text-violet-200 dark:border-violet-700";
     case "ABGERECHNET":
-      return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-700";
+      return "bg-gray-200 text-gray-900 border-gray-300 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700";
     default:
-      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600";
+      return "bg-slate-200 text-slate-900 border-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600";
   }
 }
 
@@ -86,17 +86,17 @@ export function getWorkflowBadgeColor(workflow: WorkflowState): string {
 export function getTimeSlotBadgeColor(status: string): string {
   switch (status) {
     case "PLANNED":
-      return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 border-indigo-300 dark:border-indigo-700";
+      return "bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-200 dark:border-indigo-700";
     case "RUNNING":
-      return "bg-green-600 text-white dark:bg-green-700 dark:text-white border-green-700 dark:border-green-800";
+      return "bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-700";
     case "PAUSED":
-      return "bg-yellow-500 text-black dark:bg-yellow-600 dark:text-black border-yellow-600 dark:border-yellow-700";
+      return "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700";
     case "DONE":
-      return "bg-cyan-600 text-white dark:bg-cyan-700 dark:text-white border-cyan-700 dark:border-cyan-800";
+      return "bg-teal-100 text-teal-900 border-teal-300 dark:bg-teal-900/40 dark:text-teal-200 dark:border-teal-700";
     case "BLOCKED":
-      return "bg-red-600 text-white dark:bg-red-700 dark:text-white border-red-700 dark:border-red-800";
+      return "bg-red-100 text-red-900 border-red-300 dark:bg-red-900/40 dark:text-red-200 dark:border-red-700";
     default:
-      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600";
+      return "bg-slate-200 text-slate-900 border-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600";
   }
 }
 

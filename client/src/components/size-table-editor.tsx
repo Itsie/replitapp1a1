@@ -178,7 +178,26 @@ export function SizeTableEditor({ initialData, onSave, onCancel }: SizeTableEdit
 
   const handleSave = async () => {
     try {
-      await onSave({ scheme, rows: roster, comment: comment || null, allowDuplicates });
+      // If we have an existing roster (editing mode), always save it
+      // If we're in step 1 and roster is empty (new table), generate it
+      let rowsToSave = roster;
+      if (roster.length === 0 && step === 1) {
+        // Only auto-generate for brand new tables
+        const generatedRoster: SizeTableRow[] = [];
+        let currentNumber = 1;
+        sizeQuantities.forEach(sq => {
+          for (let i = 0; i < sq.qty; i++) {
+            generatedRoster.push({
+              size: sq.size,
+              number: currentNumber++, // Auto-increment numbers for uniqueness
+              name: null,
+            });
+          }
+        });
+        rowsToSave = generatedRoster;
+      }
+      
+      await onSave({ scheme, rows: rowsToSave, comment: comment || null, allowDuplicates });
       toast({
         title: "Gespeichert",
         description: "Größentabelle wurde erfolgreich gespeichert.",
@@ -252,17 +271,27 @@ export function SizeTableEditor({ initialData, onSave, onCancel }: SizeTableEdit
             </CardContent>
           </Card>
 
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-between gap-2">
             <Button variant="outline" onClick={onCancel} data-testid="button-cancel-step1">
               Abbrechen
             </Button>
-            <Button
-              onClick={generateRoster}
-              disabled={totalItems === 0}
-              data-testid="button-next-to-roster"
-            >
-              Weiter zur Roster-Eingabe ({totalItems} Einträge)
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleSave}
+                disabled={totalItems === 0}
+                data-testid="button-save-simple"
+              >
+                Direkt speichern
+              </Button>
+              <Button
+                onClick={generateRoster}
+                disabled={totalItems === 0}
+                data-testid="button-next-to-roster"
+              >
+                Weiter zur Roster-Eingabe ({totalItems} Einträge)
+              </Button>
+            </div>
           </div>
         </div>
       ) : (
