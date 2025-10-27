@@ -774,7 +774,7 @@ export default function ProductionToday() {
                               {pos.qty} {pos.unit}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {pos.unitPriceNet.toFixed(2)} €
+                              {Number(pos.unitPriceNet).toFixed(2)} €
                             </p>
                           </div>
                         </div>
