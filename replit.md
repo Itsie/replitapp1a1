@@ -13,7 +13,7 @@ Preferred communication style: Simple, everyday language.
 **Design Philosophy:** Design System-Inspired, prioritizing productivity and data clarity, drawing inspiration from Linear and Notion.
 **Key Patterns:** React Hook Form with Zod validation, debounced search, card-based layouts, tab-based navigation, toast notifications, modal dialogs, real-time cache synchronization.
 **Production View Design:** Vertical timeline layout (07:00-18:00) with proportional positioning, 30-minute grid markers, neutral color palette with status accents, per-cluster lane calculation for overlaps, compact mode for short slots, collapsible action controls, live tracking, and date navigation.
-**Status & Notification Badges:** Modernized badge system with German labels, dark mode support, and automatic notifications for missing data ("Druckdaten fehlen", "Größentabelle fehlt"), overdue orders ("Überfällig"), unassigned production ("Nicht eingeplant"), and future planning ("Geplant für später").
+**Status & Hints System:** Modernized single-badge system displaying exactly ONE workflow status badge per order. Additional information (missing data, overdue status) appears as text in dedicated "Hinweise" column/section. German-language hints include: "Druckdaten fehlen", "Größentabelle fehlt", "Überfällig seit <date>", "Heute fällig". ABGERECHNET orders hidden by default with toggle to show/hide. Dark mode optimized.
 
 ### Backend Architecture
 **Technology Stack:** Node.js 20, Express.js, TypeScript (ES modules), RESTful JSON API.
