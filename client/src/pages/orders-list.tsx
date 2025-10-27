@@ -155,18 +155,18 @@ export default function OrdersList() {
                         {order.customer}
                       </p>
                     </div>
-                    <Badge className={getSourceBadgeClass(order.source)} data-testid={`badge-source-${order.id}`}>
+                    <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getSourceBadgeClass(order.source)}`} data-testid={`badge-source-${order.id}`}>
                       {SOURCE_LABELS[order.source]}
-                    </Badge>
+                    </span>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="outline" data-testid={`badge-department-${order.id}`}>
                         {order.department}
                       </Badge>
-                      <Badge className={getWorkflowBadgeClass(order.workflow)} data-testid={`badge-workflow-${order.id}`}>
+                      <span className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getWorkflowBadgeClass(order.workflow)}`} data-testid={`badge-workflow-${order.id}`}>
                         {WORKFLOW_LABELS[order.workflow]}
-                      </Badge>
+                      </span>
                     </div>
                     
                     <div className="flex items-center justify-between text-xs text-muted-foreground">

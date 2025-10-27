@@ -1,0 +1,62 @@
+// --- Labels (falls noch nicht schön) ---
+export const WORKFLOW_LABELS = {
+  ENTWURF: "Entwurf",
+  NEU: "Neu",
+  PRUEFUNG: "Prüfung",
+  FUER_PROD: "Bereit für Produktion",
+  IN_PROD: "In Produktion",
+  WARTET_FEHLTEILE: "Wartet auf Fehlteile",
+  FERTIG: "Fertig produziert",
+  ZUR_ABRECHNUNG: "Zur Abrechnung",
+  ABGERECHNET: "Abgerechnet",
+} as const;
+
+export const DEPARTMENT_LABELS = {
+  TEAMSPORT: "Teamsport",
+  TEXTILVEREDELUNG: "Textilveredelung",
+  STICKEREI: "Stickerei",
+  DRUCK: "Druck",
+  SONSTIGES: "Sonstiges",
+} as const;
+
+export const SOURCE_LABELS = {
+  JTL: "JTL",
+  INTERNAL: "Intern",
+} as const;
+
+// --- Feste Klassen: KEINE dynamischen Templates! ---
+export const WORKFLOW_BADGE_CLASS: Record<string, string> = {
+  ENTWURF: "bg-slate-600 text-white border-slate-700",
+  NEU: "bg-cyan-700 text-white border-cyan-800",
+  PRUEFUNG: "bg-amber-700 text-white border-amber-800",
+  FUER_PROD: "bg-indigo-700 text-white border-indigo-800",
+  IN_PROD: "bg-blue-700 text-white border-blue-800",
+  WARTET_FEHLTEILE: "bg-orange-700 text-white border-orange-800",
+  FERTIG: "bg-emerald-700 text-white border-emerald-800",
+  ZUR_ABRECHNUNG: "bg-fuchsia-700 text-white border-fuchsia-800",
+  ABGERECHNET: "bg-zinc-700 text-white border-zinc-800",
+};
+
+export const DEPARTMENT_BADGE_CLASS: Record<string, string> = {
+  TEAMSPORT: "bg-blue-700 text-white border-blue-800",
+  TEXTILVEREDELUNG: "bg-purple-700 text-white border-purple-800",
+  STICKEREI: "bg-pink-700 text-white border-pink-800",
+  DRUCK: "bg-green-700 text-white border-green-800",
+  SONSTIGES: "bg-gray-700 text-white border-gray-800",
+};
+
+export const SOURCE_BADGE_CLASS: Record<string, string> = {
+  JTL: "bg-sky-700 text-white border-sky-800",
+  INTERNAL: "bg-emerald-700 text-white border-emerald-800",
+};
+
+// Convenience-Getter
+export function getWorkflowBadgeClass(code: string) {
+  return WORKFLOW_BADGE_CLASS[code] ?? "bg-zinc-700 text-white border-zinc-800";
+}
+export function getDepartmentBadgeClass(code: string) {
+  return DEPARTMENT_BADGE_CLASS[code] ?? "bg-gray-700 text-white border-gray-800";
+}
+export function getSourceBadgeClass(code: string) {
+  return SOURCE_BADGE_CLASS[code] ?? "bg-emerald-700 text-white border-emerald-800";
+}
