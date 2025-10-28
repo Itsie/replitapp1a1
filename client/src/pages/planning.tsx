@@ -785,6 +785,11 @@ function DraggableTimeSlot({ slot, onDelete }: DraggableTimeSlotProps) {
   const transformStyle = transform ? { transform: CSS.Translate.toString(transform) } : {};
 
   const isBlocker = slot.blocked;
+  
+  // Calculate if slot is compact based on duration
+  // < 30 min = very compact, < 45 min = compact
+  const isVeryCompact = slot.lengthMin < 30;
+  const isCompact = slot.lengthMin < 45;
 
   return (
     <div
@@ -799,38 +804,58 @@ function DraggableTimeSlot({ slot, onDelete }: DraggableTimeSlotProps) {
       {...listeners}
       {...attributes}
     >
-      <div className="p-2 h-full flex flex-col cursor-grab active:cursor-grabbing">
+      <div className={`${isVeryCompact ? 'p-1' : 'p-2'} h-full flex flex-col cursor-grab active:cursor-grabbing`}>
         <div className="flex items-start justify-between gap-1">
           <div className="flex-1 min-w-0">
-            {isBlocker ? (
+            {isVeryCompact ? (
+              <>
+                {/* Ultra-compact for very short slots */}
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-semibold truncate">
+                    {isBlocker ? 'BLOCKER' : (slot.order?.displayOrderNumber || slot.order?.title)}
+                  </span>
+                </div>
+              </>
+            ) : isBlocker ? (
               <>
                 <div className="text-xs font-semibold text-muted-foreground">BLOCKER</div>
                 {slot.note && <div className="text-xs text-muted-foreground truncate">{slot.note}</div>}
+                {!isCompact && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
+                  </div>
+                )}
               </>
             ) : (
               <>
-                <div className="text-xs font-semibold truncate">
-                  {slot.order?.displayOrderNumber || slot.orderId?.slice(0, 8)}
+                <div className="flex flex-col gap-0.5">
+                  <div className="text-xs font-semibold truncate">
+                    {slot.order?.displayOrderNumber || slot.orderId?.slice(0, 8)}
+                  </div>
+                  <div className="text-xs truncate">{slot.order?.title}</div>
+                  {!isCompact && (
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
+                    </div>
+                  )}
                 </div>
-                <div className="text-xs truncate">{slot.order?.title}</div>
               </>
             )}
-            <div className="text-xs text-muted-foreground mt-1">
-              {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
-            </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(slot.id);
-            }}
-            data-testid={`button-delete-slot-${slot.id}`}
-          >
-            <X className="h-3 w-3" />
-          </Button>
+          {!isVeryCompact && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(slot.id);
+              }}
+              data-testid={`button-delete-slot-${slot.id}`}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          )}
         </div>
       </div>
     </div>

@@ -525,8 +525,10 @@ function TimeSlotRow({
 }: TimeSlotRowProps) {
   const [currentTime, setCurrentTime] = useState(Date.now());
   
-  // For very short slots (< 40 px = ~30 min), use compact display
-  const isCompact = slotHeight < 40;
+  // For short slots (< 60 px = ~45 min), use compact display
+  // For very short slots (< 30 px = ~22 min), use ultra-compact
+  const isVeryCompact = slotHeight < 30;
+  const isCompact = slotHeight < 60;
 
   useEffect(() => {
     if (slot.status === 'RUNNING') {
@@ -560,11 +562,27 @@ function TimeSlotRow({
       `}
       data-testid={`card-slot-${slot.id}`}
     >
-      <div className="flex items-start justify-between gap-2 flex-shrink-0">
+      <div className="flex items-start justify-between gap-1 flex-shrink-0">
         <div className="flex-1 min-w-0">
-          {!isCompact ? (
+          {isVeryCompact ? (
             <>
-              {/* Normal display for taller slots */}
+              {/* Ultra-compact for very short slots (< 22 min) */}
+              <div className="flex items-center gap-1">
+                <span className="text-xs font-mono font-semibold">
+                  {formatTime(slot.startMin)}
+                </span>
+                <span className="text-xs font-medium truncate">
+                  {slot.order ? (
+                    <>
+                      {slot.order.displayOrderNumber || slot.order.title}
+                    </>
+                  ) : 'Blockiert'}
+                </span>
+              </div>
+            </>
+          ) : !isCompact ? (
+            <>
+              {/* Normal display for taller slots (>= 45 min) */}
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-sm font-mono font-semibold tracking-tight">
                   {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
@@ -599,48 +617,69 @@ function TimeSlotRow({
             </>
           ) : (
             <>
-              {/* Compact display for short slots */}
-              <div className="flex items-baseline gap-2">
-                <span className="text-xs font-mono font-semibold">
-                  {formatTime(slot.startMin)}
-                </span>
-                <span className="text-xs font-medium truncate">
-                  {slot.order ? slot.order.title : 'Blockiert'}
-                </span>
+              {/* Compact display for short slots (22-45 min) */}
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xs font-mono font-semibold">
+                    {formatTime(slot.startMin)}-{formatTime(slot.startMin + slot.lengthMin)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDuration(slot.lengthMin)}
+                  </span>
+                </div>
+                <div className="text-sm font-medium truncate">
+                  {slot.order ? (
+                    <>
+                      {slot.order.displayOrderNumber && (
+                        <span className="text-muted-foreground text-xs">{slot.order.displayOrderNumber} · </span>
+                      )}
+                      <span className="text-xs">{slot.order.title}</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground italic text-xs">Blockiert</span>
+                  )}
+                </div>
+                {slot.order && (
+                  <div className="text-xs text-muted-foreground truncate">
+                    {slot.order.customer}
+                  </div>
+                )}
               </div>
             </>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {/* Live timer for running slots */}
-          {isRunning && !isCompact && (
-            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-mono bg-background/50 border">
-              <Clock className="h-3 w-3 text-muted-foreground" />
-              <span className="font-medium text-xs">{formatDuration(elapsedMin)}</span>
-            </div>
-          )}
+        {!isVeryCompact && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Live timer for running slots */}
+            {isRunning && !isCompact && (
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-mono bg-background/50 border">
+                <Clock className="h-3 w-3 text-muted-foreground" />
+                <span className="font-medium text-xs">{formatDuration(elapsedMin)}</span>
+              </div>
+            )}
 
-          {/* Collapse toggle - only for DONE slots */}
-          {!isCompact && isDone && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleCollapse();
-              }}
-              data-testid={`button-toggle-${slot.id}`}
-              className="h-7 w-7 p-0"
-            >
-              {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-            </Button>
-          )}
-        </div>
+            {/* Collapse toggle - only for DONE slots */}
+            {!isCompact && isDone && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleCollapse();
+                }}
+                data-testid={`button-toggle-${slot.id}`}
+                className="h-7 w-7 p-0"
+              >
+                {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Details section - always show for active slots, collapsible for DONE slots */}
-      {(!isDone || !isCollapsed) && (
+      {/* Details section - hide for very compact, always show for active slots, collapsible for DONE slots */}
+      {!isVeryCompact && (!isDone || !isCollapsed) && (
         <div className={`mt-2 pt-2 border-t space-y-1.5 flex-shrink-0 ${isCompact ? 'text-xs' : 'text-xs'}`}>
           {!isCompact && slot.note && (
             <div>
