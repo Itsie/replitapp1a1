@@ -888,8 +888,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Support two modes: weekly planning (department + weekStart) or daily production (date only)
       if (date) {
         // Daily production mode - return all slots for a specific date
-        const dateObj = new Date(date);
-        const dateStr = dateObj.toISOString().split('T')[0];
+        // Extract date part directly from ISO string to avoid timezone issues
+        const dateStr = date.split('T')[0];
         
         const filters = {
           startDate: dateStr,

@@ -405,8 +405,8 @@ function TimelineView({
   const workEnd = 18 * 60;   // 18:00
   const timeMarkers: number[] = [];
   
-  // Time markers every 30 minutes
-  for (let min = workStart; min <= workEnd; min += 30) {
+  // Time markers every 15 minutes
+  for (let min = workStart; min <= workEnd; min += 15) {
     timeMarkers.push(min);
   }
 
@@ -440,38 +440,52 @@ function TimelineView({
         <div className="absolute left-0 top-0 bottom-0 w-16">
           {timeMarkers.map((min, idx) => {
             const isFullHour = min % 60 === 0;
+            const isHalfHour = min % 30 === 0 && !isFullHour;
+            const showLabel = isFullHour || isHalfHour; // Only show labels at full and half hours
             return (
               <div
                 key={min}
                 className="absolute left-0 right-0 flex items-center justify-end pr-2"
-                style={{ top: `${idx * 40}px` }}
+                style={{ top: `${idx * 20}px` }}
               >
-                <span className={`text-xs font-mono ${isFullHour ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-                  {formatTime(min)}
-                </span>
+                {showLabel && (
+                  <span className={`text-xs font-mono ${isFullHour ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+                    {formatTime(min)}
+                  </span>
+                )}
               </div>
             );
           })}
         </div>
 
-        {/* Grid lines - full hours darker than half hours */}
+        {/* Grid lines - visual hierarchy: full hour > half hour > three-quarter > quarter */}
         <div className="absolute left-16 right-0 top-0 bottom-0">
           {timeMarkers.map((min, idx) => {
-            const isFullHour = min % 60 === 0;
+            const minuteInHour = min % 60;
+            const isFullHour = minuteInHour === 0;
+            const isHalfHour = minuteInHour === 30;
+            const isThreeQuarter = minuteInHour === 45;
+            const lineStyle = isFullHour 
+              ? 'border-border/40'      // Darkest: full hours
+              : isHalfHour 
+              ? 'border-border/25'      // Medium: half hours
+              : isThreeQuarter
+              ? 'border-border/18'      // Medium-light: 45-minute marks
+              : 'border-border/12';     // Lightest: 15-minute marks
             return (
               <div
                 key={min}
-                className={`absolute left-0 right-0 border-t ${isFullHour ? 'border-border/40' : 'border-border/20'}`}
-                style={{ top: `${idx * 40}px` }}
+                className={`absolute left-0 right-0 border-t ${lineStyle}`}
+                style={{ top: `${idx * 20}px` }}
               />
             );
           })}
         </div>
 
         {/* Slots content area */}
-        <div className="ml-20 relative" style={{ minHeight: `${timeMarkers.length * 40}px` }}>
+        <div className="ml-20 relative" style={{ minHeight: `${timeMarkers.length * 20}px` }}>
           {slotsWithLanes.map(slot => {
-            // Calculate position based on time - 40px per 30 minutes = 80px per hour
+            // Calculate position based on time - 20px per 15 minutes = 80px per hour
             const pixelsPerMinute = 80 / 60;
             const topPosition = (slot.startMin - workStart) * pixelsPerMinute;
             const height = Math.max(slot.lengthMin * pixelsPerMinute, 20); // Minimum 20px (~15 min) for readability
@@ -525,10 +539,13 @@ function TimeSlotRow({
 }: TimeSlotRowProps) {
   const [currentTime, setCurrentTime] = useState(Date.now());
   
-  // For short slots (< 60 px = ~45 min), use compact display
-  // For very short slots (< 30 px = ~22 min), use ultra-compact
-  const isVeryCompact = slotHeight < 30;
-  const isCompact = slotHeight < 60;
+  // For short slots, use compact display
+  // 80px/hour = 1.33px/min: 15min=20px, 20min=26.7px, 30min=40px, 45min=60px
+  // Very compact (< 25px = < 18min): Only time + order number
+  // Compact (25-35px = 18-26min): Time range + order number + title
+  // Normal (>= 35px = >= 26min): Full display - ensures 30min slots are fully readable
+  const isVeryCompact = slotHeight < 25;
+  const isCompact = slotHeight < 35;
 
   useEffect(() => {
     if (slot.status === 'RUNNING') {
