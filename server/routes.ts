@@ -232,6 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/orders - List orders with filters (requires authentication)
   app.get("/api/orders", requireAuth, async (req, res) => {
     try {
+      const sortOrderValue = req.query.sortOrder;
       const filters = {
         q: req.query.q as string | undefined,
         department: req.query.department as any,
@@ -240,8 +241,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         page: req.query.page ? parseInt(req.query.page as string, 10) : undefined,
         limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
         sortBy: req.query.sortBy as string | undefined,
-        sortOrder: (req.query.sortOrder === 'asc' || req.query.sortOrder === 'desc') 
-          ? req.query.sortOrder 
+        sortOrder: (sortOrderValue === 'asc' || sortOrderValue === 'desc') 
+          ? sortOrderValue as 'asc' | 'desc'
           : undefined,
       };
       
@@ -384,7 +385,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Parse header (case-insensitive)
-      const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const header = lines[0].split(',').map((h: string) => h.trim().toLowerCase());
       const sizeIdx = header.indexOf('size');
       const numberIdx = header.indexOf('number');
       const nameIdx = header.indexOf('name');
@@ -396,7 +397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse rows
       const rows = [];
       for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(',').map(c => c.trim());
+        const cols = lines[i].split(',').map((c: string) => c.trim());
         if (cols.length > sizeIdx && cols.length > numberIdx) {
           rows.push({
             size: cols[sizeIdx],
@@ -656,7 +657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const itemsToValidate = isArray ? req.body : [req.body];
       
       // Validate all items
-      const validated = itemsToValidate.map(item => insertPositionSchema.parse(item));
+      const validated = itemsToValidate.map((item: any) => insertPositionSchema.parse(item));
       
       // Create positions and recalculate totals
       const result = await storage.createPositions(orderId, validated);

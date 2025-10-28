@@ -1,0 +1,118 @@
+Hallo,
+
+bitte repariere zwei Probleme in client/src/pages/planning.tsx: das Drag-and-Drop und die Anzeige von sehr kurzen Time Slots.
+
+Problem 1: Drag & Drop Bug
+Wenn man einen Auftrag (DraggableOrderCard) oder einen bestehenden Slot (DraggableTimeSlot) verschiebt und ihn über einem anderen Slot fallen lässt (anstatt auf einer leeren Zelle), schlägt die handleDragEnd-Logik fehl. Das over.data.current-Objekt ist dann der Slot und nicht die Zelle (DroppableDayColumn), wodurch day und workCenterId fehlen.
+
+Problem 2: Anzeige kurzer Slots
+Wenn ein TimeSlot sehr kurz ist (z.B. 5-15 Minuten), ist die berechnete Höhe zu gering, um den Inhalt (Auftragsname, Zeit) anzuzeigen. Der Text wird abgeschnitten oder überlappt.
+
+Lösung:
+
+Teil A: Drag & Drop Fix (wie zuvor)
+
+Neuer State: Füge dragOverData hinzu:
+
+const [dragOverData, setDragOverData] = useState<{ day: number; workCenterId: string } | null>(null);
+
+
+handleDragOver implementieren: Füge die Funktion hinzu:
+
+ const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    const overId = over?.id;
+    const overData = over?.data?.current;
+
+    let cellData: { day: number; workCenterId: string } | null = null;
+
+    if (overData?.type === 'day-column') {
+        cellData = { day: overData.day, workCenterId: overData.workCenterId };
+    } else if (overId && typeof overId === 'string' && overId.startsWith('slot-')) {
+         const slotId = overId.replace('slot-', '');
+         const slot = timeSlots.find(s => s.id === slotId);
+         if (slot) {
+             // Wichtig: parseISO verwenden, da slot.date ein String ist
+             const slotDate = parseISO(slot.date);
+             // differenceInCalendarDays importieren von date-fns
+             const dayIndex = differenceInCalendarDays(slotDate, weekStart);
+             if (dayIndex >= 0 && dayIndex < 5) { // Sicherstellen, dass der Index gültig ist
+                cellData = { day: dayIndex, workCenterId: slot.workCenterId };
+             }
+         }
+    }
+
+    if (cellData) {
+        setDragOverData(cellData);
+    }
+ };
+
+
+(Stelle sicher, dass differenceInCalendarDays und parseISO von date-fns importiert werden)
+
+onDragOver an <DndContext> übergeben:
+
+<DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragStart={handleDragStart} onDragOver={handleDragOver}>
+
+
+handleDragEnd anpassen:
+
+Am Anfang: Ersetze if (!over) durch if (!over || !dragOverData) { setDraggedItem(null); setDragOverData(null); return; }.
+
+Ziel-Daten: Ersetze const overData = over.data.current; durch const targetCellData = dragOverData;.
+
+Variablen ersetzen: Ersetze alle Vorkommen von overData.day durch targetCellData.day und overData.workCenterId durch targetCellData.workCenterId.
+
+Konfliktprüfung: Stelle sicher, dass checkSlotCollision targetCellData verwendet.
+
+Am Ende: Füge setDragOverData(null); hinzu (vor dem setDraggedItem(null);).
+
+Teil B: Anzeige kurzer Slots Fix
+
+Mindesthöhe für DraggableTimeSlot:
+
+Finde die DraggableTimeSlot-Komponente.
+
+Passe das style-Objekt an. Füge minHeight: '2.5rem' hinzu:
+
+const style = {
+    ...calculateSlotStyle(slot.startMin, slot.lengthMin),
+    transform: transform ? CSS.Translate.toString(transform) : undefined,
+    opacity: isDragging ? 0.5 : 1,
+    position: "absolute" as const,
+    left: 0,
+    right: 0,
+    minHeight: '2.5rem', // <-- Mindesthöhe hinzufügen
+};
+
+
+Inhalt abschneiden:
+
+Stelle sicher, dass der innere div (der den Text enthält) die Klassen overflow-hidden whitespace-nowrap hat. Zum Beispiel:
+
+<div className="flex items-start justify-between gap-1 h-full"> {/* h-full hinzufügen */}
+    <div className="flex-1 min-w-0 overflow-hidden whitespace-nowrap"> {/* Klassen hier hinzufügen/anpassen */}
+       {/* ... Text-Elemente ... */}
+    </div>
+    {/* ... Löschen-Button ... */}
+</div>
+
+
+Tooltip hinzufügen:
+
+Importiere Tooltip, TooltipContent, TooltipProvider, TooltipTrigger von @/components/ui/tooltip.
+
+Umschließe das äußerste div des DraggableTimeSlot-Returns mit <TooltipProvider><Tooltip><TooltipTrigger asChild> ... </TooltipTrigger><TooltipContent> ... </TooltipContent></Tooltip></TooltipProvider>.
+
+Im <TooltipContent> zeige die Details an:
+
+<TooltipContent>
+    <p className="font-medium">{isBlocked ? "Blocker" : order?.displayOrderNumber || order?.title || "Unbekannt"}</p>
+    {!isBlocked && order && <p>{order.title}</p>}
+    {!isBlocked && order && <p>{order.customer}</p>}
+    <p>{formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)} ({slot.lengthMin} min)</p>
+    {slot.note && <p>Notiz: {slot.note}</p>}
+</TooltipContent>
+
+
+Bitte setze beide Teile (A und B) um.
