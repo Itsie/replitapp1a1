@@ -15,7 +15,7 @@ import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import type { Department } from "@prisma/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { addDays, subDays, startOfDay, isSameDay } from "date-fns";
+import { addDays, subDays, startOfDay, isSameDay, format } from "date-fns";
 import { de } from "date-fns/locale";
 import { ProductionSlotModal } from "@/components/production-slot-modal";
 import { ProductionSlotCard } from "@/components/production-slot-card";
@@ -105,7 +105,9 @@ export default function ProductionToday() {
     }
   }, [hideCompleted]);
 
-  const queryUrl = `/api/timeslots?date=${encodeURIComponent(selectedDate.toISOString())}`;
+  // Format date as yyyy-MM-dd to avoid timezone issues
+  const dateStr = format(selectedDate, "yyyy-MM-dd");
+  const queryUrl = `/api/timeslots?date=${dateStr}`;
   
   const { data: response, isLoading } = useQuery<{ slots: TimeSlotWithOrder[] }>({
     queryKey: [queryUrl],
