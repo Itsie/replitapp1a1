@@ -1,0 +1,166 @@
+Hallo,
+
+bitte aktualisiere die Seite client/src/pages/planning.tsx (basierend auf Commit 3ebfd6c...) mit zwei wichtigen Verbesserungen: präzisere Zeitplatzierung beim Drag & Drop und Zusammenlegung von Departments im Filter.
+
+Teil A: Präzisere Zeitplatzierung beim Droppen (Option B)
+
+Problem: Beim Ziehen eines Auftrags (DraggableOrderCard) oder Slots (DraggableTimeSlot) in die Matrix bestimmt die aktuelle handleDragEnd-Logik die Startzeit (startMin) nicht anhand der vertikalen Position (Y-Koordinate), wo der Benutzer das Element fallen lässt.
+
+Lösung: Wir berechnen die startMin basierend auf der Y-Position des Mauszeigers relativ zur Ziel-Spalte (DroppableDayColumn) beim onDragEnd-Event. Anschließend öffnet sich das AppointmentDialog-Modal, um nur die Dauer (lengthMin) des neuen Slots festzulegen. Beim Verschieben bestehender Slots wird die Startzeit ebenfalls aus der Drop-Position berechnet, die Dauer bleibt aber unverändert (kein Modal).
+
+Anweisungen:
+
+Imports: Stelle sicher, dass useRef von react importiert wird.
+
+Konstante PIXELS_PER_MINUTE: Definiere diese Konstante außerhalb der Komponente (z.B. const PIXELS_PER_MINUTE = 2;). Prüfe den Wert, falls vorhanden.
+
+Hilfsfunktion calculateMinutesFromY: Ersetze oder füge diese Funktion außerhalb der Planning-Komponente hinzu:
+
+function calculateMinutesFromY(
+    dropClientY: number, // Wichtig: clientY verwenden
+    droppableNode: HTMLElement | null
+): number {
+    if (!droppableNode) return WORKING_HOURS_START;
+
+    const rect = droppableNode.getBoundingClientRect();
+    // window.scrollY wird für clientY nicht benötigt, da es relativ zum Viewport ist
+    const relativeY = dropClientY - rect.top;
+
+    // Pixel in Minuten umrechnen (verwende die definierte Konstante)
+    let minutesOffset = relativeY / PIXELS_PER_MINUTE;
+    let minutes = WORKING_HOURS_START + minutesOffset;
+
+    // Runden auf das nächste 15-Minuten-Raster (oder snapToGrid verwenden)
+    minutes = Math.round(minutes / 15) * 15;
+
+    // Sicherstellen, dass die Zeit innerhalb der Arbeitszeiten liegt
+    // (Endzeit beachten, z.B. spätester Start für 15 Min Slot ist 17:45)
+    return Math.max(WORKING_HOURS_START, Math.min(minutes, WORKING_HOURS_END - 15));
+}
+// Stelle sicher, dass Konstanten wie WORKING_HOURS_START etc. global verfügbar sind.
+
+
+AppointmentDialog State: Stelle sicher, dass diese States vorhanden sind:
+
+const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
+const [appointmentModalData, setAppointmentModalData] = useState<{
+    day: number;
+    workCenterId: string;
+    startMin: number;
+    orderId: string; // Nur für neue Slots benötigt
+    orderTitle: string; // Zur Anzeige im Modal-Titel
+} | null>(null);
+
+
+handleDragEnd anpassen:
+
+Innerhalb handleDragEnd, nach targetCellData:
+
+Berechne calculatedStartMin mit calculateMinutesFromY:
+
+const droppableElement = document.getElementById(`droppable-${targetCellData.day}-${targetCellData.workCenterId}`);
+// event.activatorEvent.clientY liefert die Y-Koordinate relativ zum Viewport
+const dropClientY = (event.activatorEvent as PointerEvent).clientY;
+const calculatedStartMin = calculateMinutesFromY(dropClientY, droppableElement);
+
+
+Beim Erstellen eines neuen Slots (activeData.type === "order"):
+
+Entferne den direkten createSlotMutation.mutate-Aufruf.
+
+Öffne stattdessen das Modal nur für die Dauer:
+
+const order = activeData.order as Order;
+setAppointmentModalData({
+    day: targetCellData.day,
+    workCenterId: targetCellData.workCenterId,
+    startMin: calculatedStartMin, // Berechnete Startzeit
+    orderId: order.id,
+    orderTitle: order.title
+});
+setIsAppointmentModalOpen(true); // Modal öffnen
+
+
+Beim Verschieben eines bestehenden Slots (activeData.type === "slot"):
+
+Rufe updateSlotMutation.mutate auf, setze startMin: calculatedStartMin. lengthMin bleibt gleich. Wichtig: Kollisionsprüfung!
+
+ const slot = activeData.slot as TimeSlot;
+ const targetDate = format(addDays(weekStart, targetCellData.day), "yyyy-MM-dd");
+
+ // Kollisionsprüfung (Stelle sicher, dass checkSlotCollision existiert!)
+ // Sie muss die neue Startzeit und die *bestehende* Dauer des Slots prüfen.
+ if (checkSlotCollision(slot.id, targetDate, calculatedStartMin, slot.lengthMin, targetCellData.workCenterId, timeSlots)) { // timeSlots übergeben
+    toast({ title: "Kollision!", description: "Der Termin überschneidet sich.", variant: "destructive" });
+    setDraggedItem(null); setDragOverData(null); // Reset D&D States
+    return; // Abbrechen
+ }
+
+ updateSlotMutation.mutate({
+     id: slot.id,
+     data: {
+         date: targetDate,
+         workCenterId: targetCellData.workCenterId,
+         startMin: calculatedStartMin, // Neue Startzeit
+         // lengthMin bleibt gleich
+     },
+ });
+
+
+AppointmentDialog-Komponente anpassen & rendern:
+
+Stelle sicher, dass die Komponente (client/src/components/appointment-dialog.tsx) angepasst wird:
+
+Sie benötigt ein Input-Feld (Typ number, step="15") für die Dauer (lengthMin).
+
+Sie soll initialData.orderTitle und die berechnete initialData.startMin (formatiert als Uhrzeit) anzeigen.
+
+Der onSubmit-Handler der Komponente muss die eingegebene lengthMin zurückgeben.
+
+Rendere das Modal im JSX der Planning-Seite:
+
+{appointmentModalData && (
+   <AppointmentDialog
+       isOpen={isAppointmentModalOpen}
+       onClose={() => {
+         setIsAppointmentModalOpen(false);
+         setAppointmentModalData(null);
+       }}
+       onSubmit={(lengthInput: number) => {
+           if (!appointmentModalData || !appointmentModalData.orderId) return;
+
+           // Auf 15 Min runden, Mindestdauer 15 Min
+           const lengthMin = Math.max(15, Math.round(lengthInput / 15) * 15);
+           const targetDate = format(addDays(weekStart, appointmentModalData.day), "yyyy-MM-dd");
+
+           // Kollisionsprüfung (Stelle sicher, dass checkSlotCollision existiert!)
+           if (checkSlotCollision(undefined, targetDate, appointmentModalData.startMin, lengthMin, appointmentModalData.workCenterId, timeSlots)) { // timeSlots übergeben
+              toast({ title: "Kollision!", description: "Der Termin überschneidet sich.", variant: "destructive" });
+              return; // Modal nicht schließen
+           }
+
+           createSlotMutation.mutate({
+               date: targetDate,
+               startMin: appointmentModalData.startMin, // Berechnete Startzeit
+               lengthMin: lengthMin,                  // Eingegebene Dauer
+               workCenterId: appointmentModalData.workCenterId,
+               orderId: appointmentModalData.orderId,
+               blocked: false,
+           });
+
+           setIsAppointmentModalOpen(false);
+           setAppointmentModalData(null);
+       }}
+       initialData={{
+           startMin: appointmentModalData.startMin,
+           orderTitle: appointmentModalData.orderTitle,
+           // Keine initialLengthMin mehr nötig, Modal fragt Dauer ab
+       }}
+   />
+)}
+
+
+checkSlotCollision implementieren/prüfen:
+
+Diese Funktion ist entscheidend. Sie muss existieren und (slotIdToIgnore, date, startMin, lengthMin, workCenterId, allSlots) prüfen, ob der Slot (startMin bis startMin + lengthMin) mit anderen Slots im selben workCenterId am selben date überlappt. Gib true bei Kollision zurück, sonst false. Sie muss allSlots als Argument erhalten.
+
