@@ -43,11 +43,11 @@ export default function MissingPartsPage() {
 
   const queryUrl = '/api/orders?workflow=WARTET_FEHLTEILE';
   
-  const { data: response, isLoading } = useQuery<OrderWithMissingParts[]>({
+  const { data: ordersResponse, isLoading } = useQuery<{ orders: OrderWithMissingParts[] }>({
     queryKey: [queryUrl],
   });
 
-  const orders = response ?? [];
+  const orders = ordersResponse?.orders ?? [];
 
   const releaseMutation = useMutation({
     mutationFn: async (orderId: string) => {
