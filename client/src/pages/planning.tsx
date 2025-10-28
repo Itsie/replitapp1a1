@@ -167,11 +167,10 @@ export default function Planning() {
     return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
   }, [weekStart]);
 
-  const startDateStr = format(weekDates[0], "yyyy-MM-dd");
-  const endDateStr = format(weekDates[4], "yyyy-MM-dd");
+  const weekStartStr = format(weekStart, "yyyy-MM-dd");
 
   const { data: timeSlots = [], refetch: refetchTimeSlots } = useQuery<TimeSlot[]>({
-    queryKey: [`/api/timeslots?department=${selectedDepartment}&startDate=${startDateStr}&endDate=${endDateStr}`],
+    queryKey: [`/api/timeslots?department=${selectedDepartment}&weekStart=${weekStartStr}`],
   });
 
   // Mutations
