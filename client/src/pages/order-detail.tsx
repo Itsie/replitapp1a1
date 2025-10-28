@@ -453,6 +453,116 @@ export default function OrderDetail() {
                 </Alert>
               )}
               
+              {/* Freigabe-Checkliste - nur bei Status NEU */}
+              {order.workflow === "NEU" && (
+                <Card className="rounded-2xl border-primary/20 bg-primary/5 mb-4">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Package className="h-5 w-5" />
+                      Freigabe-Checkliste
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Prüfen Sie die folgenden Punkte, bevor Sie den Auftrag für die Produktion freigeben:
+                    </p>
+                    <div className="space-y-3">
+                      {/* Positionen */}
+                      <button
+                        onClick={() => setActiveTab("positions")}
+                        className="w-full flex items-start gap-3 p-3 rounded-lg hover-elevate active-elevate-2 border border-muted/40 text-left transition-all"
+                        data-testid="checklist-item-positions"
+                      >
+                        <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 ${
+                          hasPositions 
+                            ? 'bg-green-500 border-green-500' 
+                            : 'bg-muted border-muted-foreground/30'
+                        }`}>
+                          {hasPositions && <Check className="h-3 w-3 text-white" />}
+                        </div>
+                        <div className="flex-1">
+                          <div className={`font-medium ${hasPositions ? 'text-foreground' : 'text-muted-foreground'}`}>
+                            {hasPositions ? 'Positionen hinzugefügt' : 'Positionen hinzufügen'}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {hasPositions 
+                              ? `${order.positions?.length || 0} Position${(order.positions?.length || 0) !== 1 ? 'en' : ''} erfasst`
+                              : 'Klicken Sie hier, um Positionen hinzuzufügen'
+                            }
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Größentabelle - nur bei TEAMSPORT */}
+                      {isTeamsport && (
+                        <button
+                          onClick={() => setActiveTab("sizes")}
+                          className="w-full flex items-start gap-3 p-3 rounded-lg hover-elevate active-elevate-2 border border-muted/40 text-left transition-all"
+                          data-testid="checklist-item-sizetable"
+                        >
+                          <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 ${
+                            hasSizeTable 
+                              ? 'bg-green-500 border-green-500' 
+                              : 'bg-muted border-muted-foreground/30'
+                          }`}>
+                            {hasSizeTable && <Check className="h-3 w-3 text-white" />}
+                          </div>
+                          <div className="flex-1">
+                            <div className={`font-medium ${hasSizeTable ? 'text-foreground' : 'text-muted-foreground'}`}>
+                              {hasSizeTable ? 'Größentabelle erstellt' : 'Größentabelle erstellen'}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {hasSizeTable 
+                                ? 'Größentabelle für TEAMSPORT erfasst'
+                                : 'Erforderlich für TEAMSPORT-Aufträge'
+                              }
+                            </div>
+                          </div>
+                        </button>
+                      )}
+
+                      {/* Druckdaten */}
+                      <button
+                        onClick={() => setActiveTab("assets")}
+                        className="w-full flex items-start gap-3 p-3 rounded-lg hover-elevate active-elevate-2 border border-muted/40 text-left transition-all"
+                        data-testid="checklist-item-printassets"
+                      >
+                        <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 ${
+                          hasRequiredAssets 
+                            ? 'bg-green-500 border-green-500' 
+                            : 'bg-muted border-muted-foreground/30'
+                        }`}>
+                          {hasRequiredAssets && <Check className="h-3 w-3 text-white" />}
+                        </div>
+                        <div className="flex-1">
+                          <div className={`font-medium ${hasRequiredAssets ? 'text-foreground' : 'text-muted-foreground'}`}>
+                            {hasRequiredAssets ? 'Druckdaten hochgeladen' : 'Erforderliche Druckdaten hochladen'}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {hasRequiredAssets 
+                              ? 'Alle erforderlichen Druckdaten vorhanden'
+                              : 'Klicken Sie hier, um Druckdaten hochzuladen'
+                            }
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Status-Indikator */}
+                    {canSubmitOrder && (
+                      <div className="mt-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                          <Check className="h-4 w-4" />
+                          <span className="text-sm font-medium">
+                            Auftrag ist bereit für die Freigabe
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+              
               <div className="space-y-4">
                 {/* Combined Card with 3 Gradients */}
                 <Card className="rounded-2xl border-muted/60">
