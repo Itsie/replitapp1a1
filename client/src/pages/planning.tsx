@@ -9,13 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ChevronLeft, ChevronRight, X, Plus, GripVertical } from "lucide-react";
-import { format, addDays, subDays, startOfWeek, parseISO, getDay } from "date-fns";
+import { format, addDays, subDays, startOfWeek, parseISO, getDay, differenceInCalendarDays } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { 
   DndContext, 
-  DragEndEvent, 
+  DragEndEvent,
+  DragOverEvent,
   useDraggable, 
   useDroppable,
   DragOverlay,
@@ -125,6 +126,7 @@ export default function Planning() {
   // Drag & Drop
   const [activeId, setActiveId] = useState<string | null>(null);
   const [currentPointerY, setCurrentPointerY] = useState<number | null>(null);
+  const [dragOverData, setDragOverData] = useState<{ day: number; workCenterId: string } | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -242,50 +244,94 @@ export default function Planning() {
   });
 
   // Drag handlers
+  function handleDragOver(event: DragOverEvent) {
+    const { over } = event;
+    const overId = over?.id;
+    const overData = over?.data?.current;
+
+    // Finde die Daten der Zelle, über der wir schweben
+    let cellData: { day: number; workCenterId: string } | null = null;
+
+    if (overData?.type === 'day-cell') {
+      // Wir sind direkt über der Spalte
+      const targetDate = overData.date as Date;
+      const dayIndex = differenceInCalendarDays(targetDate, weekStart);
+      if (dayIndex >= 0 && dayIndex < 5 && departmentWorkCenter) {
+        cellData = { day: dayIndex, workCenterId: departmentWorkCenter.id };
+      }
+    } else if (overId && typeof overId === 'string' && overId.startsWith('slot-')) {
+      // Wir sind über einem Slot, finde die Zelle darunter
+      const slotId = overId.replace('slot-', '');
+      const slot = timeSlots.find(s => s.id === slotId);
+      if (slot) {
+        const slotDate = parseISO(slot.date);
+        const dayIndex = differenceInCalendarDays(slotDate, weekStart);
+        if (dayIndex >= 0 && dayIndex < 5) {
+          cellData = { day: dayIndex, workCenterId: slot.workCenterId };
+        }
+      }
+    }
+
+    if (cellData) {
+      setDragOverData(cellData);
+    }
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     const pointerY = currentPointerY;
     setActiveId(null);
     setCurrentPointerY(null);
 
-    if (!over || !departmentWorkCenter) return;
+    if (!over || !dragOverData) {
+      // Kein gültiges Ziel gefunden
+      setDragOverData(null);
+      return;
+    }
+
+    if (!departmentWorkCenter) {
+      setDragOverData(null);
+      return;
+    }
 
     const activeData = active.data.current;
-    const overData = over.data.current;
+    const targetCellData = dragOverData; // Nutze die gespeicherten Daten!
 
-    // Dropping on a day cell
-    if (overData?.type === "day-cell") {
-      const targetDate = overData.date as Date;
-      
-      // Get the current bounding rect of the droppable element
-      const dayElement = document.getElementById(`day-${format(targetDate, "yyyy-MM-dd")}-timeline`);
-      
-      let startMin = WORKING_HOURS_START;
-      if (dayElement && pointerY !== null) {
-        const rect = dayElement.getBoundingClientRect();
-        const relativeY = pointerY - rect.top;
-        const remFromTop = relativeY / 16; // 1rem = 16px
-        const minutesFromStart = remFromTop * MINUTES_PER_REM;
-        startMin = snapToGrid(WORKING_HOURS_START + minutesFromStart);
-        startMin = Math.max(WORKING_HOURS_START, Math.min(WORKING_HOURS_END - 15, startMin));
-      }
-
-      // Order from pool
-      if (activeData?.type === "order") {
-        const orderId = activeData.orderId as string;
-        setPendingDrop({ orderId, date: targetDate, startMin });
-        setDurationInput("60");
-        setDurationModalOpen(true);
-        return;
-      }
-
-      // Moving existing slot
-      if (activeData?.type === "slot") {
-        const slotId = activeData.slotId as string;
-        updateSlotMutation.mutate({ id: slotId, date: targetDate, startMin });
-        return;
-      }
+    // Berechne das Zieldatum aus dragOverData
+    const targetDate = addDays(weekStart, targetCellData.day);
+    
+    // Get the current bounding rect of the droppable element
+    const dayElement = document.getElementById(`day-${format(targetDate, "yyyy-MM-dd")}-timeline`);
+    
+    let startMin = WORKING_HOURS_START;
+    if (dayElement && pointerY !== null) {
+      const rect = dayElement.getBoundingClientRect();
+      const relativeY = pointerY - rect.top;
+      const remFromTop = relativeY / 16; // 1rem = 16px
+      const minutesFromStart = remFromTop * MINUTES_PER_REM;
+      startMin = snapToGrid(WORKING_HOURS_START + minutesFromStart);
+      startMin = Math.max(WORKING_HOURS_START, Math.min(WORKING_HOURS_END - 15, startMin));
     }
+
+    // Order from pool
+    if (activeData?.type === "order") {
+      const orderId = activeData.orderId as string;
+      setPendingDrop({ orderId, date: targetDate, startMin });
+      setDurationInput("60");
+      setDurationModalOpen(true);
+      setDragOverData(null); // Reset
+      return;
+    }
+
+    // Moving existing slot
+    if (activeData?.type === "slot") {
+      const slotId = activeData.slotId as string;
+      updateSlotMutation.mutate({ id: slotId, date: targetDate, startMin });
+      setDragOverData(null); // Reset am Ende
+      return;
+    }
+
+    setDragOverData(null); // Reset am Ende
   }
 
   function handleDurationConfirm() {
@@ -436,6 +482,7 @@ export default function Planning() {
             <DndContext 
               sensors={sensors} 
               onDragStart={(e) => setActiveId(e.active.id as string)} 
+              onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
             >
               <div className="flex min-w-max">

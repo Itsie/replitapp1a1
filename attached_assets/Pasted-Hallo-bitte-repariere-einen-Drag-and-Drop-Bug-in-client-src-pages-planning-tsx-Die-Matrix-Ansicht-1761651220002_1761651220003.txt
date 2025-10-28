@@ -1,0 +1,83 @@
+Hallo,
+
+bitte repariere einen Drag-and-Drop-Bug in client/src/pages/planning.tsx. Die Matrix-Ansicht ist gut, aber das Verschieben funktioniert nicht robust.
+
+Problem:
+Wenn man einen Auftrag (DraggableOrderCard) oder einen bestehenden Slot (DraggableTimeSlot) verschiebt und ihn über einem anderen Slot fallen lässt (anstatt auf einer leeren Zelle), schlägt die handleDragEnd-Logik fehl. Das over.data.current-Objekt ist dann der Slot und nicht die Zelle (DroppableDayColumn), wodurch day und workCenterId fehlen.
+
+Lösung:
+Wir müssen onDragOver verwenden, um uns die Daten der letzten gültigen Zelle, über der das Element geschwebt hat, zu merken.
+
+Anweisungen:
+
+Füge einen neuen State hinzu in der Planning-Komponente (innerhalb von export default function Planning() { ... }):
+
+const [dragOverData, setDragOverData] = useState<{ day: number; workCenterId: string } | null>(null);
+
+
+Implementiere die onDragOver-Funktion (innerhalb der Planning-Komponente):
+
+ const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    const overId = over?.id;
+    const overData = over?.data?.current;
+
+    // Finde die Daten der Zelle, über der wir schweben
+    let cellData: { day: number; workCenterId: string } | null = null;
+
+    if (overData?.type === 'day-column') {
+        // Wir sind direkt über der Spalte
+        cellData = { day: overData.day, workCenterId: overData.workCenterId };
+    } else if (overId && typeof overId === 'string' && overId.startsWith('slot-')) {
+         // Wir sind über einem Slot, finde die Zelle darunter
+         const slotId = overId.replace('slot-', '');
+         const slot = timeSlots.find(s => s.id === slotId);
+         if (slot) {
+             const slotDate = parseISO(slot.date); // Use parseISO for date strings
+             const dayIndex = differenceInCalendarDays(slotDate, weekStart);
+             if (dayIndex >= 0 && dayIndex < 5) {
+                cellData = { day: dayIndex, workCenterId: slot.workCenterId };
+             }
+         }
+    }
+
+    if (cellData) {
+        setDragOverData(cellData);
+    }
+ };
+
+
+Übergebe handleDragOver an <DndContext>:
+
+Finde das <DndContext>-Element.
+
+Füge das onDragOver-Prop hinzu: <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragStart={handleDragStart} onDragOver={handleDragOver}>
+
+Passe handleDragEnd an:
+
+Am Anfang: Ersetze if (!over) durch:
+
+if (!over || !dragOverData) {
+  // Kein gültiges Ziel gefunden
+  setDraggedItem(null);
+  setDragOverData(null); // Reset
+  return;
+}
+
+
+Ziel-Daten verwenden: Ersetze die Zeile const overData = over.data.current; durch:
+
+const targetCellData = dragOverData; // Nutze die gespeicherten Daten!
+
+
+Datum & WorkCenter ID: Ersetze alle Vorkommen von overData.day durch targetCellData.day und overData.workCenterId durch targetCellData.workCenterId.
+
+Konfliktprüfung anpassen: Stelle sicher, dass checkSlotCollision mit targetCellData.day und targetCellData.workCenterId aufgerufen wird.
+
+Am Ende: Füge vor dem }; der Funktion hinzu:
+
+setDraggedItem(null);
+setDragOverData(null); // Reset am Ende
+
+
+Bitte setze diese Änderungen um, damit das Drag & Drop robust funktioniert, egal wo man das Element ablegt.
