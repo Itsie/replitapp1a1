@@ -248,6 +248,8 @@ export default function Planning() {
     const { over } = event;
     const overId = over?.id;
     const overData = over?.data?.current;
+    
+    console.log("[DragOver] Event:", { overId, overDataType: overData?.type });
 
     // Finde die Daten der Zelle, über der wir schweben
     let cellData: { day: number; workCenterId: string } | null = null;
@@ -280,19 +282,24 @@ export default function Planning() {
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     const pointerY = currentPointerY;
+    console.log("[DragEnd] Event:", { activeId: active.id, overId: over?.id, dragOverData, pointerY });
     setActiveId(null);
     setCurrentPointerY(null);
 
     if (!over || !dragOverData) {
       // Kein gültiges Ziel gefunden
+      console.log("[DragEnd] No valid target - over:", !!over, "dragOverData:", dragOverData);
       setDragOverData(null);
       return;
     }
 
     if (!departmentWorkCenter) {
+      console.log("[DragEnd] No department work center");
       setDragOverData(null);
       return;
     }
+    
+    console.log("[DragEnd] Valid drop - targetCellData:", dragOverData, "departmentWorkCenter:", departmentWorkCenter);
 
     const activeData = active.data.current;
     const targetCellData = dragOverData; // Nutze die gespeicherten Daten!
@@ -710,6 +717,13 @@ function DraggableOrderCard({ order }: DraggableOrderCardProps) {
     data: { type: "order", orderId: order.id },
   });
 
+  console.log("[DraggableOrderCard] Render:", {
+    orderId: order.id,
+    isDragging,
+    hasListeners: !!listeners,
+    hasAttributes: !!attributes
+  });
+
   const style = {
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.5 : 1,
@@ -721,8 +735,9 @@ function DraggableOrderCard({ order }: DraggableOrderCardProps) {
       style={style}
       className="border rounded-lg p-3 bg-card hover-elevate cursor-grab active:cursor-grabbing"
       data-testid={`order-card-${order.id}`}
-      {...listeners}
       {...attributes}
+      {...listeners}
+      onPointerDown={() => console.log("[OrderCard] PointerDown")}
     >
       <div className="flex items-start gap-2">
         <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
