@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { 
   Select,
   SelectContent,
@@ -12,14 +11,14 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ChevronLeft, ChevronRight, Calendar, Clock, ChevronDown, ChevronUp, FileText, Download } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import type { WorkCenter, Department, WorkflowState } from "@prisma/client";
+import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import type { Department } from "@prisma/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { addDays, subDays, startOfDay, isSameDay } from "date-fns";
 import { de } from "date-fns/locale";
 import { ProductionSlotModal } from "@/components/production-slot-modal";
+import { ProductionSlotCard } from "@/components/production-slot-card";
 
 interface TimeSlotWithOrder {
   id: string;
@@ -72,41 +71,24 @@ interface TimeSlotWithOrder {
   };
 }
 
-interface WorkCenterWithSlotCount extends WorkCenter {
-  slotsTodayCount: number;
-}
+type WorkflowState = 
+  | "ENTWURF"
+  | "NEU"
+  | "PRUEFUNG"
+  | "FUER_PROD"
+  | "IN_PROD"
+  | "WARTET_FEHLTEILE"
+  | "FERTIG"
+  | "ZUR_ABRECHNUNG"
+  | "ABGERECHNET";
 
-type ProblemReason = "FEHLTEILE" | "MASCHINE" | "SONSTIGES";
-
-const PROBLEM_REASONS: Record<ProblemReason, string> = {
-  FEHLTEILE: "Fehlteile",
-  MASCHINE: "Maschine defekt",
-  SONSTIGES: "Sonstiges",
-};
-
-function formatTime(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-}
-
-function formatDuration(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (hours > 0) {
-    return `${hours}h ${mins}min`;
-  }
-  return `${mins}min`;
-}
+type DepartmentFilter = Department | "TEAMSPORT_TEXTIL" | "all";
 
 export default function ProductionToday() {
-  const { toast } = useToast();
-  const [selectedDepartment, setSelectedDepartment] = useState<Department | "all">("all");
+  const [selectedDepartment, setSelectedDepartment] = useState<DepartmentFilter>("all");
   const [hideCompleted, setHideCompleted] = useState(true);
-  const [collapsedSlots, setCollapsedSlots] = useState<Set<string>>(new Set());
   const [selectedDate, setSelectedDate] = useState<Date>(() => startOfDay(new Date()));
-  
-  const previousStatusesRef = useRef<Map<string, string>>(new Map());
+  const [selectedSlot, setSelectedSlot] = useState<TimeSlotWithOrder | null>(null);
   
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -131,69 +113,37 @@ export default function ProductionToday() {
 
   const slots = response?.slots ?? [];
 
-  const departments: Department[] = ["TEAMSPORT", "TEXTILVEREDELUNG", "STICKEREI", "DRUCK", "SONSTIGES"];
+  const departmentOptions: Array<{ value: DepartmentFilter; label: string }> = [
+    { value: "all", label: "Alle Bereiche" },
+    { value: "TEAMSPORT_TEXTIL", label: "Teamsport + Textilveredelung" },
+    { value: "TEAMSPORT", label: "Teamsport" },
+    { value: "TEXTILVEREDELUNG", label: "Textilveredelung" },
+    { value: "STICKEREI", label: "Stickerei" },
+    { value: "DRUCK", label: "Druck" },
+    { value: "SONSTIGES", label: "Sonstiges" },
+  ];
 
-  // Slot Detail Modal
-  const [selectedSlot, setSelectedSlot] = useState<TimeSlotWithOrder | null>(null);
-
-  const toggleCollapse = (slotId: string) => {
-    setCollapsedSlots(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(slotId)) {
-        newSet.delete(slotId);
-      } else {
-        newSet.add(slotId);
-      }
-      return newSet;
-    });
-  };
-
-  const slotStatusSignature = JSON.stringify(slots.map(s => ({ id: s.id, status: s.status })));
-  
-  useEffect(() => {
-    const previousStatuses = previousStatusesRef.current;
-    let hasChanges = false;
-    const updates: string[] = [];
-
-    slots.forEach(slot => {
-      const prevStatus = previousStatuses.get(slot.id);
-      if (prevStatus !== 'DONE' && slot.status === 'DONE') {
-        updates.push(slot.id);
-        hasChanges = true;
-      }
-      previousStatuses.set(slot.id, slot.status);
-    });
-
-    const currentSlotIds = new Set(slots.map(s => s.id));
-    Array.from(previousStatuses.entries()).forEach(([id]) => {
-      if (!currentSlotIds.has(id)) {
-        previousStatuses.delete(id);
-      }
-    });
-
-    if (hasChanges && updates.length > 0) {
-      setCollapsedSlots(prev => {
-        const newSet = new Set(prev);
-        updates.forEach(id => newSet.add(id));
-        return newSet;
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slotStatusSignature]);
-
+  // Filter slots
   let filteredSlots = slots.filter(s => s.orderId !== null || s.blocked === true);
   
   if (selectedDepartment !== "all") {
-    filteredSlots = filteredSlots.filter(s => s.workCenter.department === selectedDepartment);
+    if (selectedDepartment === "TEAMSPORT_TEXTIL") {
+      filteredSlots = filteredSlots.filter(
+        s => s.workCenter.department === "TEAMSPORT" || s.workCenter.department === "TEXTILVEREDELUNG"
+      );
+    } else {
+      filteredSlots = filteredSlots.filter(s => s.workCenter.department === selectedDepartment);
+    }
   }
   
-  // Always hide BLOCKED slots (they can't be worked on and should go to missing parts)
+  // Always hide BLOCKED slots (they should be in missing parts view)
   filteredSlots = filteredSlots.filter(s => s.status !== 'BLOCKED');
   
   if (hideCompleted) {
     filteredSlots = filteredSlots.filter(s => s.status !== 'DONE');
   }
 
+  // Sort by start time
   filteredSlots = [...filteredSlots].sort((a, b) => a.startMin - b.startMin);
 
   if (isLoading) {
@@ -266,17 +216,22 @@ export default function ProductionToday() {
         </Popover>
       </div>
 
+      {/* Filters */}
       <div className="flex items-center gap-4 mb-6">
         <div className="flex items-center gap-2">
           <Label htmlFor="department-filter">Bereich:</Label>
-          <Select value={selectedDepartment} onValueChange={(val) => setSelectedDepartment(val as Department | "all")}>
-            <SelectTrigger id="department-filter" className="w-48" data-testid="select-department-filter">
+          <Select 
+            value={selectedDepartment} 
+            onValueChange={(val) => setSelectedDepartment(val as DepartmentFilter)}
+          >
+            <SelectTrigger id="department-filter" className="w-64" data-testid="select-department-filter">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Alle Bereiche</SelectItem>
-              {departments.map(dept => (
-                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+              {departmentOptions.map(opt => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -295,6 +250,7 @@ export default function ProductionToday() {
         </div>
       </div>
 
+      {/* Slot List */}
       {filteredSlots.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
@@ -302,14 +258,15 @@ export default function ProductionToday() {
           </CardContent>
         </Card>
       ) : (
-        <TimelineView
-          slots={filteredSlots}
-          collapsedSlots={collapsedSlots}
-          onToggleCollapse={toggleCollapse}
-          onViewDetails={(slot) => {
-            setSelectedSlot(slot);
-          }}
-        />
+        <div className="space-y-3" data-testid="list-production-slots">
+          {filteredSlots.map(slot => (
+            <ProductionSlotCard
+              key={slot.id}
+              slot={slot}
+              onClick={() => setSelectedSlot(slot)}
+            />
+          ))}
+        </div>
       )}
 
       {/* Production Slot Modal */}
@@ -318,461 +275,6 @@ export default function ProductionToday() {
         slot={selectedSlot}
         onClose={() => setSelectedSlot(null)}
       />
-    </div>
-  );
-}
-
-interface TimelineViewProps {
-  slots: TimeSlotWithOrder[];
-  collapsedSlots: Set<string>;
-  onToggleCollapse: (id: string) => void;
-  onViewDetails: (slot: TimeSlotWithOrder) => void;
-}
-
-interface SlotWithLayout extends TimeSlotWithOrder {
-  lane: number;
-  totalLanes: number;
-}
-
-function calculateLanes(slots: TimeSlotWithOrder[]): SlotWithLayout[] {
-  if (slots.length === 0) return [];
-  
-  // Sort by start time
-  const sorted = [...slots].sort((a, b) => a.startMin - b.startMin);
-  
-  // Find overlapping clusters
-  const clusters: TimeSlotWithOrder[][] = [];
-  let currentCluster: TimeSlotWithOrder[] = [sorted[0]];
-  
-  for (let i = 1; i < sorted.length; i++) {
-    const slot = sorted[i];
-    const clusterEnd = Math.max(...currentCluster.map(s => s.startMin + s.lengthMin));
-    
-    if (slot.startMin < clusterEnd) {
-      // Overlaps with current cluster
-      currentCluster.push(slot);
-    } else {
-      // Start new cluster
-      clusters.push(currentCluster);
-      currentCluster = [slot];
-    }
-  }
-  clusters.push(currentCluster);
-  
-  // Assign lanes within each cluster
-  const result: SlotWithLayout[] = [];
-  
-  for (const cluster of clusters) {
-    const lanes: { endMin: number }[] = [];
-    
-    for (const slot of cluster) {
-      const slotEnd = slot.startMin + slot.lengthMin;
-      
-      // Find first available lane
-      let assignedLane = lanes.findIndex(lane => lane.endMin <= slot.startMin);
-      
-      if (assignedLane === -1) {
-        assignedLane = lanes.length;
-        lanes.push({ endMin: slotEnd });
-      } else {
-        lanes[assignedLane].endMin = slotEnd;
-      }
-      
-      result.push({
-        ...slot,
-        lane: assignedLane,
-        totalLanes: 0, // Will be set next
-      });
-    }
-    
-    // Set totalLanes for this cluster
-    const clusterLanes = lanes.length;
-    for (const slot of result.slice(-cluster.length)) {
-      slot.totalLanes = clusterLanes;
-    }
-  }
-  
-  return result;
-}
-
-function TimelineView({
-  slots,
-  collapsedSlots,
-  onToggleCollapse,
-  onViewDetails,
-}: TimelineViewProps) {
-  const workStart = 7 * 60; // 07:00
-  const workEnd = 18 * 60;   // 18:00
-  const timeMarkers: number[] = [];
-  
-  // Time markers every 15 minutes
-  for (let min = workStart; min <= workEnd; min += 15) {
-    timeMarkers.push(min);
-  }
-
-  // Calculate lanes for overlapping slots
-  const slotsWithLanes = calculateLanes(slots);
-
-  return (
-    <div className="border rounded-lg p-6 bg-card">
-      {/* Timeline header */}
-      <div className="flex items-center justify-between mb-6 pb-4 border-b">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm">
-            <div className="h-3 w-1 bg-green-600 rounded" />
-            <span className="text-muted-foreground">Läuft</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="h-3 w-1 bg-yellow-600 rounded" />
-            <span className="text-muted-foreground">Pausiert</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="h-3 w-1 bg-red-600 rounded" />
-            <span className="text-muted-foreground">Blockiert</span>
-          </div>
-        </div>
-        <span className="text-sm text-muted-foreground">Arbeitstag: 07:00 - 18:00 Uhr</span>
-      </div>
-
-      {/* Timeline grid */}
-      <div className="relative">
-        {/* Time labels on left */}
-        <div className="absolute left-0 top-0 bottom-0 w-16">
-          {timeMarkers.map((min, idx) => {
-            const isFullHour = min % 60 === 0;
-            const isHalfHour = min % 30 === 0 && !isFullHour;
-            const showLabel = isFullHour || isHalfHour; // Only show labels at full and half hours
-            return (
-              <div
-                key={min}
-                className="absolute left-0 right-0 flex items-center justify-end pr-2"
-                style={{ top: `${idx * 20}px` }}
-              >
-                {showLabel && (
-                  <span className={`text-xs font-mono ${isFullHour ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-                    {formatTime(min)}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Grid lines - visual hierarchy: full hour > half hour > three-quarter > quarter */}
-        <div className="absolute left-16 right-0 top-0 bottom-0">
-          {timeMarkers.map((min, idx) => {
-            const minuteInHour = min % 60;
-            const isFullHour = minuteInHour === 0;
-            const isHalfHour = minuteInHour === 30;
-            const isThreeQuarter = minuteInHour === 45;
-            const lineStyle = isFullHour 
-              ? 'border-border/40'      // Darkest: full hours
-              : isHalfHour 
-              ? 'border-border/25'      // Medium: half hours
-              : isThreeQuarter
-              ? 'border-border/18'      // Medium-light: 45-minute marks
-              : 'border-border/12';     // Lightest: 15-minute marks
-            return (
-              <div
-                key={min}
-                className={`absolute left-0 right-0 border-t ${lineStyle}`}
-                style={{ top: `${idx * 20}px` }}
-              />
-            );
-          })}
-        </div>
-
-        {/* Slots content area */}
-        <div className="ml-20 relative" style={{ minHeight: `${timeMarkers.length * 20}px` }}>
-          {slotsWithLanes.map(slot => {
-            // Calculate position based on time - 20px per 15 minutes = 80px per hour
-            const pixelsPerMinute = 80 / 60;
-            const topPosition = (slot.startMin - workStart) * pixelsPerMinute;
-            const height = Math.max(slot.lengthMin * pixelsPerMinute, 20); // Minimum 20px (~15 min) for readability
-            
-            // Calculate width and left offset for lanes
-            const laneWidth = 100 / slot.totalLanes;
-            const leftPercent = (slot.lane * laneWidth);
-            const widthPercent = laneWidth - (slot.totalLanes > 1 ? 1 : 0); // Small gap between lanes
-            
-            return (
-              <div
-                key={slot.id}
-                className="absolute pr-1"
-                style={{
-                  top: `${topPosition}px`,
-                  height: `${height}px`,
-                  left: `${leftPercent}%`,
-                  width: `${widthPercent}%`,
-                }}
-              >
-                <TimeSlotRow
-                  slot={slot}
-                  slotHeight={height}
-                  isCollapsed={collapsedSlots.has(slot.id)}
-                  onToggleCollapse={() => onToggleCollapse(slot.id)}
-                  onViewDetails={() => onViewDetails(slot)}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface TimeSlotRowProps {
-  slot: TimeSlotWithOrder;
-  slotHeight: number;
-  isCollapsed: boolean;
-  onToggleCollapse: () => void;
-  onViewDetails: () => void;
-}
-
-function TimeSlotRow({
-  slot,
-  slotHeight,
-  isCollapsed,
-  onToggleCollapse,
-  onViewDetails,
-}: TimeSlotRowProps) {
-  const [currentTime, setCurrentTime] = useState(Date.now());
-  
-  // For short slots, use compact display
-  // 80px/hour = 1.33px/min: 15min=20px, 20min=26.7px, 30min=40px, 45min=60px
-  // Very compact (< 25px = < 18min): Only time + order number
-  // Compact (25-35px = 18-26min): Time range + order number + title
-  // Normal (>= 35px = >= 26min): Full display - ensures 30min slots are fully readable
-  const isVeryCompact = slotHeight < 25;
-  const isCompact = slotHeight < 35;
-
-  useEffect(() => {
-    if (slot.status === 'RUNNING') {
-      const interval = setInterval(() => {
-        setCurrentTime(Date.now());
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [slot.status]);
-
-  let elapsedMin = 0;
-  if (slot.status === 'RUNNING' && slot.startedAt) {
-    const elapsedMs = currentTime - new Date(slot.startedAt).getTime();
-    elapsedMin = Math.floor(elapsedMs / 60000);
-  }
-
-  const isRunning = slot.status === 'RUNNING';
-  const isDone = slot.status === 'DONE';
-  const isPaused = slot.status === 'PAUSED';
-  const isBlocked = slot.status === 'BLOCKED';
-
-  return (
-    <div
-      onClick={onViewDetails}
-      className={`
-        relative pl-4 py-2 pr-4 rounded-md border bg-card/50 h-full overflow-hidden flex flex-col cursor-pointer hover-elevate
-        ${isDone ? 'opacity-60' : ''}
-        ${isRunning ? 'border-l-4 border-l-green-600 bg-green-50/5' : ''}
-        ${isBlocked ? 'border-l-4 border-l-red-600 bg-red-50/5' : ''}
-        ${isPaused ? 'border-l-4 border-l-yellow-600 bg-yellow-50/5' : ''}
-      `}
-      data-testid={`card-slot-${slot.id}`}
-    >
-      <div className="flex items-start justify-between gap-1 flex-shrink-0">
-        <div className="flex-1 min-w-0">
-          {isVeryCompact ? (
-            <>
-              {/* Ultra-compact for very short slots (< 22 min) */}
-              <div className="flex items-center gap-1">
-                <span className="text-xs font-mono font-semibold">
-                  {formatTime(slot.startMin)}
-                </span>
-                <span className="text-xs font-medium truncate">
-                  {slot.order ? (
-                    <>
-                      {slot.order.displayOrderNumber || slot.order.title}
-                    </>
-                  ) : 'Blockiert'}
-                </span>
-              </div>
-            </>
-          ) : !isCompact ? (
-            <>
-              {/* Normal display for taller slots (>= 45 min) */}
-              <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-sm font-mono font-semibold tracking-tight">
-                  {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {formatDuration(slot.lengthMin)}
-                </span>
-              </div>
-
-              <div className="text-sm font-medium mb-0.5 truncate">
-                {slot.order ? (
-                  <>
-                    {slot.order.displayOrderNumber && (
-                      <span className="text-muted-foreground text-xs">{slot.order.displayOrderNumber} · </span>
-                    )}
-                    <span>{slot.order.title}</span>
-                  </>
-                ) : (
-                  <span className="text-muted-foreground italic">Blockiert</span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                {slot.order && (
-                  <>
-                    <span className="truncate">{slot.order.customer}</span>
-                    <span>•</span>
-                  </>
-                )}
-                <span className="truncate">{slot.workCenter.name}</span>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Compact display for short slots (22-45 min) */}
-              <div className="flex flex-col gap-0.5">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-xs font-mono font-semibold">
-                    {formatTime(slot.startMin)}-{formatTime(slot.startMin + slot.lengthMin)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDuration(slot.lengthMin)}
-                  </span>
-                </div>
-                <div className="text-sm font-medium truncate">
-                  {slot.order ? (
-                    <>
-                      {slot.order.displayOrderNumber && (
-                        <span className="text-muted-foreground text-xs">{slot.order.displayOrderNumber} · </span>
-                      )}
-                      <span className="text-xs">{slot.order.title}</span>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground italic text-xs">Blockiert</span>
-                  )}
-                </div>
-                {slot.order && (
-                  <div className="text-xs text-muted-foreground truncate">
-                    {slot.order.customer}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        {!isVeryCompact && (
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {/* Live timer for running slots */}
-            {isRunning && !isCompact && (
-              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-mono bg-background/50 border">
-                <Clock className="h-3 w-3 text-muted-foreground" />
-                <span className="font-medium text-xs">{formatDuration(elapsedMin)}</span>
-              </div>
-            )}
-
-            {/* Collapse toggle - only for DONE slots */}
-            {!isCompact && isDone && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleCollapse();
-                }}
-                data-testid={`button-toggle-${slot.id}`}
-                className="h-7 w-7 p-0"
-              >
-                {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Details section - hide for very compact, always show for active slots, collapsible for DONE slots */}
-      {!isVeryCompact && (!isDone || !isCollapsed) && (
-        <div className={`mt-2 pt-2 border-t space-y-1.5 flex-shrink-0 ${isCompact ? 'text-xs' : 'text-xs'}`}>
-          {!isCompact && slot.note && (
-            <div>
-              <span className="text-muted-foreground">Notiz:</span> {slot.note}
-            </div>
-          )}
-
-          {!isCompact && isDone && slot.actualDurationMin !== null && (
-            <div>
-              <span className="text-muted-foreground">Tatsächlich:</span>{' '}
-              <span className="font-medium">{formatDuration(slot.actualDurationMin)}</span>
-            </div>
-          )}
-
-          {/* Order Production Information */}
-          {!isCompact && slot.order && (
-            <>
-              {/* Order Note */}
-              {slot.order.notes && (
-                <div className="bg-muted/30 p-2 rounded text-xs">
-                  <span className="font-medium text-muted-foreground">Auftragsnotiz:</span>
-                  <p className="mt-0.5">{slot.order.notes}</p>
-                </div>
-              )}
-
-              {/* Print Assets */}
-              {slot.order.printAssets && slot.order.printAssets.length > 0 && (
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-muted-foreground font-medium">
-                    <FileText className="h-3.5 w-3.5" />
-                    <span>Druckdaten ({slot.order.printAssets.length})</span>
-                  </div>
-                  <div className="space-y-1 pl-5">
-                    {slot.order.printAssets.map((asset) => (
-                      <a
-                        key={asset.id}
-                        href={asset.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        data-testid={`link-download-${asset.id}`}
-                        className="flex items-center gap-2 text-xs hover-elevate active-elevate-2 p-1.5 rounded bg-card border"
-                      >
-                        <Download className="h-3 w-3 flex-shrink-0" />
-                        <span className="truncate flex-1">{asset.label}</span>
-                        {asset.required && (
-                          <span className="text-xs text-red-600">*</span>
-                        )}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            </>
-          )}
-
-          {/* Action button - opens modal for all actions */}
-          {slot.order && (
-            <div className={`flex items-center pt-1 ${isCompact ? 'justify-center' : ''}`}>
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onViewDetails();
-                }}
-                variant="outline"
-                size="sm"
-                data-testid={`button-details-${slot.id}`}
-                className="h-7 text-xs"
-              >
-                Details & Aktionen
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
