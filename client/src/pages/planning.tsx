@@ -130,7 +130,7 @@ export default function Planning() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8,
+        distance: 3,
       },
     })
   );
@@ -732,7 +732,7 @@ function DraggableOrderCard({ order }: DraggableOrderCardProps) {
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{...style, userSelect: 'none', touchAction: 'none'}}
       className="border rounded-lg p-3 bg-card hover-elevate cursor-grab active:cursor-grabbing"
       data-testid={`order-card-${order.id}`}
       {...attributes}
