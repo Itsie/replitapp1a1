@@ -1,15 +1,15 @@
-import { useState, useMemo, memo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, GripVertical, Calendar, X } from "lucide-react";
-import { format, addDays, subDays, startOfWeek, parseISO, isPast, differenceInHours } from "date-fns";
+import { Textarea } from "@/components/ui/textarea";
+import { ChevronLeft, ChevronRight, X, Plus, GripVertical } from "lucide-react";
+import { format, addDays, subDays, startOfWeek, parseISO, getDay } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -17,7 +17,7 @@ import {
   DndContext, 
   DragEndEvent, 
   useDraggable, 
-  useDroppable, 
+  useDroppable,
   DragOverlay,
   PointerSensor,
   useSensor,
@@ -54,12 +54,6 @@ interface TimeSlot {
     workflow: string;
     dueDate: string | null;
   } | null;
-  workCenter: {
-    id: string;
-    name: string;
-    department: Department;
-    concurrentCapacity: number;
-  };
 }
 
 interface Order {
@@ -83,12 +77,12 @@ const DEPARTMENT_LABELS: Record<Department, string> = {
 const DAY_LABELS = ["Mo.", "Di.", "Mi.", "Do.", "Fr."];
 const WORKING_HOURS_START = 7 * 60; // 07:00 = 420 min
 const WORKING_HOURS_END = 18 * 60; // 18:00 = 1080 min
+const WORKING_HOURS_TOTAL = WORKING_HOURS_END - WORKING_HOURS_START; // 660 min
 
-// ============================================================================
 // STABLE GEOMETRY: 1rem = 5 minutes
-// ============================================================================
 const MINUTES_PER_REM = 5;
 const SNAP_MINUTES = 15;
+const TIMELINE_HEIGHT_REM = WORKING_HOURS_TOTAL / MINUTES_PER_REM; // 132rem
 
 function calculateSlotStyle(startMin: number, lengthMin: number) {
   const topRem = (startMin - WORKING_HOURS_START) / MINUTES_PER_REM;
@@ -109,242 +103,28 @@ function formatTime(minutes: number): string {
   return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
 }
 
-function formatDueDate(dueDate: string | null): string | null {
-  if (!dueDate) return null;
-  try {
-    return format(parseISO(dueDate), "dd.MM.", { locale: de });
-  } catch {
-    return null;
-  }
-}
-
-function isDueDateOverdue(dueDate: string | null): boolean {
-  if (!dueDate) return false;
-  try {
-    return isPast(parseISO(dueDate));
-  } catch {
-    return false;
-  }
-}
-
-function isDueDateUrgent(dueDate: string | null): boolean {
-  if (!dueDate) return false;
-  try {
-    const due = parseISO(dueDate);
-    const hoursUntil = differenceInHours(due, new Date());
-    return hoursUntil > 0 && hoursUntil <= 48;
-  } catch {
-    return false;
-  }
-}
-
-function getDepartmentColor(dept: Department): string {
-  const colors: Record<Department, string> = {
-    TEAMSPORT: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-    TEXTILVEREDELUNG: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-    STICKEREI: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
-    DRUCK: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-    SONSTIGES: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
-  };
-  return colors[dept] || colors.SONSTIGES;
-}
-
-// ============================================================================
-// Draggable Order Card
-// ============================================================================
-const DraggableOrderCard = memo(({ order }: { order: Order }) => {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `order-${order.id}`,
-    data: { type: "order", order },
-  });
-
-  const style = transform ? {
-    transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.5 : 1,
-  } : undefined;
-
-  const dueDateStr = formatDueDate(order.dueDate);
-  const isOverdue = isDueDateOverdue(order.dueDate);
-  const isUrgent = isDueDateUrgent(order.dueDate);
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      className="hover-elevate active-elevate-2 cursor-grab active:cursor-grabbing"
-      data-testid={`order-card-${order.id}`}
-    >
-      <Card className="p-3">
-        <div className="flex items-start gap-2">
-          <GripVertical className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium text-sm truncate">
-                {order.displayOrderNumber || order.id}
-              </span>
-              <Badge variant="outline" className={getDepartmentColor(order.department)}>
-                {DEPARTMENT_LABELS[order.department]}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground truncate mt-1">
-              {order.title}
-            </p>
-            <p className="text-xs text-muted-foreground truncate">
-              {order.customer}
-            </p>
-            {dueDateStr && (
-              <div className="mt-2">
-                <Badge 
-                  variant={isOverdue ? "destructive" : isUrgent ? "default" : "outline"}
-                  className="text-xs flex items-center gap-1"
-                  title={`Fälligkeitsdatum: ${order.dueDate}`}
-                >
-                  <Calendar className="h-3 w-3" />
-                  Fällig: {dueDateStr}
-                </Badge>
-              </div>
-            )}
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-});
-
-DraggableOrderCard.displayName = "DraggableOrderCard";
-
-// ============================================================================
-// Draggable Time Slot
-// ============================================================================
-const DraggableTimeSlot = memo(({ 
-  slot, 
-  onDelete 
-}: { 
-  slot: TimeSlot; 
-  onDelete: (slotId: string) => void;
-}) => {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `slot-${slot.id}`,
-    data: { type: "slot", slot },
-  });
-
-  const style = {
-    ...calculateSlotStyle(slot.startMin, slot.lengthMin),
-    transform: transform ? CSS.Translate.toString(transform) : undefined,
-    opacity: isDragging ? 0.5 : 1,
-    position: "absolute" as const,
-    left: 0,
-    right: 0,
-  };
-
-  const isBlocked = slot.blocked;
-  const order = slot.order;
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      className={`rounded border px-2 py-1 text-xs cursor-grab active:cursor-grabbing overflow-hidden ${
-        isBlocked 
-          ? "bg-gray-200 dark:bg-gray-700 border-gray-400 dark:border-gray-600" 
-          : "bg-blue-50 dark:bg-blue-950 border-blue-300 dark:border-blue-700"
-      }`}
-      data-testid={`slot-${slot.id}`}
-    >
-      <div className="flex items-start justify-between gap-1">
-        <div className="flex-1 min-w-0">
-          <div className="font-medium truncate">
-            {isBlocked ? "Blocker" : order?.displayOrderNumber || order?.title || "Unbekannt"}
-          </div>
-          {!isBlocked && order && (
-            <>
-              <div className="text-muted-foreground truncate text-[10px]">
-                {order.title}
-              </div>
-              <div className="text-muted-foreground truncate text-[10px]">
-                {order.customer}
-              </div>
-            </>
-          )}
-          <div className="text-muted-foreground text-[10px] mt-0.5">
-            {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
-          </div>
-        </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(slot.id);
-          }}
-          className="flex-shrink-0 text-muted-foreground hover:text-destructive"
-          data-testid={`button-delete-slot-${slot.id}`}
-        >
-          <X className="h-3 w-3" />
-        </button>
-      </div>
-    </div>
-  );
-});
-
-DraggableTimeSlot.displayName = "DraggableTimeSlot";
-
-// ============================================================================
-// Droppable Calendar Cell (Day Column)
-// ============================================================================
-const DroppableCalendarCell = memo(({ 
-  day, 
-  workCenterId, 
-  slots 
-}: { 
-  day: number; 
-  workCenterId: string; 
-  slots: TimeSlot[];
-}) => {
-  const { setNodeRef, isOver } = useDroppable({
-    id: `drop-${day}-${workCenterId}`,
-    data: { day, workCenterId },
-  });
-
-  const totalHeightRem = (WORKING_HOURS_END - WORKING_HOURS_START) / MINUTES_PER_REM;
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`relative border-r border-b border-border ${
-        isOver ? "bg-primary/10" : ""
-      }`}
-      style={{ minHeight: `${totalHeightRem}rem` }}
-      data-testid={`drop-zone-${day}-${workCenterId}`}
-    >
-      {/* Grid lines every 60 minutes */}
-      {Array.from({ length: Math.floor((WORKING_HOURS_END - WORKING_HOURS_START) / 60) }).map((_, i) => (
-        <div
-          key={i}
-          className="absolute left-0 right-0 border-t border-border/30"
-          style={{ top: `${(i * 60) / MINUTES_PER_REM}rem` }}
-        />
-      ))}
-    </div>
-  );
-});
-
-DroppableCalendarCell.displayName = "DroppableCalendarCell";
-
-// ============================================================================
-// Main Planning Component
-// ============================================================================
 export default function Planning() {
   const { toast } = useToast();
   const [selectedDepartment, setSelectedDepartment] = useState<Department>("TEAMSPORT");
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [showOnlyThisWeek, setShowOnlyThisWeek] = useState(false);
-  const [draggedItem, setDraggedItem] = useState<{ type: "order" | "slot"; data: Order | TimeSlot } | null>(null);
-  
-  const weekStartStr = format(weekStart, "yyyy-MM-dd");
-  
+  const [weekStart, setWeekStart] = useState<Date>(() => {
+    const today = new Date();
+    const day = getDay(today);
+    const diff = day === 0 ? -6 : 1 - day;
+    const monday = addDays(today, diff);
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  });
+
+  // Modals
+  const [durationModalOpen, setDurationModalOpen] = useState(false);
+  const [blockerModalOpen, setBlockerModalOpen] = useState(false);
+  const [pendingDrop, setPendingDrop] = useState<{ orderId: string; date: Date; startMin: number } | null>(null);
+  const [blockerForm, setBlockerForm] = useState({ date: new Date(), startMin: 420, lengthMin: 60, note: "" });
+  const [durationInput, setDurationInput] = useState("60");
+
+  // Drag & Drop
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [currentPointerY, setCurrentPointerY] = useState<number | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -353,401 +133,665 @@ export default function Planning() {
     })
   );
 
-  // Fetch work centers
+  // Track pointer position during drag (works for mouse, touch, and pen)
+  useEffect(() => {
+    const handlePointerMove = (e: PointerEvent) => {
+      if (activeId) {
+        setCurrentPointerY(e.clientY);
+      }
+    };
+
+    if (activeId) {
+      window.addEventListener("pointermove", handlePointerMove);
+      return () => window.removeEventListener("pointermove", handlePointerMove);
+    }
+  }, [activeId]);
+
+  // Get workcenters for department
   const { data: workCenters = [] } = useQuery<WorkCenter[]>({
-    queryKey: ["/api/workcenters", selectedDepartment],
-    queryFn: async () => {
-      const res = await fetch(`/api/workcenters?department=${selectedDepartment}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch work centers");
-      const all = await res.json();
-      return all.filter((wc: WorkCenter) => wc.active);
-    },
+    queryKey: [`/api/workcenters?department=${selectedDepartment}`],
   });
 
-  // Fetch time slots
+  const departmentWorkCenter = useMemo(() => {
+    return workCenters.find(wc => wc.active) || workCenters[0];
+  }, [workCenters]);
+
+  // Get available orders
+  const { data: availableOrders = [] } = useQuery<Order[]>({
+    queryKey: [`/api/orders?department=${selectedDepartment}&workflow=FUER_PROD,WARTET_FEHLTEILE`],
+  });
+
+  // Get time slots for week
+  const weekDates = useMemo(() => {
+    return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
+  }, [weekStart]);
+
+  const startDateStr = format(weekDates[0], "yyyy-MM-dd");
+  const endDateStr = format(weekDates[4], "yyyy-MM-dd");
+
   const { data: timeSlots = [] } = useQuery<TimeSlot[]>({
-    queryKey: ["/api/timeslots", selectedDepartment, weekStartStr],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        department: selectedDepartment,
-        weekStart: weekStartStr,
-      });
-      const res = await fetch(`/api/timeslots?${params.toString()}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch time slots");
-      return res.json();
-    },
+    queryKey: [`/api/timeslots?department=${selectedDepartment}&startDate=${startDateStr}&endDate=${endDateStr}`],
   });
 
-  // Fetch available orders
-  const { data: allOrders = [] } = useQuery<Order[]>({
-    queryKey: ["/api/orders", selectedDepartment, "ready"],
-    enabled: !!selectedDepartment,
-    queryFn: async () => {
-      const params1 = new URLSearchParams({
-        department: selectedDepartment,
-        workflow: "FUER_PROD",
-      });
-      const res1 = await fetch(`/api/orders?${params1.toString()}`, { credentials: "include" });
-      if (!res1.ok) throw new Error("Failed to fetch orders");
-      const orders1 = await res1.json();
-      
-      const params2 = new URLSearchParams({
-        department: selectedDepartment,
-        workflow: "WARTET_FEHLTEILE",
-      });
-      const res2 = await fetch(`/api/orders?${params2.toString()}`, { credentials: "include" });
-      if (!res2.ok) throw new Error("Failed to fetch orders");
-      const orders2 = await res2.json();
-      
-      return [...orders1, ...orders2];
-    },
-  });
-
-  const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
-
-  // Filter available orders (not scheduled)
-  const availableOrders = useMemo(() => {
-    const scheduledOrderIds = new Set(
-      timeSlots.filter(slot => slot.orderId).map(slot => slot.orderId)
-    );
-    let unscheduled = allOrders.filter(order => !scheduledOrderIds.has(order.id));
-    
-    if (showOnlyThisWeek) {
-      unscheduled = unscheduled.filter(order => {
-        if (!order.dueDate) return false;
-        const dueDate = parseISO(order.dueDate);
-        return dueDate >= weekStart && dueDate <= weekEnd;
-      });
-    }
-    
-    return unscheduled.sort((a, b) => {
-      if (!a.dueDate && !b.dueDate) return 0;
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-    });
-  }, [allOrders, timeSlots, showOnlyThisWeek, weekStart, weekEnd]);
-
-  // Create slot mutation
+  // Mutations
   const createSlotMutation = useMutation({
-    mutationFn: async (data: any) => apiRequest("POST", "/api/timeslots", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeslots", selectedDepartment, weekStartStr] });
-      queryClient.invalidateQueries({ queryKey: ["/api/orders", selectedDepartment, "ready"] });
-      toast({ title: "Termin erstellt" });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Fehler",
-        description: error.message || "Fehler beim Erstellen",
-        variant: "destructive",
+    mutationFn: async (data: {
+      workCenterId: string;
+      date: Date;
+      startMin: number;
+      lengthMin: number;
+      orderId?: string;
+      blocked?: boolean;
+      note?: string;
+    }) => {
+      const dateStr = format(data.date, "yyyy-MM-dd");
+      await apiRequest("POST", "/api/timeslots", {
+        workCenterId: data.workCenterId,
+        date: dateStr,
+        startMin: data.startMin,
+        lengthMin: data.lengthMin,
+        orderId: data.orderId || null,
+        blocked: data.blocked || false,
+        note: data.note || null,
       });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/timeslots"] });
+      toast({ title: "Erfolgreich", description: "Zeitslot erstellt" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
     },
   });
 
-  // Update slot mutation
   const updateSlotMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => 
-      apiRequest("PATCH", `/api/timeslots/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeslots", selectedDepartment, weekStartStr] });
-      toast({ title: "Termin verschoben" });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Fehler",
-        description: error.message || "Fehler beim Verschieben",
-        variant: "destructive",
+    mutationFn: async (data: { id: string; date: Date; startMin: number }) => {
+      const dateStr = format(data.date, "yyyy-MM-dd");
+      await apiRequest("PATCH", `/api/timeslots/${data.id}`, {
+        date: dateStr,
+        startMin: data.startMin,
       });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/timeslots"] });
+      toast({ title: "Erfolgreich", description: "Zeitslot verschoben" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
     },
   });
 
-  // Delete slot mutation
   const deleteSlotMutation = useMutation({
-    mutationFn: async (slotId: string) => apiRequest("DELETE", `/api/timeslots/${slotId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeslots", selectedDepartment, weekStartStr] });
-      queryClient.invalidateQueries({ queryKey: ["/api/orders", selectedDepartment, "ready"] });
-      toast({ title: "Termin gelöscht" });
+    mutationFn: async (slotId: string) => {
+      await apiRequest("DELETE", `/api/timeslots/${slotId}`, {});
     },
-    onError: (error: any) => {
-      toast({
-        title: "Fehler",
-        description: error.message || "Fehler beim Löschen",
-        variant: "destructive",
-      });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/timeslots"] });
+      toast({ title: "Erfolgreich", description: "Zeitslot gelöscht" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
     },
   });
 
-  // ============================================================================
-  // SIMPLIFIED DRAG & DROP LOGIC
-  // ============================================================================
-  const handleDragEnd = (event: DragEndEvent) => {
+  // Drag handlers
+  function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    
-    if (!over) {
-      setDraggedItem(null);
-      return;
-    }
+    const pointerY = currentPointerY;
+    setActiveId(null);
+    setCurrentPointerY(null);
+
+    if (!over || !departmentWorkCenter) return;
 
     const activeData = active.data.current;
     const overData = over.data.current;
 
-    if (!activeData || !overData) {
-      setDraggedItem(null);
-      return;
-    }
-
-    const { day, workCenterId } = overData;
-    const targetDate = format(addDays(weekStart, day), "yyyy-MM-dd");
-
-    // Dragging an ORDER from pool
-    if (activeData.type === "order") {
-      const order = activeData.order as Order;
+    // Dropping on a day cell
+    if (overData?.type === "day-cell") {
+      const targetDate = overData.date as Date;
       
-      // Find the selected work center
-      const workCenter = workCenters.find(wc => wc.id === workCenterId);
-      if (!workCenter) {
-        toast({ title: "Fehler", description: "WorkCenter nicht gefunden", variant: "destructive" });
-        setDraggedItem(null);
+      // Get the current bounding rect of the droppable element
+      const dayElement = document.getElementById(`day-${format(targetDate, "yyyy-MM-dd")}-timeline`);
+      
+      let startMin = WORKING_HOURS_START;
+      if (dayElement && pointerY !== null) {
+        const rect = dayElement.getBoundingClientRect();
+        const relativeY = pointerY - rect.top;
+        const remFromTop = relativeY / 16; // 1rem = 16px
+        const minutesFromStart = remFromTop * MINUTES_PER_REM;
+        startMin = snapToGrid(WORKING_HOURS_START + minutesFromStart);
+        startMin = Math.max(WORKING_HOURS_START, Math.min(WORKING_HOURS_END - 15, startMin));
+      }
+
+      // Order from pool
+      if (activeData?.type === "order") {
+        const orderId = activeData.orderId as string;
+        setPendingDrop({ orderId, date: targetDate, startMin });
+        setDurationInput("60");
+        setDurationModalOpen(true);
         return;
       }
 
-      // Create new slot at 08:00 with 60 min length
-      const startMin = 8 * 60; // 08:00
-      const lengthMin = 60;
-
-      createSlotMutation.mutate({
-        date: targetDate,
-        startMin,
-        lengthMin,
-        workCenterId,
-        orderId: order.id,
-        blocked: false,
-        note: null,
-      });
-    }
-    
-    // Dragging a SLOT
-    else if (activeData.type === "slot") {
-      const slot = activeData.slot as TimeSlot;
-
-      // Update the slot's position
-      updateSlotMutation.mutate({
-        id: slot.id,
-        data: {
-          date: targetDate,
-          workCenterId,
-          startMin: slot.startMin, // Keep same start time for now
-        },
-      });
-    }
-
-    setDraggedItem(null);
-  };
-
-  const handleDeleteSlot = (slotId: string) => {
-    if (window.confirm("Termin wirklich löschen?")) {
-      deleteSlotMutation.mutate(slotId);
-    }
-  };
-
-  // Group slots by day and work center
-  const slotsByDayAndWC = useMemo(() => {
-    const map = new Map<string, TimeSlot[]>();
-    
-    timeSlots.forEach(slot => {
-      const slotDate = format(new Date(slot.date), "yyyy-MM-dd");
-      const dayIndex = Math.floor(
-        (new Date(slotDate).getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      
-      if (dayIndex >= 0 && dayIndex < 5) {
-        const key = `${dayIndex}-${slot.workCenterId}`;
-        if (!map.has(key)) {
-          map.set(key, []);
-        }
-        map.get(key)!.push(slot);
+      // Moving existing slot
+      if (activeData?.type === "slot") {
+        const slotId = activeData.slotId as string;
+        updateSlotMutation.mutate({ id: slotId, date: targetDate, startMin });
+        return;
       }
-    });
-    
-    return map;
-  }, [timeSlots, weekStart]);
+    }
+  }
 
-  const totalHeightRem = (WORKING_HOURS_END - WORKING_HOURS_START) / MINUTES_PER_REM;
+  function handleDurationConfirm() {
+    if (!pendingDrop || !departmentWorkCenter) return;
+    const lengthMin = parseInt(durationInput, 10);
+    if (isNaN(lengthMin) || lengthMin < 5) {
+      toast({ title: "Fehler", description: "Bitte gültige Dauer eingeben (min. 5 Min)", variant: "destructive" });
+      return;
+    }
+
+    createSlotMutation.mutate({
+      workCenterId: departmentWorkCenter.id,
+      date: pendingDrop.date,
+      startMin: pendingDrop.startMin,
+      lengthMin,
+      orderId: pendingDrop.orderId,
+    });
+
+    setDurationModalOpen(false);
+    setPendingDrop(null);
+  }
+
+  function handleAddBlocker() {
+    if (!departmentWorkCenter) {
+      toast({ title: "Fehler", description: "Kein Arbeitsplatz verfügbar", variant: "destructive" });
+      return;
+    }
+    setBlockerForm({ date: weekDates[0], startMin: 420, lengthMin: 60, note: "" });
+    setBlockerModalOpen(true);
+  }
+
+  function handleBlockerConfirm() {
+    if (!departmentWorkCenter) return;
+    createSlotMutation.mutate({
+      workCenterId: departmentWorkCenter.id,
+      date: blockerForm.date,
+      startMin: blockerForm.startMin,
+      lengthMin: blockerForm.lengthMin,
+      blocked: true,
+      note: blockerForm.note,
+    });
+    setBlockerModalOpen(false);
+  }
+
+  // Filter orders that are already scheduled
+  const scheduledOrderIds = new Set(timeSlots.filter(s => s.orderId).map(s => s.orderId));
+  const unscheduledOrders = availableOrders.filter(o => !scheduledOrderIds.has(o.id));
+
+  // Group slots by date
+  const slotsByDate = useMemo(() => {
+    const map = new Map<string, TimeSlot[]>();
+    timeSlots.forEach(slot => {
+      const dateKey = slot.date;
+      if (!map.has(dateKey)) map.set(dateKey, []);
+      map.get(dateKey)!.push(slot);
+    });
+    return map;
+  }, [timeSlots]);
+
+  const activeOrder = activeId && activeId.startsWith("order-") 
+    ? unscheduledOrders.find(o => o.id === activeId.substring(6))
+    : null;
+
+  const activeSlot = activeId && activeId.startsWith("slot-")
+    ? timeSlots.find(s => s.id === activeId.substring(5))
+    : null;
 
   return (
-    <DndContext
-      sensors={sensors}
-      onDragEnd={handleDragEnd}
-      onDragStart={(e) => {
-        const data = e.active.data.current;
-        if (data?.type === "order") {
-          setDraggedItem({ type: "order", data: data.order });
-        } else if (data?.type === "slot") {
-          setDraggedItem({ type: "slot", data: data.slot });
-        }
-      }}
-    >
-      <div className="p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold" data-testid="heading-planning">Produktionsplanung</h1>
+    <div className="w-full h-screen flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex-shrink-0 border-b bg-card p-4">
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-2xl font-semibold" data-testid="text-page-title">Produktionsplanung</h1>
           
-          <div className="flex items-center gap-3">
-            <Select value={selectedDepartment} onValueChange={(val) => setSelectedDepartment(val as Department)}>
-              <SelectTrigger className="w-48" data-testid="select-department">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(DEPARTMENT_LABELS).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Label>Bereich:</Label>
+              <Select value={selectedDepartment} onValueChange={(v) => setSelectedDepartment(v as Department)}>
+                <SelectTrigger className="w-48" data-testid="select-department">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(DEPARTMENT_LABELS).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setWeekStart(prev => subDays(prev, 7))}
+                data-testid="button-prev-week"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-medium min-w-[140px] text-center">
+                KW {format(weekStart, "w, yyyy")}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setWeekStart(prev => addDays(prev, 7))}
+                data-testid="button-next-week"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <Button onClick={handleAddBlocker} variant="outline" data-testid="button-add-blocker">
+              <Plus className="mr-2 h-4 w-4" />
+              Blocker hinzufügen
+            </Button>
           </div>
-        </div>
-
-        {/* Week Navigation */}
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setWeekStart(subDays(weekStart, 7))}
-            data-testid="button-prev-week"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="text-sm font-medium" data-testid="text-week-range">
-            KW {format(weekStart, "w", { locale: de })} • {format(weekStart, "dd.MM.", { locale: de })} - {format(addDays(weekStart, 4), "dd.MM.yyyy", { locale: de })}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setWeekStart(addDays(weekStart, 7))}
-            data-testid="button-next-week"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-[300px_1fr] gap-4">
-          {/* Left: Order Pool */}
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold" data-testid="heading-order-pool">
-                Aufträge ({availableOrders.length})
-              </h2>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="filter-week"
-                  checked={showOnlyThisWeek}
-                  onCheckedChange={(checked) => setShowOnlyThisWeek(!!checked)}
-                  data-testid="checkbox-filter-week"
-                />
-                <Label htmlFor="filter-week" className="text-xs cursor-pointer">
-                  Nur diese Woche
-                </Label>
-              </div>
-            </div>
-
-            <div className="space-y-2 overflow-y-auto" style={{ maxHeight: "70vh" }}>
-              {availableOrders.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  Keine planbaren Aufträge
-                </p>
-              )}
-              {availableOrders.map(order => (
-                <DraggableOrderCard key={order.id} order={order} />
-              ))}
-            </div>
-          </Card>
-
-          {/* Right: Calendar Grid */}
-          <Card className="p-4 overflow-auto">
-            <div className="grid grid-cols-[120px_repeat(5,1fr)] gap-0 border border-border">
-              {/* Header Row */}
-              <div className="border-r border-b border-border bg-muted/50 p-2 font-medium text-sm sticky top-0 z-10">
-                Arbeitsstelle
-              </div>
-              {DAY_LABELS.map((label, i) => {
-                const dayDate = addDays(weekStart, i);
-                return (
-                  <div
-                    key={i}
-                    className="border-r border-b border-border bg-muted/50 p-2 text-center font-medium text-sm sticky top-0 z-10"
-                    data-testid={`header-day-${i}`}
-                  >
-                    <div>{label}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {format(dayDate, "dd.MM.")}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Work Center Rows */}
-              {workCenters.map(wc => (
-                <div key={wc.id} className="contents">
-                  <div className="border-r border-b border-border p-2 text-sm font-medium bg-muted/30">
-                    {wc.name}
-                  </div>
-                  {[0, 1, 2, 3, 4].map(day => {
-                    const key = `${day}-${wc.id}`;
-                    const slots = slotsByDayAndWC.get(key) || [];
-                    
-                    return (
-                      <div key={day} className="relative">
-                        <DroppableCalendarCell
-                          day={day}
-                          workCenterId={wc.id}
-                          slots={slots}
-                        />
-                        {slots.map(slot => (
-                          <DraggableTimeSlot
-                            key={slot.id}
-                            slot={slot}
-                            onDelete={handleDeleteSlot}
-                          />
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-
-            {/* Time Labels (Left Side) */}
-            <div className="mt-4 flex gap-2 text-xs text-muted-foreground">
-              <div className="w-20">07:00</div>
-              <div className="w-20">08:00</div>
-              <div className="w-20">09:00</div>
-              <div className="w-20">10:00</div>
-              <div className="w-20">11:00</div>
-              <div className="w-20">12:00</div>
-              <div className="w-20">13:00</div>
-              <div className="w-20">14:00</div>
-              <div className="w-20">15:00</div>
-              <div className="w-20">16:00</div>
-              <div className="w-20">17:00</div>
-              <div className="w-20">18:00</div>
-            </div>
-          </Card>
         </div>
       </div>
 
-      {/* Drag Overlay */}
-      <DragOverlay>
-        {draggedItem?.type === "order" && (
-          <DraggableOrderCard order={draggedItem.data as Order} />
-        )}
-        {draggedItem?.type === "slot" && (
-          <Card className="p-2 text-xs opacity-80">
-            <div className="font-medium">
-              {(draggedItem.data as TimeSlot).order?.displayOrderNumber || "Slot"}
+      {/* Main content */}
+      <div className="flex-1 overflow-hidden flex gap-4 p-4">
+        {/* Left: Order Pool */}
+        <Card className="w-80 flex-shrink-0 flex flex-col">
+          <CardHeader>
+            <CardTitle className="text-base">Verfügbare Aufträge ({unscheduledOrders.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto space-y-2">
+            {unscheduledOrders.map(order => (
+              <DraggableOrderCard key={order.id} order={order} />
+            ))}
+            {unscheduledOrders.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Keine Aufträge verfügbar
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Right: Time Matrix */}
+        <Card className="flex-1 flex flex-col overflow-hidden">
+          <CardContent className="flex-1 overflow-auto p-0">
+            <DndContext 
+              sensors={sensors} 
+              onDragStart={(e) => setActiveId(e.active.id as string)} 
+              onDragEnd={handleDragEnd}
+            >
+              <div className="flex min-w-max">
+                {/* Time column */}
+                <div className="w-16 flex-shrink-0 border-r bg-muted/30">
+                  <div className="h-12 border-b" /> {/* Header spacer */}
+                  <div className="relative" style={{ height: `${TIMELINE_HEIGHT_REM}rem` }}>
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const hour = 7 + i;
+                      const topRem = (i * 60) / MINUTES_PER_REM;
+                      return (
+                        <div
+                          key={hour}
+                          className="absolute left-0 right-0 text-xs text-muted-foreground px-1 border-t"
+                          style={{ top: `${topRem}rem` }}
+                        >
+                          {`${hour}:00`}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Day columns */}
+                {weekDates.map((date, idx) => {
+                  const dateKey = format(date, "yyyy-MM-dd");
+                  const slots = slotsByDate.get(dateKey) || [];
+                  return (
+                    <DayColumn
+                      key={dateKey}
+                      date={date}
+                      dayLabel={DAY_LABELS[idx]}
+                      slots={slots}
+                      onDeleteSlot={(slotId) => deleteSlotMutation.mutate(slotId)}
+                    />
+                  );
+                })}
+              </div>
+
+              <DragOverlay>
+                {activeOrder && <OrderCardOverlay order={activeOrder} />}
+                {activeSlot && <SlotOverlay slot={activeSlot} />}
+              </DragOverlay>
+            </DndContext>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Duration Modal */}
+      <Dialog open={durationModalOpen} onOpenChange={setDurationModalOpen}>
+        <DialogContent data-testid="dialog-duration">
+          <DialogHeader>
+            <DialogTitle>Dauer festlegen</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="duration-input">Dauer in Minuten</Label>
+              <Input
+                id="duration-input"
+                type="number"
+                step="5"
+                min="5"
+                value={durationInput}
+                onChange={(e) => setDurationInput(e.target.value)}
+                data-testid="input-duration"
+              />
             </div>
-          </Card>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDurationModalOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleDurationConfirm} data-testid="button-confirm-duration">
+              Bestätigen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Blocker Modal */}
+      <Dialog open={blockerModalOpen} onOpenChange={setBlockerModalOpen}>
+        <DialogContent data-testid="dialog-blocker">
+          <DialogHeader>
+            <DialogTitle>Blocker hinzufügen</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Datum</Label>
+              <Select
+                value={format(blockerForm.date, "yyyy-MM-dd")}
+                onValueChange={(v) => setBlockerForm(prev => ({ ...prev, date: parseISO(v) }))}
+              >
+                <SelectTrigger data-testid="select-blocker-date">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {weekDates.map(d => (
+                    <SelectItem key={format(d, "yyyy-MM-dd")} value={format(d, "yyyy-MM-dd")}>
+                      {format(d, "EEEE, dd.MM.yyyy", { locale: de })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="blocker-start">Startzeit</Label>
+              <Input
+                id="blocker-start"
+                type="time"
+                value={formatTime(blockerForm.startMin)}
+                onChange={(e) => {
+                  const [h, m] = e.target.value.split(":").map(Number);
+                  setBlockerForm(prev => ({ ...prev, startMin: h * 60 + m }));
+                }}
+                data-testid="input-blocker-start"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="blocker-length">Dauer (Minuten)</Label>
+              <Input
+                id="blocker-length"
+                type="number"
+                step="15"
+                min="15"
+                value={blockerForm.lengthMin}
+                onChange={(e) => setBlockerForm(prev => ({ ...prev, lengthMin: parseInt(e.target.value, 10) }))}
+                data-testid="input-blocker-length"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="blocker-note">Notiz (optional)</Label>
+              <Textarea
+                id="blocker-note"
+                value={blockerForm.note}
+                onChange={(e) => setBlockerForm(prev => ({ ...prev, note: e.target.value }))}
+                placeholder="Grund für Blocker..."
+                data-testid="textarea-blocker-note"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBlockerModalOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleBlockerConfirm} data-testid="button-confirm-blocker">
+              Hinzufügen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ============================================================================
+// Day Column Component
+// ============================================================================
+interface DayColumnProps {
+  date: Date;
+  dayLabel: string;
+  slots: TimeSlot[];
+  onDeleteSlot: (slotId: string) => void;
+}
+
+function DayColumn({ date, dayLabel, slots, onDeleteSlot }: DayColumnProps) {
+  const { setNodeRef } = useDroppable({
+    id: `day-${format(date, "yyyy-MM-dd")}`,
+    data: { type: "day-cell", date },
+  });
+
+  return (
+    <div className="flex-1 min-w-[200px] border-r">
+      {/* Header */}
+      <div className="h-12 border-b flex flex-col items-center justify-center bg-muted/20">
+        <div className="text-xs text-muted-foreground">{dayLabel}</div>
+        <div className="text-sm font-medium">{format(date, "dd.MM.")}</div>
+      </div>
+
+      {/* Time slots area */}
+      <div 
+        ref={setNodeRef} 
+        id={`day-${format(date, "yyyy-MM-dd")}-timeline`}
+        className="relative bg-card" 
+        style={{ height: `${TIMELINE_HEIGHT_REM}rem` }}
+      >
+        {/* Hour lines */}
+        {Array.from({ length: 12 }, (_, i) => {
+          const topRem = (i * 60) / MINUTES_PER_REM;
+          return (
+            <div
+              key={i}
+              className="absolute left-0 right-0 border-t border-border/30"
+              style={{ top: `${topRem}rem` }}
+            />
+          );
+        })}
+
+        {/* Slots */}
+        {slots.map(slot => (
+          <DraggableTimeSlot key={slot.id} slot={slot} onDelete={onDeleteSlot} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Draggable Order Card
+// ============================================================================
+interface DraggableOrderCardProps {
+  order: Order;
+}
+
+function DraggableOrderCard({ order }: DraggableOrderCardProps) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `order-${order.id}`,
+    data: { type: "order", orderId: order.id },
+  });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="border rounded-lg p-3 bg-card hover-elevate cursor-grab active:cursor-grabbing"
+      data-testid={`order-card-${order.id}`}
+      {...listeners}
+      {...attributes}
+    >
+      <div className="flex items-start gap-2">
+        <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-sm truncate">
+            {order.displayOrderNumber || order.id.slice(0, 8)}
+          </div>
+          <div className="text-xs text-muted-foreground truncate">{order.title}</div>
+          <div className="text-xs text-muted-foreground truncate">{order.customer}</div>
+          {order.dueDate && (
+            <div className="text-xs text-orange-600 mt-1">
+              Fällig: {format(parseISO(order.dueDate), "dd.MM.yyyy")}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderCardOverlay({ order }: { order: Order }) {
+  return (
+    <div className="border rounded-lg p-3 bg-card shadow-lg w-64">
+      <div className="flex items-start gap-2">
+        <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-sm truncate">
+            {order.displayOrderNumber || order.id.slice(0, 8)}
+          </div>
+          <div className="text-xs text-muted-foreground truncate">{order.title}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Draggable Time Slot
+// ============================================================================
+interface DraggableTimeSlotProps {
+  slot: TimeSlot;
+  onDelete: (slotId: string) => void;
+}
+
+function DraggableTimeSlot({ slot, onDelete }: DraggableTimeSlotProps) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `slot-${slot.id}`,
+    data: { type: "slot", slotId: slot.id },
+  });
+
+  const slotStyle = calculateSlotStyle(slot.startMin, slot.lengthMin);
+  const transformStyle = transform ? { transform: CSS.Translate.toString(transform) } : {};
+
+  const isBlocker = slot.blocked;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`absolute left-1 right-1 rounded border overflow-hidden group ${
+        isBlocker 
+          ? "bg-muted border-muted-foreground/50 bg-stripes" 
+          : "bg-primary/10 border-primary hover-elevate"
+      }`}
+      style={{ ...slotStyle, ...transformStyle, opacity: isDragging ? 0.5 : 1 }}
+      data-testid={`slot-${slot.id}`}
+      {...listeners}
+      {...attributes}
+    >
+      <div className="p-2 h-full flex flex-col cursor-grab active:cursor-grabbing">
+        <div className="flex items-start justify-between gap-1">
+          <div className="flex-1 min-w-0">
+            {isBlocker ? (
+              <>
+                <div className="text-xs font-semibold text-muted-foreground">BLOCKER</div>
+                {slot.note && <div className="text-xs text-muted-foreground truncate">{slot.note}</div>}
+              </>
+            ) : (
+              <>
+                <div className="text-xs font-semibold truncate">
+                  {slot.order?.displayOrderNumber || slot.orderId?.slice(0, 8)}
+                </div>
+                <div className="text-xs truncate">{slot.order?.title}</div>
+              </>
+            )}
+            <div className="text-xs text-muted-foreground mt-1">
+              {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(slot.id);
+            }}
+            data-testid={`button-delete-slot-${slot.id}`}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SlotOverlay({ slot }: { slot: TimeSlot }) {
+  const slotStyle = { width: "180px", height: `${slot.lengthMin / MINUTES_PER_REM}rem` };
+  const isBlocker = slot.blocked;
+
+  return (
+    <div
+      className={`rounded border overflow-hidden shadow-lg ${
+        isBlocker 
+          ? "bg-muted border-muted-foreground/50 bg-stripes" 
+          : "bg-primary/10 border-primary"
+      }`}
+      style={slotStyle}
+    >
+      <div className="p-2">
+        {isBlocker ? (
+          <>
+            <div className="text-xs font-semibold text-muted-foreground">BLOCKER</div>
+            {slot.note && <div className="text-xs text-muted-foreground truncate">{slot.note}</div>}
+          </>
+        ) : (
+          <>
+            <div className="text-xs font-semibold truncate">
+              {slot.order?.displayOrderNumber || slot.orderId?.slice(0, 8)}
+            </div>
+            <div className="text-xs truncate">{slot.order?.title}</div>
+          </>
         )}
-      </DragOverlay>
-    </DndContext>
+      </div>
+    </div>
   );
 }
