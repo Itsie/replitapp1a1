@@ -8,6 +8,10 @@ export interface OrderFilters {
   department?: Department;
   source?: OrderSource;
   workflow?: WorkflowState;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface CalendarFilters {
@@ -243,7 +247,7 @@ export class PrismaStorage implements IStorage {
     return `INT-${year}-${result}`;
   }
   
-  async getOrders(filters: OrderFilters): Promise<OrderWithRelations[]> {
+  async getOrders(filters: OrderFilters): Promise<{ orders: OrderWithRelations[]; totalCount: number }> {
     const where: any = {};
     
     // Search query - trim and check minimum length
@@ -275,41 +279,61 @@ export class PrismaStorage implements IStorage {
       where.workflow = filters.workflow;
     }
     
-    // Limit results to 200 if no filters are applied (performance safeguard)
-    const hasFilters = 
-      filters.department || 
-      filters.source || 
-      filters.workflow || 
-      (searchQuery && searchQuery.length >= 2);
-    const limit = hasFilters ? undefined : 200;
+    // Pagination
+    const page = filters.page || 1;
+    const limit = filters.limit || 50;
+    const skip = (page - 1) * limit;
     
-    return await prisma.order.findMany({
-      where,
-      include: {
-        sizeTable: true,
-        printAssets: true,
-        orderAssets: true,
-        positions: true,
-        timeSlots: {
-          where: {
-            status: 'RUNNING',
-          },
-          orderBy: {
-            startedAt: 'asc',
-          },
-          take: 1,
-          select: {
-            id: true,
-            status: true,
-            startedAt: true,
+    // Sorting
+    const sortBy = filters.sortBy || 'createdAt';
+    const sortOrder = filters.sortOrder || 'desc';
+    
+    // Map sortBy to Prisma field names
+    const sortFieldMap: Record<string, any> = {
+      'displayOrderNumber': { displayOrderNumber: sortOrder },
+      'title': { title: sortOrder },
+      'customer': { customer: sortOrder },
+      'department': { department: sortOrder },
+      'source': { source: sortOrder },
+      'workflow': { workflow: sortOrder },
+      'dueDate': { dueDate: sortOrder },
+      'createdAt': { createdAt: sortOrder },
+    };
+    
+    const orderBy = sortFieldMap[sortBy] || { createdAt: sortOrder };
+    
+    // Get total count and paginated results in parallel
+    const [totalCount, orders] = await Promise.all([
+      prisma.order.count({ where }),
+      prisma.order.findMany({
+        where,
+        include: {
+          sizeTable: true,
+          printAssets: true,
+          orderAssets: true,
+          positions: true,
+          timeSlots: {
+            where: {
+              status: 'RUNNING',
+            },
+            orderBy: {
+              startedAt: 'asc',
+            },
+            take: 1,
+            select: {
+              id: true,
+              status: true,
+              startedAt: true,
+            },
           },
         },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: limit,
-    });
+        orderBy,
+        skip,
+        take: limit,
+      }),
+    ]);
+    
+    return { orders, totalCount };
   }
   
   async getOrderById(id: string): Promise<OrderWithRelations | null> {

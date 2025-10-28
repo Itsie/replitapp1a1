@@ -237,10 +237,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         department: req.query.department as any,
         source: req.query.source as any,
         workflow: req.query.workflow as any,
+        page: req.query.page ? parseInt(req.query.page as string, 10) : undefined,
+        limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
+        sortBy: req.query.sortBy as string | undefined,
+        sortOrder: (req.query.sortOrder === 'asc' || req.query.sortOrder === 'desc') 
+          ? req.query.sortOrder 
+          : undefined,
       };
       
-      const orders = await storage.getOrders(filters);
-      res.json(orders);
+      const result = await storage.getOrders(filters);
+      res.json(result);
     } catch (error) {
       console.error("Error fetching orders:", error);
       res.status(500).json({ error: "Failed to fetch orders" });
