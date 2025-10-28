@@ -1,0 +1,79 @@
+Hallo,
+
+bitte führe einen erneuten Rewrite der Komponente client/src/pages/planning.tsx durch. Die vorherige Version entsprach nicht den Anforderungen.
+
+Ziel: Eine einfache Zeit-Matrix-Ansicht erstellen (Zeit links, Tage oben), ohne spezifische Arbeitsplätze/Maschinen anzuzeigen. Beim Einplanen eines Auftrags soll ein Modal zur Dauer-Eingabe erscheinen. Blocker sollen direkt eintragbar sein.
+
+Anforderungen:
+
+Layout (Matrix):
+
+Entferne die Logik und Darstellung von mehreren WorkCenter-Spalten.
+
+Die Hauptansicht soll ein Grid sein:
+
+Linke Spalte: Zeitleiste von 07:00 bis 18:00 (z.B. in 15- oder 30-Minuten-Schritten beschriftet).
+
+Obere Zeile: Wochentage (Mo - Fr) mit Datum.
+
+Zellen: Jede Zelle repräsentiert einen Tag und ist der Drop-Bereich.
+
+Daten laden:
+
+Lade weiterhin die availableOrders (Aufträge mit Status FUER_PROD oder WARTET_FEHLTEILE für die gewählte Abteilung).
+
+Lade die timeSlots für die gewählte Abteilung und die aktuelle Woche.
+
+WICHTIG: Gehe davon aus, dass es pro Abteilung nur einen relevanten (virtuellen) Arbeitsbereich gibt. Du musst im Frontend nicht mehr nach workCenterId gruppieren. Finde den ersten aktiven WorkCenter für die gewählte Abteilung (GET /api/workcenters?department=...) und verwende dessen ID für alle neuen und verschobenen Slots.
+
+Zeitleiste & Geometrie:
+
+Verwende die stabile Geometrie-Berechnung: 1 rem = 5 Minuten.
+
+Die Höhe der Tages-Spalten entspricht der Gesamtdauer (11 Stunden = 660 Minuten = 132rem).
+
+Zeichne horizontale Linien für jede Stunde.
+
+Drag & Drop (dnd-kit):
+
+Aufträge aus Pool: Ziehen eines DraggableOrderCard aus dem Pool auf eine Tages-Zelle.
+
+Slots innerhalb der Matrix: Ziehen eines DraggableTimeSlot innerhalb der Matrix oder auf einen anderen Tag.
+
+onDragEnd:
+
+Ermittle den Zieldatum (targetDate) und die ungefähre Startminute (startMin, gerundet auf z.B. 15 Min).
+
+Wenn ein Auftrag gezogen wurde:
+
+Öffne ein Modal (Shadcn/UI <Dialog>).
+
+Das Modal fragt nach der Dauer in Minuten (lengthMin), z.B. mit einem <Input type="number" step="5">.
+
+Bei Bestätigung: Rufe createSlotMutation (POST /api/timeslots) auf mit orderId, targetDate, startMin, lengthMin und der (einen) workCenterId der Abteilung.
+
+Wenn ein Slot gezogen wurde:
+
+Rufe updateSlotMutation (PATCH /api/timeslots/:id) auf, um date und startMin zu ändern (und die eine workCenterId). lengthMin bleibt unverändert.
+
+Nach Mutation: Immer queryClient.invalidateQueries(['/api/timeslots']) aufrufen, um die Ansicht zu aktualisieren.
+
+TimeSlot-Darstellung (DraggableTimeSlot):
+
+Zeige die Slots als Blöcke in den Tages-Spalten an, positioniert über top und height basierend auf startMin und lengthMin (via calculateSlotStyle).
+
+Zeige Auftragsinfos (Nummer, Titel) im Slot an.
+
+Füge einen kleinen "Löschen"-Button (X) hinzu, der deleteSlotMutation aufruft.
+
+Blocker erstellen:
+
+Füge eine Möglichkeit hinzu, Blocker zu erstellen (z.B. Button "Blocker hinzufügen" oder per Rechtsklick auf eine Zelle).
+
+Öffne ein Modal, das nach Datum, Startzeit, Dauer und optionaler Notiz fragt.
+
+Bei Bestätigung: Rufe createSlotMutation auf mit blocked: true, date, startMin, lengthMin, note und der einen workCenterId.
+
+Blocker-Slots (slot.blocked === true) sollen anders aussehen (z.B. grau/gestreift) und ebenfalls verschiebbar/löschbar sein.
+
+Aufräumen: Entferne nicht mehr benötigten Code (Zoom, komplexe State-Verwaltung, WorkCenter-Gruppierung). Halte die Komponente so schlank wie möglich und verlasse dich auf react-query für den Datenfluss.
