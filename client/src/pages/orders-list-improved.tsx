@@ -79,7 +79,7 @@ type ViewMode = 'table' | 'cards';
 type DensityMode = 'comfort' | 'compact';
 type QuickFilter = 'dueToday' | 'overdue' | 'noAssets' | 'noSize';
 
-const MAX_ROWS = 500;
+const ITEMS_PER_PAGE = 50;
 
 // Intelligent Status Badge Component
 function OrderStatusBadge({ order }: { order: OrderWithRelations }) {
@@ -195,6 +195,9 @@ export default function OrdersList() {
     return saved === null ? true : saved === 'true';
   });
   
+  // Pagination
+  const [page, setPage] = useState(1);
+  
   // Persist preferences
   useEffect(() => {
     localStorage.setItem('orders_viewMode', viewMode);
@@ -233,13 +236,33 @@ export default function OrdersList() {
     if (department) params.set("department", department);
     if (source) params.set("source", source);
     if (workflow) params.set("workflow", workflow);
+    
+    // Pagination
+    params.set("page", page.toString());
+    params.set("limit", ITEMS_PER_PAGE.toString());
+    
+    // Sorting
+    if (sorting.length > 0) {
+      const sort = sorting[0];
+      params.set("sortBy", sort.id);
+      params.set("sortOrder", sort.desc ? "desc" : "asc");
+    }
+    
     const queryString = params.toString();
     return queryString ? `?${queryString}` : "";
   };
   
-  const { data: ordersRaw = [], isLoading } = useQuery<OrderWithRelations[]>({
-    queryKey: [`/api/orders${buildQueryString()}`],
+  const { data, isLoading } = useQuery<{ orders: OrderWithRelations[]; totalCount: number }>({
+    queryKey: ['/api/orders', debouncedSearch, department, source, workflow, page, sorting],
+    queryFn: async () => {
+      const res = await fetch(`/api/orders${buildQueryString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch orders");
+      return res.json();
+    },
   });
+  
+  const ordersRaw = data?.orders ?? [];
+  const totalCount = data?.totalCount ?? 0;
   
   const formatDate = (date: string | Date | null) => {
     if (!date) return "—";
@@ -293,7 +316,7 @@ export default function OrdersList() {
     setActiveQuickFilters(new Set());
   };
   
-  // Apply quick filters client-side
+  // Apply quick filters client-side (on current page only)
   const filteredOrders = useMemo(() => {
     let filtered = [...ordersRaw];
     
@@ -338,52 +361,16 @@ export default function OrdersList() {
     return filtered;
   }, [ordersRaw, activeQuickFilters, hideAbgerechnet]);
   
-  // Apply 500-row cap and sorting
-  const isRowLimitReached = filteredOrders.length > MAX_ROWS;
+  // Sorting is now handled server-side
+  const sortedAndLimitedOrders = filteredOrders;
   
-  // Apply sorting and row limit (works for both table and card view)
-  const sortedAndLimitedOrders = useMemo(() => {
-    // First limit to MAX_ROWS
-    const limited = filteredOrders.slice(0, MAX_ROWS);
-    
-    // Then apply sorting if needed
-    if (sorting.length === 0) return limited;
-    
-    const sorted = [...limited];
-    const sort = sorting[0];
-    
-    sorted.sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
-      
-      switch (sort.id) {
-        case 'title':
-          aValue = a.title;
-          bValue = b.title;
-          break;
-        case 'workflow':
-          aValue = a.workflow;
-          bValue = b.workflow;
-          break;
-        case 'dueDate':
-          aValue = a.dueDate ? new Date(a.dueDate).getTime() : 0;
-          bValue = b.dueDate ? new Date(b.dueDate).getTime() : 0;
-          break;
-        case 'totalGross':
-          aValue = Number(a.totalGross) || 0;
-          bValue = Number(b.totalGross) || 0;
-          break;
-        default:
-          return 0;
-      }
-      
-      if (aValue < bValue) return sort.desc ? 1 : -1;
-      if (aValue > bValue) return sort.desc ? -1 : 1;
-      return 0;
-    });
-    
-    return sorted;
-  }, [filteredOrders, sorting]);
+  // Calculate page count
+  const pageCount = Math.ceil(totalCount / ITEMS_PER_PAGE);
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, department, source, workflow]);
   
   // Aliases for clarity in the code
   const orders = sortedAndLimitedOrders;
@@ -848,14 +835,15 @@ export default function OrdersList() {
         </div>
       </div>
       
-      {/* Row limit notice */}
-      {isRowLimitReached && (
-        <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-          <p className="text-sm text-amber-800 dark:text-amber-200" data-testid="text-row-limit">
-            Ansicht aus Performance-Gründen auf {MAX_ROWS} Einträge begrenzt. Nutzen Sie Filter, um die Ergebnisse einzugrenzen.
-          </p>
+      {/* Pagination info */}
+      <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground">
+        <div>
+          Zeige {((page - 1) * ITEMS_PER_PAGE) + 1} bis {Math.min(page * ITEMS_PER_PAGE, totalCount)} von {totalCount} Aufträgen
         </div>
-      )}
+        {pageCount > 1 && (
+          <div>Seite {page} von {pageCount}</div>
+        )}
+      </div>
       
       {/* Conditional rendering based on view mode */}
       {viewMode === 'table' && (
@@ -1055,6 +1043,60 @@ export default function OrdersList() {
             </div>
           )}
         </>
+      )}
+      
+      {/* Pagination Controls */}
+      {!isLoading && pageCount > 1 && (
+        <div className="mt-6 flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1}
+            data-testid="button-prev-page"
+          >
+            Zurück
+          </Button>
+          
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(7, pageCount) }, (_, i) => {
+              let pageNum: number;
+              
+              if (pageCount <= 7) {
+                pageNum = i + 1;
+              } else if (page <= 4) {
+                pageNum = i + 1;
+              } else if (page >= pageCount - 3) {
+                pageNum = pageCount - 6 + i;
+              } else {
+                pageNum = page - 3 + i;
+              }
+              
+              return (
+                <Button
+                  key={pageNum}
+                  variant={page === pageNum ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setPage(pageNum)}
+                  className="w-10"
+                  data-testid={`button-page-${pageNum}`}
+                >
+                  {pageNum}
+                </Button>
+              );
+            })}
+          </div>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+            disabled={page === pageCount}
+            data-testid="button-next-page"
+          >
+            Weiter
+          </Button>
+        </div>
       )}
     </div>
   );

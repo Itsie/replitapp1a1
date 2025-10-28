@@ -73,7 +73,7 @@ export interface IStorage {
   deleteUser(id: string): Promise<void>;
   
   // Orders
-  getOrders(filters: OrderFilters): Promise<OrderWithRelations[]>;
+  getOrders(filters: OrderFilters): Promise<{ orders: OrderWithRelations[]; totalCount: number }>;
   getOrderById(id: string): Promise<OrderWithRelations | null>;
   createOrder(order: InsertOrder): Promise<OrderWithRelations>;
   updateOrder(id: string, data: Partial<InsertOrder>): Promise<OrderWithRelations>;

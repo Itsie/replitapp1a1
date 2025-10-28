@@ -1,0 +1,54 @@
+Hallo,
+
+bitte refaktoriere die Seite client/src/pages/production-today.tsx [cite: 105], da sie aktuell "zerschossen" und überladen ist.
+
+Das Ziel ist, die überladene TimeSlotCard [cite: 105 (lines 405-779)] durch ein sauberes Modal (Shadcn/UI <Dialog>) zu ersetzen, das alle Funktionen aufgeräumt darstellt. Die Hauptseite soll nur noch eine saubere Liste der Slots anzeigen.
+
+Anforderungen:
+
+Neue Komponente erstellen (z.B. ProductionSlotModal.tsx):
+
+Diese Komponente soll ein Shadcn/UI <Dialog> sein und die timeSlot (inkl. order-Relation) als Prop erhalten.
+
+Mache den <DialogContent> groß (z.B. className="max-w-4xl"), damit Platz für die Infos ist.
+
+Logik verschieben:
+
+Verschiebe die gesamte Logik aus der alten TimeSlotCard [cite: 105 (lines 405-779)] in die neue ProductionSlotModal-Komponente.
+
+Dazu gehören: Alle useMutation-Hooks (für Start, Stop, Pause, Fehlteil etc. [cite: 105 (lines 604-747)]), der useTimer [cite: 105 (line 451)] und die Status-Logik [cite: 105 (line 446)].
+
+Modal-Inhalt strukturieren:
+
+Body: Verwende eine <Tabs>-Komponente, um die Auftragsdetails anzuzeigen:
+
+Tab 1: "Positionen" (zeigt order.positions)
+
+Tab 2: "Druckdaten" (zeigt order.orderAssets / order.printAssets [cite: 105 (line 512)])
+
+Tab 3: "Größentabelle" (zeigt order.sizeTable [cite: 105 (line 522)], falls vorhanden)
+
+Tab 4: "Notizen" (zeigt order.notes)
+
+Footer: Verwende einen <DialogFooter>, um die Aktions-Buttons sauber zu platzieren:
+
+Ein "Produktion starten" Button (ruft handleStart auf [cite: 105 (line 622)])
+
+Ein "Pause" / "Fortsetzen" Button (ruft handlePause / handleResume auf [cite: 105 (lines 634, 659)])
+
+Ein "Fertigstellen" Button (ruft handleStop auf [cite: 105 (line 645)])
+
+Ein "Problem melden"-Dropdown (<DropdownMenu>), das die Aktionen für "Fehlteil" (handleMissingParts [cite: 105 (line 673)]) und "Qualitätsproblem" (handleQC [cite: 105 (line 708)]) enthält.
+
+production-today.tsx aufräumen:
+
+Entferne die alte, komplexe TimeSlotCard-Logik.
+
+Die Seite soll jetzt einen useState (z.B. [selectedSlot, setSelectedSlot]) verwalten.
+
+Rendere die timeSlots-Liste als einfache Karten (<Card>). Jede Karte zeigt nur die wichtigsten Infos (Auftragstitel, Status) und einen "Details öffnen"-Button.
+
+Bei Klick auf den Button wird der Slot gespeichert: setSelectedSlot(slot).
+
+Rendere die neue Modal-Komponente:
+<ProductionSlotModal isOpen={!!selectedSlot} slot={selectedSlot} onClose={() => setSelectedSlot(null)} />
