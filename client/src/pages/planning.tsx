@@ -255,8 +255,6 @@ export default function Planning() {
     const { over } = event;
     const overId = over?.id;
     const overData = over?.data?.current;
-    
-    console.log("[DragOver] Event:", { overId, overDataType: overData?.type });
 
     // Finde die Daten der Zelle, über der wir schweben
     let cellData: { day: number; workCenterId: string } | null = null;
@@ -289,24 +287,19 @@ export default function Planning() {
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     const pointerY = currentPointerY;
-    console.log("[DragEnd] Event:", { activeId: active.id, overId: over?.id, dragOverData, pointerY });
     setActiveId(null);
     setCurrentPointerY(null);
 
     if (!over || !dragOverData) {
       // Kein gültiges Ziel gefunden
-      console.log("[DragEnd] No valid target - over:", !!over, "dragOverData:", dragOverData);
       setDragOverData(null);
       return;
     }
 
     if (!departmentWorkCenter) {
-      console.log("[DragEnd] No department work center");
       setDragOverData(null);
       return;
     }
-    
-    console.log("[DragEnd] Valid drop - targetCellData:", dragOverData, "departmentWorkCenter:", departmentWorkCenter);
 
     const activeData = active.data.current;
     const targetCellData = dragOverData; // Nutze die gespeicherten Daten!
@@ -472,36 +465,33 @@ export default function Planning() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 overflow-hidden flex gap-4 p-4">
-        {/* Left: Order Pool */}
-        <Card className="w-80 flex-shrink-0 flex flex-col">
-          <CardHeader>
-            <CardTitle className="text-base">Verfügbare Aufträge ({unscheduledOrders.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto space-y-2">
-            {unscheduledOrders.map(order => (
-              <DraggableOrderCard key={order.id} order={order} />
-            ))}
-            {unscheduledOrders.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Keine Aufträge verfügbar
-              </p>
-            )}
-          </CardContent>
-        </Card>
+      <DndContext 
+        sensors={sensors} 
+        onDragStart={(e) => setActiveId(e.active.id as string)} 
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex-1 overflow-hidden flex gap-4 p-4">
+          {/* Left: Order Pool */}
+          <Card className="w-80 flex-shrink-0 flex flex-col">
+            <CardHeader>
+              <CardTitle className="text-base">Verfügbare Aufträge ({unscheduledOrders.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto space-y-2">
+              {unscheduledOrders.map(order => (
+                <DraggableOrderCard key={order.id} order={order} />
+              ))}
+              {unscheduledOrders.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Keine Aufträge verfügbar
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
-        {/* Right: Time Matrix */}
-        <Card className="flex-1 flex flex-col overflow-hidden">
-          <CardContent className="flex-1 overflow-auto p-0">
-            <DndContext 
-              sensors={sensors} 
-              onDragStart={(e) => {
-                console.log("[DndContext] DragStart:", e.active.id);
-                setActiveId(e.active.id as string);
-              }} 
-              onDragOver={handleDragOver}
-              onDragEnd={handleDragEnd}
-            >
+          {/* Right: Time Matrix */}
+          <Card className="flex-1 flex flex-col overflow-hidden">
+            <CardContent className="flex-1 overflow-auto p-0">
               <div className="flex min-w-max">
                 {/* Time column */}
                 <div className="w-16 flex-shrink-0 border-r bg-muted/30">
@@ -539,14 +529,15 @@ export default function Planning() {
                 })}
               </div>
 
-              <DragOverlay>
-                {activeOrder && <OrderCardOverlay order={activeOrder} />}
-                {activeSlot && <SlotOverlay slot={activeSlot} />}
-              </DragOverlay>
-            </DndContext>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <DragOverlay>
+          {activeOrder && <OrderCardOverlay order={activeOrder} />}
+          {activeSlot && <SlotOverlay slot={activeSlot} />}
+        </DragOverlay>
+      </DndContext>
 
       {/* Duration Modal */}
       <Dialog open={durationModalOpen} onOpenChange={setDurationModalOpen}>
@@ -727,13 +718,6 @@ function DraggableOrderCard({ order }: DraggableOrderCardProps) {
     data: { type: "order", orderId: order.id },
   });
 
-  console.log("[DraggableOrderCard] Render:", {
-    orderId: order.id,
-    isDragging,
-    hasListeners: !!listeners,
-    hasAttributes: !!attributes
-  });
-
   const style = {
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.5 : 1,
@@ -747,7 +731,6 @@ function DraggableOrderCard({ order }: DraggableOrderCardProps) {
       data-testid={`order-card-${order.id}`}
       {...attributes}
       {...listeners}
-      onPointerDown={() => console.log("[OrderCard] PointerDown")}
     >
       <div className="flex items-start gap-2">
         <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
