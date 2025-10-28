@@ -118,15 +118,15 @@ export function ProductionSlotCard({ slot, onClick }: ProductionSlotCardProps) {
     return `Geplant: ${formatTime(slot.startMin)} - ${formatTime(slot.startMin + slot.lengthMin)}`;
   };
 
-  const borderColor = isRunning 
-    ? 'border-l-green-600' 
+  const statusColor = isRunning 
+    ? 'bg-green-600' 
     : isPaused 
-    ? 'border-l-yellow-600'
+    ? 'bg-yellow-600'
     : isBlocked 
-    ? 'border-l-red-600'
+    ? 'bg-red-600'
     : isDone
-    ? 'border-l-blue-600'
-    : 'border-l-border';
+    ? 'bg-blue-600'
+    : 'bg-border';
 
   const bgColor = isRunning 
     ? 'bg-green-50/5 dark:bg-green-950/10' 
@@ -138,11 +138,14 @@ export function ProductionSlotCard({ slot, onClick }: ProductionSlotCardProps) {
 
   return (
     <Card 
-      className={`cursor-pointer hover-elevate border-l-4 ${borderColor} ${bgColor} ${isDone ? 'opacity-70' : ''}`}
+      className={`cursor-pointer hover-elevate relative ${bgColor} ${isDone ? 'opacity-70' : ''}`}
       onClick={onClick}
       data-testid={`card-slot-${slot.id}`}
     >
-      <CardContent className="p-4">
+      {/* Status Indicator Bar */}
+      <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-md ${statusColor}`} />
+      
+      <CardContent className="p-4 pl-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0 space-y-2">
             {/* Header Row */}
