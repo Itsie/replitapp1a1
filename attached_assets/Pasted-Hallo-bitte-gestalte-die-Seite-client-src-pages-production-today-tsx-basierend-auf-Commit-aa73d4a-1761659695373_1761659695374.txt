@@ -1,0 +1,93 @@
+Hallo,
+
+bitte gestalte die Seite client/src/pages/production-today.tsx (basierend auf Commit aa73d4a...) grundlegend um, um die Übersichtlichkeit zu verbessern, wie besprochen.
+
+Ziel: Ersetze die aktuelle, unübersichtliche Matrix-Ansicht durch eine chronologische, vertikale Liste von Karten. Jede Karte (für einen Slot oder Blocker) soll eine feste Höhe haben und die wichtigsten Informationen direkt anzeigen.  Der Klick auf eine Karte öffnet das ProductionSlotModal für Details und Aktionen.
+
+Anforderungen:
+
+Layout-Entfernung:
+
+Entferne die gesamte Grid-/Matrix-Logik aus production-today.tsx, einschließlich Komponenten wie TimeSlotRow, TimeAxis, Grid-CSS-Klassen (grid, grid-cols-...), Skalierungs-Konstanten (PIXELS_PER_MINUTE), die groupByWorkCenter-Funktion und die zugehörigen Renderingschleifen.
+
+Neues Layout:
+
+Die Hauptansicht unterhalb der Tagesnavigation und des Department-Filters soll ein einfacher div-Container sein, der die Slot-/Blocker-Karten als vertikale Liste darstellt (z.B. <div className="mt-4 space-y-3">).
+
+ProductionSlotCard-Komponente (Neu oder Anpassen):
+
+Erstelle (oder passe die existierende an) eine Komponente ProductionSlotCard (z.B. client/src/components/production-slot-card.tsx).
+
+Props:
+
+slot: TimeSlotWithOrder (Typ aus production-today.tsx holen/definieren - stelle sicher, dass order optional ist order?: Order | null).
+
+onOpenModal: (slot: TimeSlotWithOrder) => void.
+
+Darstellung (Wichtig: Feste Höhe):
+
+Die <Card> soll eine feste Mindesthöhe haben (z.B. min-h-[7rem] h-28), um Konsistenz zu gewährleisten. Verwende flex flex-col justify-between p-4 für den inneren Aufbau.
+
+Inhalt der Karte:
+
+Zeile 1 (flex, justify-between, items-center):
+
+Links: Geplante Zeit (formatTime(slot.startMin) - formatTime(slot.startMin + slot.lengthMin)).
+
+Rechts: Auftragsnummer (slot.order?.displayOrderNumber) ODER "Blocker", falls slot.blocked.
+
+Zeile 2: Auftragstitel (slot.order?.title) ODER Blocker-Notiz (slot.note). truncate.
+
+Zeile 3: Kunde (slot.order?.customer). truncate. (Nur anzeigen, wenn es kein Blocker ist).
+
+Zeile 4 (flex, justify-between, items-center, mt-auto pt-2 border-t mt-2): // Trennlinie und Abstand oben
+
+Links:
+
+Slot-Status-Badge (slot.status, nutze TIMESLOT_STATUS_LABELS & getTimeSlotBadgeClass aus shared/schema.ts).
+
+Laufzeit-Anzeige (NEU): Daneben, wenn slot.status 'RUNNING' oder 'PAUSED', die bisherige Laufzeit anzeigen (z.B. "Runtime: 1h 15m"). Hierfür brauchst du slot.startedAt (Datum/Zeit des Starts) und slot.totalPausedDurationMin (Summe der Pausen in Minuten). Diese Daten müssen vom Backend (/api/timeslots/today) kommen. Erstelle eine Hilfsfunktion oder Hook useElapsedTime(startedAt: Date | string | null, pausedDuration: number, status: string), die die aktuelle Laufzeit berechnet (nur wenn status RUNNING/PAUSED) und Pausen abzieht. Formatiere die Ausgabe lesbar (z.B. "1h 15m").
+
+Rechts: Button "Details / Bearbeiten".
+
+Blocker-Styling: Wenn slot.blocked, gib der Karte einen roten Rand (border-red-500) und zeige "Blocker" prominent an.
+
+Interaktion: Ein Klick auf den Button "Details / Bearbeiten" (oder die gesamte Karte) ruft props.onOpenModal(props.slot) auf.
+
+Daten Laden (production-today.tsx):
+
+Passe die useQuery für /api/timeslots/today an:
+
+Der Endpunkt muss die Slots für selectedDate und das (ggf. kombinierte) selectedDepartment liefern.
+
+Backend anpassen (routes.ts / storage.ts): Stelle sicher, dass GET /api/timeslots/today die order-Relation lädt (include: { order: true }) und die Felder startedAt (als Date oder ISO-String) und totalPausedDurationMin (als number) für jeden Slot zurückgibt. Passe die Prisma-Abfrage in getTimeSlotsForToday entsprechend an (include: { order: true }).
+
+Sortierung: Die Sortierung nach startMin: 'asc' muss im Backend in der Prisma-Abfrage erfolgen.
+
+Rendering (production-today.tsx):
+
+Filtere die geladenen timeSlots im Frontend basierend auf dem selectedDepartment (oder ['TEAMSPORT', 'TEXTILVEREDELUNG'] für die kombinierte Option).
+
+Iteriere über die gefilterten, sortierten Slots.
+
+Rendere für jeden Slot: <ProductionSlotCard slot={slot} onOpenModal={setSelectedSlot} />.
+
+Zeige eine Meldung ("Keine Einträge für heute...") an, wenn die gefilterte Liste leer ist.
+
+Department-Filter & Zusammenlegung:
+
+Stelle sicher, dass der <Select>-Dropdown für selectedDepartment vorhanden ist.
+
+Füge die Option "Teamsport / Textil" (value="TEAMSPORT_TEXTIL") hinzu und entferne die einzelnen Optionen.
+
+Passe die useQuery an:
+
+Option 1 (Bevorzugt): Backend anpassen. Erweitere GET /api/timeslots/today, sodass es einen kommaseparierten department-Parameter akzeptiert (z.B. ?department=TEAMSPORT,TEXTILVEREDELUNG). Passe routes.ts (Parameter parsen) und storage.ts (Prisma where-Klausel department: { in: [...] }) an.
+
+Option 2 (Fallback): Frontend. Wenn das Backend nicht angepasst werden kann, sende bei TEAMSPORT_TEXTIL zwei parallele Anfragen mit Promise.all und merge die Ergebnisse im queryFn.
+
+Passe den queryKey an, um die Auswahl korrekt widerzuspiegeln (z.B. ['/api/timeslots/today', selectedDate, 'TEAMSPORT_TEXTIL']).
+
+Modal: Die Logik mit setSelectedSlot zum Öffnen des ProductionSlotModal bleibt bestehen.
+
+Zusammenfassend: Baue die Seite zu einer sauberen Liste um, erstelle informative Karten mit fester Höhe und Laufzeit-Anzeige, und integriere die Department-Zusammenlegung. Stelle sicher, dass das Backend die benötigten Daten liefert.

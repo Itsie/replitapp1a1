@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -86,6 +86,9 @@ const MINUTES_PER_REM = 5;
 const SNAP_MINUTES = 15;
 const TIMELINE_HEIGHT_REM = WORKING_HOURS_TOTAL / MINUTES_PER_REM; // 132rem
 
+// Pixel-based calculation for precise drop positioning
+const PIXELS_PER_MINUTE = 16 / MINUTES_PER_REM; // 16px per rem / 5 min per rem = 3.2px per minute
+
 function calculateSlotStyle(startMin: number, lengthMin: number) {
   const topRem = (startMin - WORKING_HOURS_START) / MINUTES_PER_REM;
   const heightRem = lengthMin / MINUTES_PER_REM;
@@ -105,6 +108,60 @@ function formatTime(minutes: number): string {
   return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
 }
 
+// Calculate minutes from Y-coordinate position
+function calculateMinutesFromY(
+  dropClientY: number,
+  droppableNode: HTMLElement | null
+): number {
+  if (!droppableNode) return WORKING_HOURS_START;
+
+  const rect = droppableNode.getBoundingClientRect();
+  const relativeY = dropClientY - rect.top;
+
+  // Convert pixels to minutes
+  let minutesOffset = relativeY / PIXELS_PER_MINUTE;
+  let minutes = WORKING_HOURS_START + minutesOffset;
+
+  // Snap to 15-minute grid
+  minutes = Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;
+
+  // Ensure within working hours (with space for minimum 15 min slot)
+  return Math.max(WORKING_HOURS_START, Math.min(minutes, WORKING_HOURS_END - 15));
+}
+
+// Check for slot collisions
+function checkSlotCollision(
+  slotIdToIgnore: string | undefined,
+  date: string,
+  startMin: number,
+  lengthMin: number,
+  workCenterId: string,
+  allSlots: TimeSlot[]
+): boolean {
+  const endMin = startMin + lengthMin;
+  
+  // Filter slots for the same work center and date
+  const relevantSlots = allSlots.filter(slot => {
+    if (slot.id === slotIdToIgnore) return false;
+    if (slot.workCenterId !== workCenterId) return false;
+    if (slot.date !== date) return false;
+    return true;
+  });
+
+  // Check for overlap with any existing slot
+  for (const slot of relevantSlots) {
+    const slotEnd = slot.startMin + slot.lengthMin;
+    
+    // Check if there's any overlap
+    // Overlap occurs if: new slot starts before existing ends AND new slot ends after existing starts
+    if (startMin < slotEnd && endMin > slot.startMin) {
+      return true; // Collision detected
+    }
+  }
+
+  return false; // No collision
+}
+
 export default function Planning() {
   const { toast } = useToast();
   const [selectedDepartment, setSelectedDepartment] = useState<Department>("TEAMSPORT");
@@ -118,9 +175,15 @@ export default function Planning() {
   });
 
   // Modals
-  const [durationModalOpen, setDurationModalOpen] = useState(false);
+  const [appointmentModalOpen, setAppointmentModalOpen] = useState(false);
+  const [appointmentModalData, setAppointmentModalData] = useState<{
+    day: number;
+    workCenterId: string;
+    startMin: number;
+    orderId: string;
+    orderTitle: string;
+  } | null>(null);
   const [blockerModalOpen, setBlockerModalOpen] = useState(false);
-  const [pendingDrop, setPendingDrop] = useState<{ orderId: string; date: Date; startMin: number } | null>(null);
   const [blockerForm, setBlockerForm] = useState({ date: new Date(), startMin: 420, lengthMin: 60, note: "" });
   const [durationInput, setDurationInput] = useState("60");
 
@@ -206,7 +269,10 @@ export default function Planning() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ 
-        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith("/api/timeslots");
+        }
       });
       await refetchTimeSlots();
       toast({ title: "Erfolgreich", description: "Zeitslot erstellt" });
@@ -217,16 +283,20 @@ export default function Planning() {
   });
 
   const updateSlotMutation = useMutation({
-    mutationFn: async (data: { id: string; date: Date; startMin: number }) => {
+    mutationFn: async (data: { id: string; date: Date; startMin: number; workCenterId: string }) => {
       const dateStr = format(data.date, "yyyy-MM-dd");
       await apiRequest("PATCH", `/api/timeslots/${data.id}`, {
         date: dateStr,
         startMin: data.startMin,
+        workCenterId: data.workCenterId,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ 
-        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith("/api/timeslots");
+        }
       });
       toast({ title: "Erfolgreich", description: "Zeitslot verschoben" });
     },
@@ -241,7 +311,10 @@ export default function Planning() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ 
-        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith("/api/timeslots");
+        }
       });
       toast({ title: "Erfolgreich", description: "Zeitslot gelöscht" });
     },
@@ -302,63 +375,131 @@ export default function Planning() {
     }
 
     const activeData = active.data.current;
-    const targetCellData = dragOverData; // Nutze die gespeicherten Daten!
+    const targetCellData = dragOverData;
 
     // Berechne das Zieldatum aus dragOverData
     const targetDate = addDays(weekStart, targetCellData.day);
+    const targetDateStr = format(targetDate, "yyyy-MM-dd");
     
-    // Get the current bounding rect of the droppable element
-    const dayElement = document.getElementById(`day-${format(targetDate, "yyyy-MM-dd")}-timeline`);
+    // Get the droppable element for precise position calculation
+    const droppableElement = document.getElementById(`day-${targetDateStr}-timeline`);
     
-    let startMin = WORKING_HOURS_START;
-    if (dayElement && pointerY !== null) {
-      const rect = dayElement.getBoundingClientRect();
-      const relativeY = pointerY - rect.top;
-      const remFromTop = relativeY / 16; // 1rem = 16px
-      const minutesFromStart = remFromTop * MINUTES_PER_REM;
-      startMin = snapToGrid(WORKING_HOURS_START + minutesFromStart);
-      startMin = Math.max(WORKING_HOURS_START, Math.min(WORKING_HOURS_END - 15, startMin));
-    }
+    // Calculate precise start time from Y-coordinate
+    const calculatedStartMin = pointerY !== null 
+      ? calculateMinutesFromY(pointerY, droppableElement)
+      : WORKING_HOURS_START;
 
-    // Order from pool
+    // Order from pool - open modal to get duration
     if (activeData?.type === "order") {
       const orderId = activeData.orderId as string;
-      setPendingDrop({ orderId, date: targetDate, startMin });
-      setDurationInput("60");
-      setDurationModalOpen(true);
-      setDragOverData(null); // Reset
+      const order = availableOrders.find(o => o.id === orderId);
+      
+      if (order) {
+        setAppointmentModalData({
+          day: targetCellData.day,
+          workCenterId: targetCellData.workCenterId,
+          startMin: calculatedStartMin,
+          orderId: order.id,
+          orderTitle: order.displayOrderNumber || order.title,
+        });
+        setDurationInput("60");
+        setAppointmentModalOpen(true);
+      }
+      setDragOverData(null);
       return;
     }
 
-    // Moving existing slot
+    // Moving existing slot - update with new position, keep duration
     if (activeData?.type === "slot") {
       const slotId = activeData.slotId as string;
-      updateSlotMutation.mutate({ id: slotId, date: targetDate, startMin });
-      setDragOverData(null); // Reset am Ende
+      const slot = timeSlots.find(s => s.id === slotId);
+      
+      if (slot) {
+        // Clamp start time to ensure slot doesn't overflow past working hours
+        const clampedStartMin = Math.min(calculatedStartMin, WORKING_HOURS_END - slot.lengthMin);
+        
+        // Check for collision with the new position (keeping existing duration)
+        if (checkSlotCollision(slot.id, targetDateStr, clampedStartMin, slot.lengthMin, targetCellData.workCenterId, timeSlots)) {
+          toast({ 
+            title: "Kollision!", 
+            description: "Der Termin überschneidet sich mit einem anderen Zeitslot.", 
+            variant: "destructive" 
+          });
+          setDragOverData(null);
+          return;
+        }
+
+        // Update the slot with new position
+        updateSlotMutation.mutate({ 
+          id: slotId, 
+          date: targetDate, 
+          startMin: clampedStartMin,
+          workCenterId: targetCellData.workCenterId,
+        });
+      }
+      setDragOverData(null);
       return;
     }
 
-    setDragOverData(null); // Reset am Ende
+    setDragOverData(null);
   }
 
-  function handleDurationConfirm() {
-    if (!pendingDrop || !departmentWorkCenter) return;
-    const lengthMin = parseInt(durationInput, 10);
-    if (isNaN(lengthMin) || lengthMin < 5) {
-      toast({ title: "Fehler", description: "Bitte gültige Dauer eingeben (min. 5 Min)", variant: "destructive" });
+  function handleAppointmentConfirm() {
+    if (!appointmentModalData || !departmentWorkCenter) return;
+    
+    const lengthInput = parseInt(durationInput, 10);
+    if (isNaN(lengthInput) || lengthInput < 15) {
+      toast({ title: "Fehler", description: "Bitte gültige Dauer eingeben (min. 15 Min)", variant: "destructive" });
       return;
     }
 
+    // Round to 15 minute intervals, minimum 15 minutes
+    const lengthMin = Math.max(15, Math.round(lengthInput / 15) * 15);
+    const targetDate = addDays(weekStart, appointmentModalData.day);
+    const targetDateStr = format(targetDate, "yyyy-MM-dd");
+
+    // Clamp start time to ensure slot doesn't overflow past working hours
+    const clampedStartMin = Math.min(appointmentModalData.startMin, WORKING_HOURS_END - lengthMin);
+
+    // Validate that the slot fits within working hours
+    if (clampedStartMin + lengthMin > WORKING_HOURS_END) {
+      toast({ 
+        title: "Fehler", 
+        description: "Der Termin würde über die Arbeitszeit hinausgehen. Bitte kürzere Dauer wählen.", 
+        variant: "destructive" 
+      });
+      return; // Don't close modal, let user adjust
+    }
+
+    // Check for collision
+    if (checkSlotCollision(
+      undefined, 
+      targetDateStr, 
+      clampedStartMin, 
+      lengthMin, 
+      appointmentModalData.workCenterId, 
+      timeSlots
+    )) {
+      toast({ 
+        title: "Kollision!", 
+        description: "Der Termin überschneidet sich mit einem anderen Zeitslot.", 
+        variant: "destructive" 
+      });
+      return; // Don't close modal, let user adjust
+    }
+
+    // Create the slot
     createSlotMutation.mutate({
-      workCenterId: departmentWorkCenter.id,
-      date: pendingDrop.date,
-      startMin: pendingDrop.startMin,
-      lengthMin,
-      orderId: pendingDrop.orderId,
+      workCenterId: appointmentModalData.workCenterId,
+      date: targetDate,
+      startMin: clampedStartMin,
+      lengthMin: lengthMin,
+      orderId: appointmentModalData.orderId,
+      blocked: false,
     });
 
-    setDurationModalOpen(false);
-    setPendingDrop(null);
+    setAppointmentModalOpen(false);
+    setAppointmentModalData(null);
   }
 
   function handleAddBlocker() {
@@ -539,36 +680,53 @@ export default function Planning() {
         </DragOverlay>
       </DndContext>
 
-      {/* Duration Modal */}
-      <Dialog open={durationModalOpen} onOpenChange={setDurationModalOpen}>
-        <DialogContent data-testid="dialog-duration">
-          <DialogHeader>
-            <DialogTitle>Dauer festlegen</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="duration-input">Dauer in Minuten</Label>
-              <Input
-                id="duration-input"
-                type="number"
-                step="5"
-                min="5"
-                value={durationInput}
-                onChange={(e) => setDurationInput(e.target.value)}
-                data-testid="input-duration"
-              />
+      {/* Appointment Modal - Only ask for duration with calculated start time */}
+      {appointmentModalData && (
+        <Dialog open={appointmentModalOpen} onOpenChange={setAppointmentModalOpen}>
+          <DialogContent data-testid="dialog-appointment">
+            <DialogHeader>
+              <DialogTitle>Termin festlegen</DialogTitle>
+              <DialogDescription>
+                Auftrag: <span className="font-semibold">{appointmentModalData.orderTitle}</span>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Berechnete Startzeit</Label>
+                <div className="text-sm font-medium p-2 bg-muted rounded-md" data-testid="text-calculated-start-time">
+                  {formatTime(appointmentModalData.startMin)} Uhr
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="appointment-duration">Dauer in Minuten</Label>
+                <Input
+                  id="appointment-duration"
+                  type="number"
+                  step="15"
+                  min="15"
+                  value={durationInput}
+                  onChange={(e) => setDurationInput(e.target.value)}
+                  data-testid="input-appointment-duration"
+                />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDurationModalOpen(false)}>
-              Abbrechen
-            </Button>
-            <Button onClick={handleDurationConfirm} data-testid="button-confirm-duration">
-              Bestätigen
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setAppointmentModalOpen(false);
+                  setAppointmentModalData(null);
+                }}
+              >
+                Abbrechen
+              </Button>
+              <Button onClick={handleAppointmentConfirm} data-testid="button-confirm-appointment">
+                Bestätigen
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Blocker Modal */}
       <Dialog open={blockerModalOpen} onOpenChange={setBlockerModalOpen}>
@@ -863,32 +1021,20 @@ function DraggableTimeSlot({ slot, onDelete }: DraggableTimeSlotProps) {
 }
 
 function SlotOverlay({ slot }: { slot: TimeSlot }) {
-  const slotStyle = { width: "180px", height: `${slot.lengthMin / MINUTES_PER_REM}rem` };
   const isBlocker = slot.blocked;
-
+  
   return (
-    <div
-      className={`rounded border overflow-hidden shadow-lg ${
-        isBlocker 
-          ? "bg-muted border-muted-foreground/50 bg-stripes" 
-          : "bg-primary/10 border-primary"
-      }`}
-      style={slotStyle}
-    >
-      <div className="p-2">
-        {isBlocker ? (
-          <>
-            <div className="text-xs font-semibold text-muted-foreground">BLOCKER</div>
-            {slot.note && <div className="text-xs text-muted-foreground truncate">{slot.note}</div>}
-          </>
-        ) : (
-          <>
-            <div className="text-xs font-semibold truncate">
-              {slot.order?.displayOrderNumber || slot.orderId?.slice(0, 8)}
-            </div>
-            <div className="text-xs truncate">{slot.order?.title}</div>
-          </>
-        )}
+    <div className={`border rounded-lg p-2 shadow-lg w-48 ${
+      isBlocker ? "bg-muted border-muted-foreground/50" : "bg-primary/10 border-primary"
+    }`}>
+      <div className="text-xs font-semibold truncate">
+        {isBlocker ? 'BLOCKER' : (slot.order?.displayOrderNumber || slot.order?.title)}
+      </div>
+      {!isBlocker && slot.order?.title && (
+        <div className="text-xs text-muted-foreground truncate">{slot.order.title}</div>
+      )}
+      <div className="text-xs text-muted-foreground mt-1">
+        {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
       </div>
     </div>
   );
