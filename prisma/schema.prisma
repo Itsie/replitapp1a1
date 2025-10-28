@@ -198,7 +198,9 @@ model TimeSlot {
   note                      String?
   status                    TimeSlotStatus  @default(PLANNED)
   startedAt                 DateTime?
+  pausedAt                  DateTime?
   stoppedAt                 DateTime?
+  totalPausedDurationMin    Int             @default(0)
   actualDurationMin         Int?
   qc                        QCState?
   missingPartsNote          String?
