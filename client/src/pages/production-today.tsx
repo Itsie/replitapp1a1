@@ -584,8 +584,8 @@ function TimeSlotRow({
           {isVeryCompact ? (
             <>
               {/* Ultra-compact for very short slots (< 22 min) */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-mono text-muted-foreground">
+              <div className="flex items-center gap-1">
+                <span className="text-xs font-mono font-semibold">
                   {formatTime(slot.startMin)}
                 </span>
                 <span className="text-xs font-medium truncate">
@@ -600,22 +600,25 @@ function TimeSlotRow({
           ) : !isCompact ? (
             <>
               {/* Normal display for taller slots (>= 45 min) */}
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-sm font-mono font-semibold tracking-tight">
+                  {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {formatDuration(slot.lengthMin)}
+                </span>
+              </div>
+
               <div className="text-sm font-medium mb-0.5 truncate">
                 {slot.order ? (
                   <>
-                    <span className="text-xs font-mono text-muted-foreground">{formatTime(slot.startMin)}</span>
-                    <span className="mx-1.5 text-muted-foreground">·</span>
                     {slot.order.displayOrderNumber && (
                       <span className="text-muted-foreground text-xs">{slot.order.displayOrderNumber} · </span>
                     )}
                     <span>{slot.order.title}</span>
                   </>
                 ) : (
-                  <>
-                    <span className="text-xs font-mono text-muted-foreground">{formatTime(slot.startMin)}</span>
-                    <span className="mx-1.5 text-muted-foreground">·</span>
-                    <span className="text-muted-foreground italic">Blockiert</span>
-                  </>
+                  <span className="text-muted-foreground italic">Blockiert</span>
                 )}
               </div>
 
@@ -627,35 +630,35 @@ function TimeSlotRow({
                   </>
                 )}
                 <span className="truncate">{slot.workCenter.name}</span>
-                <span>•</span>
-                <span>{formatDuration(slot.lengthMin)}</span>
               </div>
             </>
           ) : (
             <>
               {/* Compact display for short slots (22-45 min) */}
               <div className="flex flex-col gap-0.5">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xs font-mono font-semibold">
+                    {formatTime(slot.startMin)}-{formatTime(slot.startMin + slot.lengthMin)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDuration(slot.lengthMin)}
+                  </span>
+                </div>
                 <div className="text-sm font-medium truncate">
                   {slot.order ? (
                     <>
-                      <span className="text-xs font-mono text-muted-foreground">{formatTime(slot.startMin)}</span>
-                      <span className="mx-1.5 text-muted-foreground">·</span>
                       {slot.order.displayOrderNumber && (
                         <span className="text-muted-foreground text-xs">{slot.order.displayOrderNumber} · </span>
                       )}
                       <span className="text-xs">{slot.order.title}</span>
                     </>
                   ) : (
-                    <>
-                      <span className="text-xs font-mono text-muted-foreground">{formatTime(slot.startMin)}</span>
-                      <span className="mx-1.5 text-muted-foreground">·</span>
-                      <span className="text-muted-foreground italic text-xs">Blockiert</span>
-                    </>
+                    <span className="text-muted-foreground italic text-xs">Blockiert</span>
                   )}
                 </div>
                 {slot.order && (
                   <div className="text-xs text-muted-foreground truncate">
-                    {slot.order.customer} · {formatDuration(slot.lengthMin)}
+                    {slot.order.customer}
                   </div>
                 )}
               </div>
