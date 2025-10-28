@@ -206,7 +206,7 @@ export default function Planning() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ 
-        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") 
+        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") ?? false
       });
       await refetchTimeSlots();
       toast({ title: "Erfolgreich", description: "Zeitslot erstellt" });
@@ -226,7 +226,7 @@ export default function Planning() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ 
-        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") 
+        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") ?? false
       });
       toast({ title: "Erfolgreich", description: "Zeitslot verschoben" });
     },
@@ -241,7 +241,7 @@ export default function Planning() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ 
-        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") 
+        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") ?? false
       });
       toast({ title: "Erfolgreich", description: "Zeitslot gelöscht" });
     },
