@@ -116,8 +116,6 @@ export default function ProductionToday() {
   const departmentOptions: Array<{ value: DepartmentFilter; label: string }> = [
     { value: "all", label: "Alle Bereiche" },
     { value: "TEAMSPORT_TEXTIL", label: "Teamsport + Textilveredelung" },
-    { value: "TEAMSPORT", label: "Teamsport" },
-    { value: "TEXTILVEREDELUNG", label: "Textilveredelung" },
     { value: "STICKEREI", label: "Stickerei" },
     { value: "DRUCK", label: "Druck" },
     { value: "SONSTIGES", label: "Sonstiges" },
