@@ -28,6 +28,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 type Department = "TEAMSPORT" | "TEXTILVEREDELUNG" | "STICKEREI" | "DRUCK" | "SONSTIGES";
+type DepartmentFilter = Department | "TEAMSPORT_TEXTIL";
 
 interface WorkCenter {
   id: string;
@@ -68,9 +69,8 @@ interface Order {
   dueDate: string | null;
 }
 
-const DEPARTMENT_LABELS: Record<Department, string> = {
-  TEAMSPORT: "Teamsport",
-  TEXTILVEREDELUNG: "Textilveredelung",
+const DEPARTMENT_LABELS: Record<DepartmentFilter, string> = {
+  TEAMSPORT_TEXTIL: "Teamsport / Textil",
   STICKEREI: "Stickerei",
   DRUCK: "Druck",
   SONSTIGES: "Sonstiges",
@@ -164,7 +164,7 @@ function checkSlotCollision(
 
 export default function Planning() {
   const { toast } = useToast();
-  const [selectedDepartment, setSelectedDepartment] = useState<Department>("TEAMSPORT");
+  const [selectedDepartment, setSelectedDepartment] = useState<DepartmentFilter>("TEAMSPORT_TEXTIL");
   const [weekStart, setWeekStart] = useState<Date>(() => {
     const today = new Date();
     const day = getDay(today);
@@ -221,7 +221,21 @@ export default function Planning() {
 
   // Get workcenters for department
   const { data: workCenters = [] } = useQuery<WorkCenter[]>({
-    queryKey: [`/api/workcenters?department=${selectedDepartment}`],
+    queryKey: ["/api/workcenters", selectedDepartment],
+    queryFn: async () => {
+      if (selectedDepartment === "TEAMSPORT_TEXTIL") {
+        // Fetch all workcenters and filter in frontend
+        const response = await fetch("/api/workcenters");
+        if (!response.ok) throw new Error("Failed to fetch workcenters");
+        const all: WorkCenter[] = await response.json();
+        return all.filter(wc => wc.active && ['TEAMSPORT', 'TEXTILVEREDELUNG'].includes(wc.department));
+      } else {
+        // Fetch for single department
+        const response = await fetch(`/api/workcenters?department=${selectedDepartment}`);
+        if (!response.ok) throw new Error("Failed to fetch workcenters");
+        return response.json();
+      }
+    },
   });
 
   const departmentWorkCenter = useMemo(() => {
@@ -230,7 +244,29 @@ export default function Planning() {
 
   // Get available orders
   const { data: ordersResponse } = useQuery<{ orders: Order[]; totalCount: number }>({
-    queryKey: [`/api/orders?department=${selectedDepartment}&workflow=FUER_PROD,WARTET_FEHLTEILE`],
+    queryKey: ["/api/orders", selectedDepartment],
+    queryFn: async () => {
+      if (selectedDepartment === "TEAMSPORT_TEXTIL") {
+        // Fetch from both departments and merge
+        const [teamsport, textil] = await Promise.all([
+          fetch("/api/orders?department=TEAMSPORT&workflow=FUER_PROD,WARTET_FEHLTEILE").then(r => {
+            if (!r.ok) throw new Error("Failed to fetch TEAMSPORT orders");
+            return r.json() as Promise<{ orders: Order[]; totalCount: number }>;
+          }),
+          fetch("/api/orders?department=TEXTILVEREDELUNG&workflow=FUER_PROD,WARTET_FEHLTEILE").then(r => {
+            if (!r.ok) throw new Error("Failed to fetch TEXTILVEREDELUNG orders");
+            return r.json() as Promise<{ orders: Order[]; totalCount: number }>;
+          })
+        ]);
+        const mergedOrders = [...teamsport.orders, ...textil.orders];
+        return { orders: mergedOrders, totalCount: mergedOrders.length };
+      } else {
+        // Fetch for single department
+        const response = await fetch(`/api/orders?department=${selectedDepartment}&workflow=FUER_PROD,WARTET_FEHLTEILE`);
+        if (!response.ok) throw new Error("Failed to fetch orders");
+        return response.json();
+      }
+    },
   });
   const availableOrders = ordersResponse?.orders || [];
 
@@ -242,7 +278,28 @@ export default function Planning() {
   const weekStartStr = format(weekStart, "yyyy-MM-dd");
 
   const { data: timeSlots = [], refetch: refetchTimeSlots } = useQuery<TimeSlot[]>({
-    queryKey: [`/api/timeslots?department=${selectedDepartment}&weekStart=${weekStartStr}`],
+    queryKey: ["/api/timeslots", selectedDepartment, weekStartStr],
+    queryFn: async () => {
+      if (selectedDepartment === "TEAMSPORT_TEXTIL") {
+        // Fetch from both departments and merge
+        const [teamsport, textil] = await Promise.all([
+          fetch(`/api/timeslots?department=TEAMSPORT&weekStart=${weekStartStr}`).then(r => {
+            if (!r.ok) throw new Error("Failed to fetch TEAMSPORT timeslots");
+            return r.json() as Promise<TimeSlot[]>;
+          }),
+          fetch(`/api/timeslots?department=TEXTILVEREDELUNG&weekStart=${weekStartStr}`).then(r => {
+            if (!r.ok) throw new Error("Failed to fetch TEXTILVEREDELUNG timeslots");
+            return r.json() as Promise<TimeSlot[]>;
+          })
+        ]);
+        return [...teamsport, ...textil];
+      } else {
+        // Fetch for single department
+        const response = await fetch(`/api/timeslots?department=${selectedDepartment}&weekStart=${weekStartStr}`);
+        if (!response.ok) throw new Error("Failed to fetch timeslots");
+        return response.json();
+      }
+    },
   });
 
   // Mutations
