@@ -469,7 +469,7 @@ export default function OrderDetail() {
                     <div className="space-y-3">
                       {/* Positionen */}
                       <button
-                        onClick={() => setActiveTab("positions")}
+                        onClick={() => setActiveTab("details")}
                         className="w-full flex items-start gap-3 p-3 rounded-lg hover-elevate active-elevate-2 border border-muted/40 text-left transition-all"
                         data-testid="checklist-item-positions"
                       >
