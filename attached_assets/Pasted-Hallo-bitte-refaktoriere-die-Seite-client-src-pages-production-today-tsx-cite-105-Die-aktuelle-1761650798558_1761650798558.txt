@@ -1,0 +1,64 @@
+Hallo,
+
+bitte refaktoriere die Seite client/src/pages/production-today.tsx [cite: 105]. Die aktuelle Ansicht (siehe image_7a6e7f.jpg) ist "zerschossen", weil die TimeSlotCard-Komponente (TimeSlotRow in production-today.tsx [cite: 105 (lines 405-779)]) viel zu viele Informationen und Aktionen auf einmal anzeigt.
+
+Ziel: Die Seite production-today.tsx soll aufgeräumt werden. Die Detail-Informationen und Aktionen (Start/Stop/Pause/Problem) für einen Slot sollen in ein separates Modal (<Dialog>) ausgelagert werden.
+
+Anforderungen:
+
+Neue Komponente erstellen (z.B. client/src/components/ProductionSlotModal.tsx):
+
+Erstelle eine neue Komponente, die ein Shadcn/UI <Dialog> ist.
+
+Sie soll isOpen: boolean, onOpenChange: (open: boolean) => void, und slot: TimeSlotWithOrder | null als Props annehmen.
+
+Mache den <DialogContent> groß (className="max-w-4xl max-h-[90vh] overflow-y-auto"), damit alle Informationen Platz haben.
+
+Logik und Inhalt in das Modal verschieben:
+
+Verschiebe die useMutation-Hooks (Start, Pause, Stop, Problem/Fehlteil) aus production-today.tsx [cite: 105 (lines 135-251)] in die neue ProductionSlotModal.tsx-Komponente. Passe die queryClient.invalidateQueries-Aufrufe an, damit sie weiterhin die queryKey von production-today.tsx ([queryUrl]) aktualisieren.
+
+Verschiebe die handle...-Funktionen (handleStart, handlePause, handleStop, handleOpenProblemDialog) [cite: 105 (lines 253-277)] ebenfalls in das Modal.
+
+Der Inhalt des Modals soll die Details anzeigen, die vorher in der Karte versteckt waren. Nutze <Tabs>:
+
+Tab "Details": Zeige die Auftragsinfos (Kunde, Workflow, Fälligkeit) und die Slot-Infos (Zeit, Arbeitsplatz).
+
+Tab "Positionen": Zeige die slot.order.positions in einer Tabelle an.
+
+Tab "Größentabelle": Zeige die slot.order.sizeTable an [cite: 105 (line 522)].
+
+Tab "Druckdaten/Assets": Zeige die slot.order.printAssets und order.orderAssets an [cite: 105 (lines 512, 545)].
+
+Tab "Notizen": Zeige slot.order.notes.
+
+Footer: Der <DialogFooter> soll die Aktions-Buttons enthalten:
+
+"Starten" / "Fortsetzen" (ruft handleStart auf [cite: 105 (line 622)])
+
+"Pause" (ruft handlePause auf [cite: 105 (line 634)])
+
+"Fertigstellen" (ruft handleStop auf [cite: 105 (line 645)])
+
+"Problem melden" (öffnet das ProblemDialog-Modal [cite: 105 (lines 351-402)])
+
+production-today.tsx aufräumen:
+
+Entferne die TimeSlotRow-Komponente (ehemals TimeSlotCard) [cite: 105 (lines 405-779)].
+
+Füge einen useState hinzu: const [selectedSlot, setSelectedSlot] = useState<TimeSlotWithOrder | null>(null);
+
+Die TimelineView [cite: 105 (line 783)] soll jetzt eine viel einfachere SlotCard-Komponente rendern (du kannst TimeSlotRow umbenennen und stark vereinfachen).
+
+Diese neue SlotCard zeigt nur die wichtigsten Infos (Uhrzeit, Titel) und hat einen "Details öffnen"-Button.
+
+Ein Klick auf "Details öffnen" soll setSelectedSlot(slot) aufrufen (ersetze onViewDetails [cite: 105 (line 817)]).
+
+Entferne alle useMutation-Hooks und die handle...-Funktionen aus production-today.tsx, da sie jetzt im Modal leben.
+
+Rendere das neue Modal am Ende der Seite:
+<ProductionSlotModal isOpen={!!selectedSlot} slot={selectedSlot} onOpenChange={(open) => !open && setSelectedSlot(null)} />
+
+Das ProblemDialog-Modal [cite: 105 (lines 351-402)] muss ebenfalls in das ProductionSlotModal verschoben werden, da die Aktionen (z.B. problemMutation) jetzt dort leben.
+
+Bitte setze diesen Umbau um. Das Ziel ist eine saubere production-today.tsx-Seite mit einer Timeline und einem voll funktionsfähigen Detail-Modal.
