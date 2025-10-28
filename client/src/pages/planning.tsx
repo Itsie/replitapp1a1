@@ -20,7 +20,8 @@ import {
   useDraggable, 
   useDroppable,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors
 } from "@dnd-kit/core";
@@ -128,9 +129,15 @@ export default function Planning() {
   const [currentPointerY, setCurrentPointerY] = useState<number | null>(null);
   const [dragOverData, setDragOverData] = useState<{ day: number; workCenterId: string } | null>(null);
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
-        distance: 3,
+        distance: 5,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 100,
+        tolerance: 5,
       },
     })
   );
@@ -488,7 +495,10 @@ export default function Planning() {
           <CardContent className="flex-1 overflow-auto p-0">
             <DndContext 
               sensors={sensors} 
-              onDragStart={(e) => setActiveId(e.active.id as string)} 
+              onDragStart={(e) => {
+                console.log("[DndContext] DragStart:", e.active.id);
+                setActiveId(e.active.id as string);
+              }} 
               onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
             >
