@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -207,7 +206,7 @@ export default function Planning() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ 
-        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") ?? false
+        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") 
       });
       await refetchTimeSlots();
       toast({ title: "Erfolgreich", description: "Zeitslot erstellt" });
@@ -227,7 +226,7 @@ export default function Planning() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ 
-        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") ?? false
+        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") 
       });
       toast({ title: "Erfolgreich", description: "Zeitslot verschoben" });
     },
@@ -242,7 +241,7 @@ export default function Planning() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ 
-        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") ?? false
+        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") 
       });
       toast({ title: "Erfolgreich", description: "Zeitslot gelöscht" });
     },
@@ -414,8 +413,7 @@ export default function Planning() {
     : null;
 
   return (
-    <TooltipProvider>
-      <div className="w-full h-screen flex flex-col overflow-hidden">
+    <div className="w-full h-screen flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 border-b bg-card p-4">
         <div className="flex items-center justify-between gap-4">
@@ -651,8 +649,7 @@ export default function Planning() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      </div>
-    </TooltipProvider>
+    </div>
   );
 }
 
@@ -788,7 +785,6 @@ function DraggableTimeSlot({ slot, onDelete }: DraggableTimeSlotProps) {
   const transformStyle = transform ? { transform: CSS.Translate.toString(transform) } : {};
 
   const isBlocker = slot.blocked;
-  const order = slot.order;
   
   // Calculate if slot is compact based on duration
   // < 30 min = very compact, < 45 min = compact
@@ -796,94 +792,73 @@ function DraggableTimeSlot({ slot, onDelete }: DraggableTimeSlotProps) {
   const isCompact = slot.lengthMin < 45;
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div
-          ref={setNodeRef}
-          className={`absolute left-1 right-1 rounded border overflow-hidden group ${
-            isBlocker 
-              ? "bg-muted border-muted-foreground/50 bg-stripes" 
-              : "bg-primary/10 border-primary hover-elevate"
-          }`}
-          style={{ 
-            ...slotStyle, 
-            ...transformStyle, 
-            opacity: isDragging ? 0.5 : 1,
-          }}
-          data-testid={`slot-${slot.id}`}
-          {...listeners}
-          {...attributes}
-        >
-            <div className={`${isVeryCompact ? 'p-1' : 'p-2'} h-full flex flex-col cursor-grab active:cursor-grabbing`} style={{ minHeight: '2.5rem' }}>
-              <div className="flex items-start justify-between gap-1">
-                <div className="flex-1 min-w-0 overflow-hidden whitespace-nowrap">
-                  {isVeryCompact ? (
-                    <>
-                      {/* Ultra-compact for very short slots */}
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-semibold truncate">
-                          {isBlocker ? 'BLOCKER' : (slot.order?.displayOrderNumber || slot.order?.title)}
-                        </span>
-                      </div>
-                    </>
-                  ) : isBlocker ? (
-                    <>
-                      <div className="text-xs font-semibold text-muted-foreground">BLOCKER</div>
-                      {slot.note && <div className="text-xs text-muted-foreground truncate">{slot.note}</div>}
-                      {!isCompact && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex flex-col gap-0.5">
-                        <div className="text-xs font-semibold truncate">
-                          {slot.order?.displayOrderNumber || slot.orderId?.slice(0, 8)}
-                        </div>
-                        <div className="text-xs truncate">{slot.order?.title}</div>
-                        {!isCompact && (
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
-                          </div>
-                        )}
-                      </div>
-                    </>
+    <div
+      ref={setNodeRef}
+      className={`absolute left-1 right-1 rounded border overflow-hidden group ${
+        isBlocker 
+          ? "bg-muted border-muted-foreground/50 bg-stripes" 
+          : "bg-primary/10 border-primary hover-elevate"
+      }`}
+      style={{ ...slotStyle, ...transformStyle, opacity: isDragging ? 0.5 : 1 }}
+      data-testid={`slot-${slot.id}`}
+      {...listeners}
+      {...attributes}
+    >
+      <div className={`${isVeryCompact ? 'p-1' : 'p-2'} h-full flex flex-col cursor-grab active:cursor-grabbing`}>
+        <div className="flex items-start justify-between gap-1">
+          <div className="flex-1 min-w-0">
+            {isVeryCompact ? (
+              <>
+                {/* Ultra-compact for very short slots */}
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-semibold truncate">
+                    {isBlocker ? 'BLOCKER' : (slot.order?.displayOrderNumber || slot.order?.title)}
+                  </span>
+                </div>
+              </>
+            ) : isBlocker ? (
+              <>
+                <div className="text-xs font-semibold text-muted-foreground">BLOCKER</div>
+                {slot.note && <div className="text-xs text-muted-foreground truncate">{slot.note}</div>}
+                {!isCompact && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col gap-0.5">
+                  <div className="text-xs font-semibold truncate">
+                    {slot.order?.displayOrderNumber || slot.orderId?.slice(0, 8)}
+                  </div>
+                  <div className="text-xs truncate">{slot.order?.title}</div>
+                  {!isCompact && (
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
+                    </div>
                   )}
                 </div>
-                {!isVeryCompact && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(slot.id);
-                    }}
-                    data-testid={`button-delete-slot-${slot.id}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-            </div>
+              </>
+            )}
           </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <div className="space-y-1">
-            <p className="font-medium">
-              {isBlocker ? "Blocker" : order?.displayOrderNumber || order?.title || "Unbekannt"}
-            </p>
-            {!isBlocker && order && <p className="text-sm">{order.title}</p>}
-            {!isBlocker && order && order.customer && <p className="text-sm text-muted-foreground">{order.customer}</p>}
-            <p className="text-sm">
-              {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)} ({slot.lengthMin} min)
-            </p>
-            {slot.note && <p className="text-sm text-muted-foreground">Notiz: {slot.note}</p>}
-          </div>
-        </TooltipContent>
-    </Tooltip>
+          {!isVeryCompact && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(slot.id);
+              }}
+              data-testid={`button-delete-slot-${slot.id}`}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
