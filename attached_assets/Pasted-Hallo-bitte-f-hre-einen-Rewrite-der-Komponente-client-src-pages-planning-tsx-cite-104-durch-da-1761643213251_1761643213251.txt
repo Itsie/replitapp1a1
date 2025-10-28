@@ -1,0 +1,39 @@
+Hallo,
+
+bitte führe einen Rewrite der Komponente client/src/pages/planning.tsx [cite: 104] durch, da sie aktuell instabil ist. Das Ziel ist, die Komplexität drastisch zu reduzieren und die Komponente robust zu machen.
+
+Anforderungen:
+
+Stabile Geometrie-Berechnung:
+
+Entferne alle komplexen Zoom-Stufen [cite: 104 (line 351)] und komplizierten Berechnungen.
+
+Führe eine zentrale Hilfsfunktion ein, z.B. calculateSlotStyle(startMin, lengthMin), die startMin und lengthMin direkt in top und height (in Pixel oder rem) für das CSS style-Attribut umrechnet.
+
+Die Basis sollte ein fester Wert sein, z.B. 1 rem = 5 Minuten. Ein 60-Minuten-Slot wäre dann 12rem hoch.
+
+Server-State als "Source of Truth":
+
+Verlasse dich nicht auf einen komplexen lokalen React-State, um Slots zu verschieben.
+
+Der useQuery-Hook für GET /api/timeslots [cite: 104 (line 155)] ist die einzige Quelle der Wahrheit für alle angezeigten Slots.
+
+Vereinfachtes Drag & Drop (mit dnd-kit [cite: 104 (line 69)]):
+
+onDragEnd [cite: 104 (line 571)]: Diese Funktion muss vereinfacht werden. Ihre einzige Aufgabe ist:
+
+Ermitteln, auf welcher Spalte (WorkCenter ID) und bei welcher Minute (startMin) der Slot losgelassen wurde.
+
+Den useMutation-Hook aufrufen, um ein PUT /api/timeslots/:id [cite: 138 (line 151)] mit den neuen Werten (workCenterId, date, startMin) an das Backend zu senden.
+
+Optimistic UI entfernen: Entferne jegliche Logik, die versucht, den Slot im UI vor der Server-Antwort zu verschieben.
+
+Auto-Refresh: Nach erfolgreicher useMutation (im onSuccess-Callback), rufe queryClient.invalidateQueries(['/api/timeslots']) auf. Dadurch lädt die Seite die Slots neu und der verschobene Slot erscheint automatisch an der korrekten, vom Server bestätigten Position.
+
+Auftrags-Pool (Rechte Seite):
+
+Der Pool der planbaren Aufträge (workflow: "FUER_PROD" [cite: 104 (line 527)]) muss ebenfalls dnd-kit verwenden.
+
+Ein Drag vom Pool auf das Kalender-Grid soll ein POST /api/timeslots [cite: 138 (line 143)] auslösen (neuen Slot erstellen) und danach ebenfalls die TimeSlots neu laden.
+
+Bitte baue die Komponente mit diesem stabileren, Server-gesteuerten Ansatz neu auf.

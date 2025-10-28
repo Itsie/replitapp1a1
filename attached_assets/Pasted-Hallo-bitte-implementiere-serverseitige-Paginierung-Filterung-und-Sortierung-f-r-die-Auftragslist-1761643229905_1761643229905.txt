@@ -1,0 +1,51 @@
+Hallo,
+
+bitte implementiere serverseitige Paginierung, Filterung und Sortierung für die Auftragsliste (client/src/pages/orders-list-improved.tsx [cite: 1]), da sie aktuell alle Aufträge lädt [cite: 1 (line 204)] und im Client filtert, was nicht skaliert.
+
+1. Backend-Anpassungen (server/storage.ts & server/routes.ts):
+
+server/storage.ts - getOrders [cite: 139 (line 191)]:
+
+Die Funktion getOrders muss ein Objekt mit Query-Parametern akzeptieren (z.B. q, status, department, page, limit, sortBy, sortOrder).
+
+Die Prisma-Abfrage (prisma.order.findMany [cite: 139 (line 205)]) muss diese Parameter nutzen:
+
+where: Muss q (für die Suche) und die Filter (status, department) kombinieren.
+
+orderBy: Muss sortBy und sortOrder verwenden.
+
+take: Muss den limit-Parameter verwenden (z.B. 50).
+
+skip: Muss (page - 1) * limit verwenden.
+
+Die Funktion muss ein Objekt zurückgeben, das orders (die Liste) und totalCount (Gesamtzahl der Treffer, ermittelt über ein separates prisma.order.count({ where })) enthält.
+
+server/routes.ts - GET /api/orders [cite: 138 (line 30)]:
+
+Die Route muss die Query-Parameter aus der URL (c.req.query()) validieren (z.B. page zu Number parsen) und an die getOrders-Funktion weitergeben.
+
+Die Route muss das Objekt { orders, totalCount } als JSON zurückgeben.
+
+2. Frontend-Anpassungen (client/src/pages/orders-list-improved.tsx):
+
+State: Füge Paginierungs-State hinzu: const [page, setPage] = useState(1); (Limit ist fest, z.B. 50).
+
+useQuery [cite: 1 (line 202)]:
+
+Der queryKey muss alle States enthalten: ['/api/orders', debouncedSearch, department, workflow, sorting, page].
+
+Die queryFn muss diese Parameter in die URL einbauen (z.B. /api/orders?q=...&page=...&sortBy=...).
+
+Die MAX_ROWS-Logik [cite: 1 (line 78)] und das Client-Filtering [cite: 1 (line 271)] müssen vollständig entfernt werden.
+
+Daten: const { data } = useQuery(...). Die Daten sind jetzt ein Objekt: const orders = data?.orders ?? []; und const totalCount = data?.totalCount ?? 0;.
+
+Sortierung: Der onSortingChange [cite: 1 (line 484)]-Handler der Tabelle muss setSorting aufrufen (was bereits geschieht). Dies löst automatisch einen neuen useQuery-Aufruf aus, da sich der queryKey ändert.
+
+Paginierungs-UI:
+
+Füge eine Paginierungs-Komponente hinzu (z.B. die <Pagination>-Komponente von Shadcn/UI).
+
+Berechne die Gesamtanzahl der Seiten: const pageCount = Math.ceil(totalCount / 50);.
+
+Steuere die Komponente mit dem page-State und pageCount. Der onPageChange-Handler muss setPage aufrufen.
