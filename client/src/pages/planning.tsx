@@ -157,9 +157,10 @@ export default function Planning() {
   }, [workCenters]);
 
   // Get available orders
-  const { data: availableOrders = [] } = useQuery<Order[]>({
+  const { data: ordersResponse } = useQuery<{ orders: Order[]; totalCount: number }>({
     queryKey: [`/api/orders?department=${selectedDepartment}&workflow=FUER_PROD,WARTET_FEHLTEILE`],
   });
+  const availableOrders = ordersResponse?.orders || [];
 
   // Get time slots for week
   const weekDates = useMemo(() => {
@@ -169,7 +170,7 @@ export default function Planning() {
   const startDateStr = format(weekDates[0], "yyyy-MM-dd");
   const endDateStr = format(weekDates[4], "yyyy-MM-dd");
 
-  const { data: timeSlots = [] } = useQuery<TimeSlot[]>({
+  const { data: timeSlots = [], refetch: refetchTimeSlots } = useQuery<TimeSlot[]>({
     queryKey: [`/api/timeslots?department=${selectedDepartment}&startDate=${startDateStr}&endDate=${endDateStr}`],
   });
 
@@ -195,8 +196,11 @@ export default function Planning() {
         note: data.note || null,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeslots"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ 
+        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") 
+      });
+      await refetchTimeSlots();
       toast({ title: "Erfolgreich", description: "Zeitslot erstellt" });
     },
     onError: (error: Error) => {
@@ -213,7 +217,9 @@ export default function Planning() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeslots"] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") 
+      });
       toast({ title: "Erfolgreich", description: "Zeitslot verschoben" });
     },
     onError: (error: Error) => {
@@ -226,7 +232,9 @@ export default function Planning() {
       await apiRequest("DELETE", `/api/timeslots/${slotId}`, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeslots"] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => query.queryKey[0]?.toString().startsWith("/api/timeslots") 
+      });
       toast({ title: "Erfolgreich", description: "Zeitslot gelöscht" });
     },
     onError: (error: Error) => {
@@ -312,6 +320,12 @@ export default function Planning() {
 
   function handleBlockerConfirm() {
     if (!departmentWorkCenter) return;
+    
+    if (isNaN(blockerForm.startMin) || isNaN(blockerForm.lengthMin)) {
+      toast({ title: "Fehler", description: "Ungültige Zeit- oder Dauerwerte", variant: "destructive" });
+      return;
+    }
+    
     createSlotMutation.mutate({
       workCenterId: departmentWorkCenter.id,
       date: blockerForm.date,
@@ -331,7 +345,7 @@ export default function Planning() {
   const slotsByDate = useMemo(() => {
     const map = new Map<string, TimeSlot[]>();
     timeSlots.forEach(slot => {
-      const dateKey = slot.date;
+      const dateKey = format(parseISO(slot.date), "yyyy-MM-dd");
       if (!map.has(dateKey)) map.set(dateKey, []);
       map.get(dateKey)!.push(slot);
     });
@@ -535,8 +549,13 @@ export default function Planning() {
                 type="time"
                 value={formatTime(blockerForm.startMin)}
                 onChange={(e) => {
-                  const [h, m] = e.target.value.split(":").map(Number);
-                  setBlockerForm(prev => ({ ...prev, startMin: h * 60 + m }));
+                  const timeValue = e.target.value;
+                  if (timeValue) {
+                    const [h, m] = timeValue.split(":").map(Number);
+                    if (!isNaN(h) && !isNaN(m)) {
+                      setBlockerForm(prev => ({ ...prev, startMin: h * 60 + m }));
+                    }
+                  }
                 }}
                 data-testid="input-blocker-start"
               />

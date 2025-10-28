@@ -276,7 +276,12 @@ export class PrismaStorage implements IStorage {
     }
     
     if (filters.workflow && filters.workflow.trim()) {
-      where.workflow = filters.workflow;
+      const workflows = filters.workflow.split(",").map(w => w.trim()).filter(Boolean);
+      if (workflows.length === 1) {
+        where.workflow = workflows[0];
+      } else if (workflows.length > 1) {
+        where.workflow = { in: workflows };
+      }
     }
     
     // Pagination
