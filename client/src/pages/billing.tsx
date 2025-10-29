@@ -174,6 +174,14 @@ export default function Billing() {
     return lines.join('\n');
   };
 
+  // Format contact info for copy/paste
+  const formatContactInfo = (order: OrderWithRelations) => {
+    const parts = [];
+    if (order.customerEmail) parts.push(`E-Mail: ${order.customerEmail}`);
+    if (order.customerPhone) parts.push(`Tel: ${order.customerPhone}`);
+    return parts.join('\n');
+  };
+
   return (
     <div className="w-full px-4 md:px-6 py-6">
       {/* Header */}
@@ -226,7 +234,7 @@ export default function Billing() {
                 {openOrders.map((order) => {
                   const totals = calculateTotals(order.positions || []);
                   const invoiceAddress = formatInvoiceAddress(order);
-                  const verwendungszweck = `Rechnung ${order.displayOrderNumber || order.id.substring(0, 8)}`;
+                  const contactInfo = formatContactInfo(order);
 
                   return (
                     <AccordionItem key={order.id} value={order.id} data-testid={`accordion-order-${order.id}`}>
@@ -250,7 +258,7 @@ export default function Billing() {
                       </AccordionTrigger>
                       <AccordionContent className="pt-4">
                         <div className="space-y-6">
-                          {/* Invoice Address */}
+                          {/* Contact Information */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Card>
                               <CardHeader className="pb-3">
@@ -272,36 +280,31 @@ export default function Billing() {
                               </CardContent>
                             </Card>
 
-                            {/* Bank Data */}
-                            <Card>
-                              <CardHeader className="pb-3">
-                                <div className="flex items-center justify-between">
-                                  <CardTitle className="text-sm">Bankdaten</CardTitle>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      copyToClipboard(
-                                        `${BANK_DATA.name}\n${BANK_DATA.bank}\nIBAN: ${BANK_DATA.iban}\nBIC: ${BANK_DATA.bic}`,
-                                        "Bankdaten"
-                                      )
-                                    }
-                                    data-testid={`button-copy-bank-${order.id}`}
-                                  >
-                                    <ClipboardCopy className="w-4 h-4 mr-1" />
-                                    Kopieren
-                                  </Button>
-                                </div>
-                              </CardHeader>
-                              <CardContent>
-                                <div className="text-sm space-y-1">
-                                  <div>{BANK_DATA.name}</div>
-                                  <div>{BANK_DATA.bank}</div>
-                                  <div className="font-mono">IBAN: {BANK_DATA.iban}</div>
-                                  <div className="font-mono">BIC: {BANK_DATA.bic}</div>
-                                </div>
-                              </CardContent>
-                            </Card>
+                            {/* Contact Details */}
+                            {contactInfo && (
+                              <Card>
+                                <CardHeader className="pb-3">
+                                  <div className="flex items-center justify-between">
+                                    <CardTitle className="text-sm">Kontaktdaten</CardTitle>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => copyToClipboard(contactInfo, "Kontaktdaten")}
+                                      data-testid={`button-copy-contact-${order.id}`}
+                                    >
+                                      <ClipboardCopy className="w-4 h-4 mr-1" />
+                                      Kopieren
+                                    </Button>
+                                  </div>
+                                </CardHeader>
+                                <CardContent>
+                                  <div className="text-sm space-y-1">
+                                    {order.customerEmail && <div>E-Mail: {order.customerEmail}</div>}
+                                    {order.customerPhone && <div>Tel: {order.customerPhone}</div>}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
                           </div>
 
                           {/* Positions Table */}
@@ -337,7 +340,7 @@ export default function Billing() {
                                         const qty = typeof pos.qty === 'object' && 'toNumber' in pos.qty ? pos.qty.toNumber() : (pos.qty || 0);
                                         const price = typeof pos.unitPriceNet === 'object' && 'toNumber' in pos.unitPriceNet ? pos.unitPriceNet.toNumber() : (pos.unitPriceNet || 0);
                                         return (
-                                          <TableRow key={idx}>
+                                          <TableRow key={idx} className={idx % 2 === 0 ? "" : "bg-muted/30"}>
                                             <TableCell>
                                               <div className="font-medium">{pos.articleName}</div>
                                               {pos.articleNumber && (
@@ -380,27 +383,6 @@ export default function Billing() {
                                   Keine Positionen vorhanden
                                 </div>
                               )}
-                            </CardContent>
-                          </Card>
-
-                          {/* Payment Reference */}
-                          <Card>
-                            <CardHeader className="pb-3">
-                              <div className="flex items-center justify-between">
-                                <CardTitle className="text-sm">Verwendungszweck</CardTitle>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => copyToClipboard(verwendungszweck, "Verwendungszweck")}
-                                  data-testid={`button-copy-reference-${order.id}`}
-                                >
-                                  <ClipboardCopy className="w-4 h-4 mr-1" />
-                                  Kopieren
-                                </Button>
-                              </div>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="font-mono text-sm">{verwendungszweck}</div>
                             </CardContent>
                           </Card>
 
