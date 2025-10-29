@@ -26,6 +26,7 @@ import {
   useSensors
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { ProductionSlotModal } from "@/components/production-slot-modal";
 
 type Department = "TEAMSPORT" | "TEXTILVEREDELUNG" | "STICKEREI" | "DRUCK" | "SONSTIGES";
 type DepartmentFilter = Department | "TEAMSPORT_TEXTIL";
@@ -209,6 +210,7 @@ export default function Planning() {
   });
 
   // Modals
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [appointmentModalOpen, setAppointmentModalOpen] = useState(false);
   const [appointmentModalData, setAppointmentModalData] = useState<{
     day: number;
@@ -708,6 +710,7 @@ export default function Planning() {
                 slotsByDate={slotsByDate}
                 utilizationByDate={utilizationByDate}
                 onDeleteSlot={(slotId) => deleteSlotMutation.mutate(slotId)}
+                onSlotClick={setSelectedSlotId}
               />
             </CardContent>
           </Card>
@@ -846,6 +849,14 @@ export default function Planning() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Production Slot Modal */}
+      {selectedSlotId && (
+        <ProductionSlotModal
+          slotId={selectedSlotId}
+          onClose={() => setSelectedSlotId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -858,9 +869,10 @@ interface PlanningGridProps {
   slotsByDate: Map<string, TimeSlot[]>;
   utilizationByDate: Map<string, number>;
   onDeleteSlot: (slotId: string) => void;
+  onSlotClick: (slotId: string) => void;
 }
 
-function PlanningGrid({ weekDates, slotsByDate, utilizationByDate, onDeleteSlot }: PlanningGridProps) {
+function PlanningGrid({ weekDates, slotsByDate, utilizationByDate, onDeleteSlot, onSlotClick }: PlanningGridProps) {
   return (
     <div 
       id="planning-grid"
@@ -929,6 +941,7 @@ function PlanningGrid({ weekDates, slotsByDate, utilizationByDate, onDeleteSlot 
             slot={slot}
             dayIdx={dayIdx}
             onDelete={onDeleteSlot}
+            onSlotClick={onSlotClick}
           />
         ));
       })}
@@ -1006,9 +1019,10 @@ interface GridSlotCardProps {
   slot: TimeSlot;
   dayIdx: number;
   onDelete: (slotId: string) => void;
+  onSlotClick: (slotId: string) => void;
 }
 
-function GridSlotCard({ slot, dayIdx, onDelete }: GridSlotCardProps) {
+function GridSlotCard({ slot, dayIdx, onDelete, onSlotClick }: GridSlotCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `slot-${slot.id}`,
     data: { type: "slot", slotId: slot.id },
@@ -1028,8 +1042,7 @@ function GridSlotCard({ slot, dayIdx, onDelete }: GridSlotCardProps) {
     <div
       ref={setNodeRef}
       {...attributes}
-      {...listeners}
-      className={`rounded border-l-4 ${borderColor} border-r border-t border-b overflow-hidden group cursor-grab active:cursor-grabbing m-1 z-20 ${
+      className={`rounded border-l-4 ${borderColor} border-r border-t border-b overflow-hidden group m-1 z-20 ${
         isBlocker 
           ? "bg-muted border-muted-foreground/30" 
           : "bg-primary/5 border-border/50 hover-elevate"
@@ -1042,7 +1055,18 @@ function GridSlotCard({ slot, dayIdx, onDelete }: GridSlotCardProps) {
       }}
       data-testid={`slot-${slot.id}`}
     >
-      <div className="p-1.5 h-full flex flex-col justify-between">
+      <div 
+        {...listeners}
+        onClick={(e) => {
+          console.log("Slot clicked:", slot.id, "isDragging:", isDragging, "detail:", e.detail);
+          // Only open modal if not dragging
+          if (!isDragging && e.detail === 1) {
+            console.log("Opening modal for slot:", slot.id);
+            onSlotClick(slot.id);
+          }
+        }}
+        className="p-1.5 h-full flex flex-col justify-between cursor-pointer"
+      >
         {isBlocker ? (
           <div className="flex items-start justify-between gap-1">
             <div className="flex-1 min-w-0">
