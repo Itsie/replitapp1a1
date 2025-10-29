@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { OrderWithRelations } from "@shared/schema";
@@ -183,12 +184,34 @@ export default function Billing() {
         </h1>
       </div>
 
-        {/* Open Orders - Accordion */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Offene Posten</CardTitle>
-          </CardHeader>
-          <CardContent>
+      {/* Tabs */}
+      <Tabs defaultValue="open" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="open" data-testid="tab-open-orders">
+            Offene Posten
+            {openOrders.length > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {openOrders.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="closed" data-testid="tab-closed-orders">
+            Abgerechnete Posten
+            {closedOrders.length > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {closedOrders.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Tab 1: Open Orders */}
+        <TabsContent value="open">
+          <Card>
+            <CardHeader>
+              <CardTitle>Offene Posten</CardTitle>
+            </CardHeader>
+            <CardContent>
             {isLoadingOpen ? (
               <div className="space-y-3">
                 <Skeleton className="h-12 w-full" />
@@ -412,15 +435,17 @@ export default function Billing() {
                 })}
               </Accordion>
             )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        {/* Closed Orders - Simple Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Kürzlich erledigte Posten</CardTitle>
-          </CardHeader>
-          <CardContent>
+        {/* Tab 2: Closed Orders */}
+        <TabsContent value="closed">
+          <Card>
+            <CardHeader>
+              <CardTitle>Abgerechnete Posten</CardTitle>
+            </CardHeader>
+            <CardContent>
             {isLoadingClosed ? (
               <div className="space-y-3">
                 <Skeleton className="h-10 w-full" />
@@ -463,8 +488,10 @@ export default function Billing() {
                 </Table>
               </div>
             )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
