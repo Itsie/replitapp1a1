@@ -1,0 +1,40 @@
+Hallo,
+
+bitte korrigiere einen hartnäckigen Positionierungsfehler in client/src/pages/planning.tsx (basierend auf Commit a09330c...).
+
+Problem:
+Die DraggableTimeSlot-Komponenten werden konsistent um ca. 12rem (entspricht 60 Minuten) zu tief in den DroppableDayColumn-Spalten angezeigt. Ein Slot, der um 08:15 Uhr (startMin=495) beginnen sollte und bei top: 15rem erwartet wird, erscheint stattdessen bei top: 27rem.
+
+Vermutete Ursache:
+Ein konstanter Offset in der CSS-Layout-Berechnung oder eine Diskrepanz zwischen der JavaScript-Berechnung (calculateSlotStyle) und dem tatsächlichen Rendering-Startpunkt der Zeitachse innerhalb der DroppableDayColumn.
+
+Aufgabe:
+
+Öffne die Datei client/src/pages/planning.tsx.
+
+Finde die Hilfsfunktion calculateSlotStyle(startMin: number, lengthMin: number): React.CSSProperties.
+
+Passe die Berechnung für topRem an, um den konstanten 60-Minuten-Offset zu korrigieren.
+
+Ändere diese Zeile:
+
+const topRem = minutesFromStart * REM_PER_MINUTE;
+
+
+Zu dieser Zeile (Subtrahiere den Offset von 60 Minuten):
+
+// Offset von 07:00 Uhr in Minuten, korrigiert um den beobachteten 60min Offset
+const minutesFromStartCorrected = Math.max(0, startMin - WORKING_HOURS_START); // Stelle sicher, dass es nicht negativ wird
+const topRem = minutesFromStartCorrected * REM_PER_MINUTE;
+
+
+(Hinweis: Diese Anpassung entfernt explizit 60 Minuten vom berechneten Offset, was den visuellen Effekt umkehren sollte. Stelle sicher, dass minutesFromStartCorrected verwendet wird.)
+
+Optional (Debugging): Füge temporär ein console.log innerhalb von calculateSlotStyle hinzu, um die berechneten Werte zu überprüfen:
+
+console.log(`Slot Start: ${startMin} (${formatTime(startMin)}), Corrected Minutes: ${minutesFromStartCorrected}, TopRem: ${topRem.toFixed(2)}rem`);
+
+
+Überprüfung: Teste nach der Änderung, ob die Slots jetzt an der korrekten vertikalen Position entsprechend ihrer startMin angezeigt werden. Ein Slot um 08:15 sollte jetzt nahe der 15rem-Marke beginnen.
+
+Lass uns diesen gezielten Fix versuchen, um das Positionierungsproblem zu beheben.

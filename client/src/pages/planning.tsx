@@ -1001,10 +1001,7 @@ function DraggableTimeSlot({ slot, onDelete }: DraggableTimeSlotProps) {
 
   const slotStyle = calculateSlotStyle(slot.startMin, slot.lengthMin);
   const transformStyle = transform ? { transform: CSS.Translate.toString(transform) } : {};
-  
-  // Debug: Log the final combined style
   const finalStyle = { ...slotStyle, ...transformStyle, opacity: isDragging ? 0.5 : 1 };
-  console.log(`Slot ${slot.id}: startMin=${slot.startMin}, slotStyle=`, slotStyle, 'finalStyle=', finalStyle, 'attributes=', attributes);
 
   const isBlocker = slot.blocked;
   

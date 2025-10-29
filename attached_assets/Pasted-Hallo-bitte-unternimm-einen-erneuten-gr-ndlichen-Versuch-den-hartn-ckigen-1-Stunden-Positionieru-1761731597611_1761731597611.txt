@@ -1,0 +1,105 @@
+Hallo,
+
+bitte unternimm einen erneuten, gründlichen Versuch, den hartnäckigen 1-Stunden-Positionierungs-Offset in client/src/pages/planning.tsx (basierend auf Commit a09330c...) zu beheben.
+
+Problem:
+Slots werden konsistent ~12rem (60 Minuten) zu tief angezeigt.
+
+Neuer, robusterer Ansatz:
+Wir debuggen und korrigieren die Y-Koordinaten-Berechnung systematisch, um sicherzustellen, dass sie relativ zum korrekten Startpunkt der Zeitachse innerhalb des Grid-Layouts erfolgt.
+
+Aufgabe:
+
+Öffne client/src/pages/planning.tsx.
+
+Konstanten überprüfen & anpassen:
+
+Skalierung:
+
+Definiere PIXELS_PER_MINUTE klar (z.B. const PIXELS_PER_MINUTE = 2;).
+
+Leite REM_PER_MINUTE direkt daraus ab, unter Annahme von 1rem = 16px: const REM_PER_MINUTE = PIXELS_PER_MINUTE / 16;. Dokumentiere diese Annahme als Kommentar.
+
+Stelle sicher, dass GRID_ROW_HEIGHT_REM (für TimeAxis) exakt (WORKING_HOURS_END - WORKING_HOURS_START) * REM_PER_MINUTE entspricht.
+
+Layout-Konstanten:
+
+Finde das Haupt-Grid-Container-Element, das die TimeAxis und die DroppableDayColumns enthält. Gib ihm eine eindeutige ID, falls noch nicht vorhanden (z.B. id="planning-grid-container").
+
+Miss im Browser-Inspektor exakt den Abstand (padding-top, border-top, Höhe des Tages-Headers) vom oberen Rand des planning-grid-container bis zum visuellen Beginn der 07:00-Uhr-Linie. Definiere dies als Konstante in Pixeln: const TIME_AXIS_START_OFFSET_PX = ...;.
+
+calculateSlotStyle anpassen:
+
+Die top-Berechnung muss den Offset von 07:00 berücksichtigen, aber relativ zum Grid-Container, nicht mehr mit vagen Annahmen über Header-Höhen.
+
+  export function calculateSlotStyle(startMin: number, lengthMin: number): React.CSSProperties {
+    // Minuten seit 07:00 Uhr
+    const minutesFromStart = Math.max(0, startMin - WORKING_HOURS_START);
+    // Direkte Berechnung in Pixeln, basierend auf dem Skalierungsfaktor
+    const topPx = minutesFromStart * PIXELS_PER_MINUTE;
+    const heightPx = lengthMin * PIXELS_PER_MINUTE;
+
+    // Debugging Log (kann später entfernt werden)
+    console.log(`Calc Style for ${startMin} (${formatTime(startMin)}): topPx=${topPx.toFixed(1)}, heightPx=${heightPx.toFixed(1)}`);
+
+    return {
+      // Position wird relativ zum DroppableDayColumn sein, das selbst relativ positioniert ist
+      top: `${topPx}px`, // Verwende Pixel für mehr Präzision
+      height: `${heightPx}px`, // Verwende Pixel
+      minHeight: '2.5rem', // Behalte Mindesthöhe für Lesbarkeit
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      overflow: 'hidden', // Verhindert Überlaufen bei Mindesthöhe
+    };
+  }
+
+
+calculateMinutesFromY anpassen:
+
+Diese Funktion muss die Maus-Y-Koordinate (dropClientY) korrekt in Minuten umrechnen, bezogen auf den Start der 07:00-Linie innerhalb der Zielspalte.
+
+  function calculateMinutesFromY(dropClientY: number, droppableNode: HTMLElement | null): number {
+    if (!droppableNode) {
+      console.error("Droppable node not found in calculateMinutesFromY");
+      return WORKING_HOURS_START; // Fallback
+    }
+
+    const rect = droppableNode.getBoundingClientRect();
+
+    // WICHTIG: Finde den *visuellen* Start der 07:00-Linie innerhalb des DroppableNode
+    // Dies hängt davon ab, ob der Node Padding, Border etc. hat ODER ob die TimeAxis daneben liegt.
+    // Wir verwenden den zuvor gemessenen Offset relativ zum Grid-Container.
+    // Finde zuerst den Grid-Container
+    const gridContainer = document.getElementById('planning-grid-container');
+    const gridRect = gridContainer?.getBoundingClientRect();
+
+    if (!gridRect) {
+        console.error("Grid container not found.");
+        return WORKING_HOURS_START;
+    }
+
+    // Der visuelle Start der 07:00-Linie im Viewport
+    const timeAxisStartYInViewport = gridRect.top + TIME_AXIS_START_OFFSET_PX;
+
+    // Y-Position des Drops relativ zum Start der 07:00-Linie
+    const relativeY = Math.max(0, dropClientY - timeAxisStartYInViewport);
+
+    // Umrechnung in Minuten
+    const minutesOffset = relativeY / PIXELS_PER_MINUTE;
+
+    let calculatedMin = WORKING_HOURS_START + minutesOffset;
+
+    // Runden auf Raster
+    calculatedMin = Math.round(calculatedMin / GRID_SNAP_MINUTES) * GRID_SNAP_MINUTES;
+
+    // Clamp within working hours (adjust end time slightly to prevent dropping exactly at 18:00)
+    const maxStartMin = WORKING_HOURS_END - GRID_SNAP_MINUTES; // Cannot start later than 17:45 for a 15min slot
+    calculatedMin = Math.max(WORKING_HOURS_START, Math.min(calculatedMin, maxStartMin));
+
+    // Debugging Log
+    console.log(`Drop Y: ${dropClientY.toFixed(0)}, Axis Start Y: ${timeAxisStartYInViewport.toFixed(0)}, Relative Y: ${relativeY.toFixed(1)}, Offset Min: ${minutesOffset.toFixed(1)}, Calculated Min: ${calculatedMin} (${formatTime(calculatedMin)})`);
+
+
+    return calculatedMin;
+  }
