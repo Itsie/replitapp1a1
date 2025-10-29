@@ -851,12 +851,11 @@ export default function Planning() {
       </Dialog>
 
       {/* Production Slot Modal */}
-      {selectedSlotId && (
-        <ProductionSlotModal
-          slotId={selectedSlotId}
-          onClose={() => setSelectedSlotId(null)}
-        />
-      )}
+      <ProductionSlotModal
+        isOpen={!!selectedSlotId}
+        slot={selectedSlotId ? (timeSlots.find(s => s.id === selectedSlotId) || null) : null}
+        onClose={() => setSelectedSlotId(null)}
+      />
     </div>
   );
 }
@@ -1026,6 +1025,10 @@ function GridSlotCard({ slot, dayIdx, onDelete, onSlotClick }: GridSlotCardProps
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `slot-${slot.id}`,
     data: { type: "slot", slotId: slot.id },
+    // Require dragging at least 5px before starting drag, so clicks work
+    activationConstraint: {
+      distance: 5,
+    },
   });
 
   const rowStart = minutesToGridRow(slot.startMin);
@@ -1058,10 +1061,8 @@ function GridSlotCard({ slot, dayIdx, onDelete, onSlotClick }: GridSlotCardProps
       <div 
         {...listeners}
         onClick={(e) => {
-          console.log("Slot clicked:", slot.id, "isDragging:", isDragging, "detail:", e.detail);
           // Only open modal if not dragging
           if (!isDragging && e.detail === 1) {
-            console.log("Opening modal for slot:", slot.id);
             onSlotClick(slot.id);
           }
         }}
