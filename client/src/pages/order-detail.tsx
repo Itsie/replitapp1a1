@@ -388,8 +388,9 @@ export default function OrderDetail() {
             </div>
 
             <div className="flex gap-2">
-              {/* Edit Button - Only for INTERNAL orders or JTL orders with limited editing */}
-              {order.source === "INTERNAL" && order.workflow !== "IN_PROD" && (
+              {/* Edit Button - Only for INTERNAL orders before production starts */}
+              {order.source === "INTERNAL" && 
+               !["IN_PROD", "FERTIG", "ZUR_ABRECHNUNG", "NACHKALKULATION", "ABGERECHNET"].includes(order.workflow) && (
                 <Button
                   variant="outline"
                   onClick={handleEdit}
@@ -400,7 +401,8 @@ export default function OrderDetail() {
                 </Button>
               )}
               
-              {order.workflow !== "FUER_PROD" && order.workflow !== "IN_PROD" && (
+              {/* Submit Button - Only for status where release makes sense */}
+              {["ENTWURF", "NEU", "PRUEFUNG", "WARTET_FEHLTEILE"].includes(order.workflow) && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div>
