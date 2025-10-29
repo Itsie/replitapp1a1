@@ -23,7 +23,14 @@ import {
 
 export default function PostCalculationPage() {
   const { data: orders, isLoading } = useQuery<OrderWithRelations[]>({
-    queryKey: ['/api/accounting/orders', { status: 'NACHKALKULATION' }],
+    queryKey: ['/api/accounting/orders', 'NACHKALKULATION'],
+    queryFn: async () => {
+      const res = await fetch('/api/accounting/orders?status=NACHKALKULATION', {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to fetch post-calculation orders');
+      return res.json();
+    },
   });
 
   return (
