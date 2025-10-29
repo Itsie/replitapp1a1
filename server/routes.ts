@@ -309,6 +309,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to update order" });
     }
   });
+
+  // POST /api/orders/:id/status - Update order workflow status (ADMIN, ACCOUNTING, SALES_OPS)
+  app.post("/api/orders/:id/status", requireRole('ADMIN', 'ACCOUNTING', 'SALES_OPS'), async (req, res) => {
+    try {
+      const statusSchema = z.object({
+        status: workflowStateSchema,
+      });
+      const validated = statusSchema.parse(req.body);
+      const order = await storage.updateOrder(req.params.id, { workflow: validated.status });
+      res.json(order);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      if (error instanceof Error && error.message === "Order not found") {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      console.error("Error updating order status:", error);
+      res.status(500).json({ error: "Failed to update order status" });
+    }
+  });
   
   // GET /api/orders/:id/size - Get size table with countsBySize (requires authentication)
   app.get("/api/orders/:id/size", requireAuth, async (req, res) => {
