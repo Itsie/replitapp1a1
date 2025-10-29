@@ -697,7 +697,8 @@ export default function Planning() {
                   <div className="relative" style={{ height: `${TIMELINE_HEIGHT_REM}rem` }}>
                     {Array.from({ length: 12 }, (_, i) => {
                       const hour = 7 + i;
-                      const topRem = (i * 60) / MINUTES_PER_REM;
+                      const minutesFromMidnight = hour * 60;
+                      const topRem = (minutesFromMidnight - WORKING_HOURS_START) / MINUTES_PER_REM;
                       return (
                         <div
                           key={hour}
@@ -901,7 +902,9 @@ function DayColumn({ date, dayLabel, slots, onDeleteSlot }: DayColumnProps) {
       >
         {/* Hour lines */}
         {Array.from({ length: 12 }, (_, i) => {
-          const topRem = (i * 60) / MINUTES_PER_REM;
+          const hour = 7 + i;
+          const minutesFromMidnight = hour * 60;
+          const topRem = (minutesFromMidnight - WORKING_HOURS_START) / MINUTES_PER_REM;
           return (
             <div
               key={i}
@@ -998,6 +1001,10 @@ function DraggableTimeSlot({ slot, onDelete }: DraggableTimeSlotProps) {
 
   const slotStyle = calculateSlotStyle(slot.startMin, slot.lengthMin);
   const transformStyle = transform ? { transform: CSS.Translate.toString(transform) } : {};
+  
+  // Debug: Log the final combined style
+  const finalStyle = { ...slotStyle, ...transformStyle, opacity: isDragging ? 0.5 : 1 };
+  console.log(`Slot ${slot.id}: startMin=${slot.startMin}, slotStyle=`, slotStyle, 'finalStyle=', finalStyle, 'attributes=', attributes);
 
   const isBlocker = slot.blocked;
   
@@ -1009,15 +1016,15 @@ function DraggableTimeSlot({ slot, onDelete }: DraggableTimeSlotProps) {
   return (
     <div
       ref={setNodeRef}
+      {...attributes}
+      {...listeners}
       className={`absolute left-1 right-1 rounded border overflow-hidden group ${
         isBlocker 
           ? "bg-muted border-muted-foreground/50 bg-stripes" 
           : "bg-primary/10 border-primary hover-elevate"
       }`}
-      style={{ ...slotStyle, ...transformStyle, opacity: isDragging ? 0.5 : 1 }}
+      style={finalStyle}
       data-testid={`slot-${slot.id}`}
-      {...listeners}
-      {...attributes}
     >
       <div className={`${isVeryCompact ? 'p-1' : 'p-2'} h-full flex flex-col cursor-grab active:cursor-grabbing`}>
         <div className="flex items-start justify-between gap-1">
