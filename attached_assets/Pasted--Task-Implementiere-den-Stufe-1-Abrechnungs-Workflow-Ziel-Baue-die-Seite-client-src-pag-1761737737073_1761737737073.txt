@@ -1,0 +1,57 @@
+**Task: Implementiere den "Stufe 1" Abrechnungs-Workflow**
+
+**Ziel:** Baue die Seite `client/src/pages/billing.tsx` komplett um. Ersetze die aktuelle (fehlerhafte) Demo-Tabelle durch eine "In-Place"-Abrechnungszentrale, die den manuellen Sevdesk-Workflow per Copy-Paste optimiert und einen neuen "Nachkalkulations"-Prozess einführt.
+
+---
+
+**1. Backend: Neuen Workflow-Status hinzufügen**
+
+* **Datei:** `shared/schema.ts`
+* **Aktion 1:** Füge den neuen Status `NACHKALKULATION` zur `WorkflowState`-Definition hinzu (z.B. nach `ZUR_ABRECHNUNG`).
+* **Aktion 2:** Füge den Status `NACHKALKULATION` zum `WORKFLOW_STATES`-Array hinzu.
+* **Aktion 3:** Stelle sicher, dass `updateOrderStatus` in `server/storage.ts` (oder die Logik in `server/routes.ts`) den Übergang von `ZUR_ABRECHNUNG` zu `NACHKALKULATION` erlaubt.
+
+**2. Frontend: Neue Seite "Nachkalkulation" erstellen (Minimal)**
+
+* **Aktion 1:** Erstelle eine neue Datei `client/src/pages/post-calculation.tsx`.
+* **Aktion 2:** Diese Seite soll (vorerst) sehr einfach sein. Sie soll alle Aufträge abrufen und auflisten, die den Status `NACHKALKULATION` haben. (Du kannst `orders-list-improved.tsx` als Vorlage kopieren und den Filter anpassen).
+* **Aktion 3:** Füge die neue Seite in `client/src/App.tsx` als Route hinzu (z.B. `/post-calculation`).
+* **Aktion 4:** Füge einen Menüpunkt "Nachkalkulation" in `client/src/components/app-sidebar.tsx` hinzu (z.B. in der Nähe von "Abrechnung"), der auf `/post-calculation` verlinkt und nur für Rollen wie `ADMIN` oder `SALES_OPS` sichtbar ist.
+
+**3. Frontend: Umbau der Seite `client/src/pages/billing.tsx`**
+
+* **Ziel:** Die Seite soll eine "Aufklappbare" Workflow-Liste werden.
+
+* **Aktion 1: Datenabruf anpassen**
+    * Entferne die Demo-Daten (`demoOrders`).
+    * Erstelle **zwei** `useQuery`-Hooks:
+        1.  `useOpenOrders`: Ruft `GET /api/accounting/orders?status=ZUR_ABRECHNUNG` ab.
+        2.  `useClosedOrders`: Ruft `GET /api/accounting/orders?status=ABGERECHNET` ab.
+
+* **Aktion 2: Seitenlayout (Zwei Sektionen)**
+    * Erstelle eine Sektion "Offene Posten" (für `useOpenOrders`).
+    * Erstelle eine Sektion "Kürzlich erledigte Posten" (für `useClosedOrders`).
+
+* **Aktion 3: "Offene Posten" als `Accordion` implementieren**
+    * Importiere `Accordion`, `AccordionItem`, `AccordionTrigger`, `AccordionContent` von `client/src/components/ui/accordion.tsx`.
+    * Nutze `Accordion` als Hauptcontainer (mit `type="single" collapsible`).
+    * Mappe über die `useOpenOrders`-Daten. Jede `order` wird ein `<AccordionItem>`.
+    * Der `<AccordionTrigger>` soll wie eine Tabellenzeile aussehen (Auftrags-Nr., Kunde, Datum, Betrag). **Entferne den "Ansehen"-Button.**
+    * Der `<AccordionContent>` ist der aufklappbare Bereich.
+
+* **Aktion 4: Inhalt des `AccordionContent` (Der Copy-Paste-Bereich)**
+    * Erstelle einen kleinen Hook `useCopyToClipboard` (oder eine Util-Funktion), um das Kopieren in die Zwischenablage (z.B. via `navigator.clipboard.writeText`) zu kapseln.
+    * **Layout:** Gestalte den Inhalt übersichtlich (z.B. mit `Card`-Komponenten oder Grid-Layout) und füge `ClipboardCopy`-Icons von `lucide-react` hinzu:
+        1.  **Rechnungsadresse:** Zeige `order.invoiceAddress` formatiert an. `[Kopieren 📋]`
+        2.  **Positionen:** Zeige eine simple Tabelle der `order.positions` (Menge, Text, Gesamtpreis) und darunter Netto, MwSt., **Brutto-Gesamtbetrag**. `[Kopieren 📋]` (für Brutto)
+        3.  **Bankdaten:** Zeige statische Bankdaten an. `[Kopieren 📋]`
+        4.  **Verwendungszweck:** Zeige z.B. `Rechnung ${order.readableId}`. `[Kopieren 📋]`
+
+* **Aktion 5: Aktions-Buttons im `AccordionContent`**
+    * Erstelle einen `useMutation`-Hook (`updateStatusMutation`), der `POST /api/orders/:id/status` aufruft und bei Erfolg die Queries (`useOpenOrders`, `useClosedOrders`) invalidiert.
+    * Platziere am Ende des `AccordionContent` zwei Buttons:
+        1.  **"Als Abgerechnet markieren"** (`variant="default"`): Ruft `updateStatusMutation.mutate({ orderId: order.id, status: 'ABGERECHNET' })` auf.
+        2.  **"Nachkalkulation erforderlich"** (`variant="secondary"`): Ruft `updateStatusMutation.mutate({ orderId: order.id, status: 'NACHKALKULATION' })` auf.
+
+* **Aktion 6: "Erledigte Posten"**
+    * Zeige die Daten von `useClosedOrders` in einer normalen, nicht-interaktiven Tabelle (`<Table>`) an.

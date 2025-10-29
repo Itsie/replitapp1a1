@@ -107,6 +107,41 @@ interface TimeSlotWithOrder {
 interface ProductionSlotModalProps {
   isOpen: boolean;
   slot: TimeSlotWithOrder | null;
+  order?: {
+    id: string;
+    displayOrderNumber: string | null;
+    title: string;
+    customer: string;
+    department: Department;
+    workflow: WorkflowState;
+    dueDate: Date | null;
+    notes: string | null;
+    printAssets?: Array<{
+      id: string;
+      label: string;
+      url: string;
+      required: boolean;
+    }>;
+    orderAssets?: Array<{
+      id: string;
+      label: string;
+      url: string;
+      required: boolean;
+    }>;
+    sizeTable?: {
+      scheme: string;
+      rowsJson: any[];
+      comment: string | null;
+    } | null;
+    positions?: Array<{
+      id: string;
+      articleName: string;
+      articleNumber: string | null;
+      qty: number;
+      unit: string;
+      unitPriceNet: number;
+    }>;
+  } | null;
   onClose: () => void;
 }
 
@@ -139,6 +174,7 @@ function formatDuration(minutes: number): string {
 export function ProductionSlotModal({
   isOpen,
   slot,
+  order: orderProp,
   onClose,
 }: ProductionSlotModalProps) {
   const { toast } = useToast();
@@ -328,11 +364,12 @@ export function ProductionSlotModal({
     }
   };
 
-  if (!slot || !slot.order) {
+  // Use slot.order if available, otherwise use orderProp
+  const order = slot?.order || orderProp;
+  
+  if (!order) {
     return null;
   }
-
-  const order = slot.order;
   const allAssets = [...(order.printAssets || []), ...(order.orderAssets || [])];
 
   return (
@@ -351,56 +388,58 @@ export function ProductionSlotModal({
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Time Slot Info Card */}
-            <Card>
-              <CardContent className="pt-6">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">
-                      ZEIT
-                    </Label>
-                    <p className="font-medium">
-                      {formatTime(slot.startMin)} -{" "}
-                      {formatTime(slot.startMin + slot.lengthMin)} (
-                      {formatDuration(slot.lengthMin)})
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">
-                      ARBEITSPLATZ
-                    </Label>
-                    <p className="font-medium">{slot.workCenter.name}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">
-                      STATUS
-                    </Label>
-                    <div>
-                      <span
-                        className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getTimeSlotBadgeClass(
-                          slot.status
-                        )}`}
-                      >
-                        {TIMESLOT_STATUS_LABELS[
-                          slot.status as keyof typeof TIMESLOT_STATUS_LABELS
-                        ] || slot.status}
-                      </span>
-                    </div>
-                  </div>
-                  {slot.status === "RUNNING" && (
+            {/* Time Slot Info Card - only show if slot exists */}
+            {slot && (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <Label className="text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3 inline mr-1" />
-                        LAUFZEIT
+                        ZEIT
                       </Label>
-                      <p className="font-medium text-green-600">
-                        {formatDuration(elapsedMin)}
+                      <p className="font-medium">
+                        {formatTime(slot.startMin)} -{" "}
+                        {formatTime(slot.startMin + slot.lengthMin)} (
+                        {formatDuration(slot.lengthMin)})
                       </p>
                     </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        ARBEITSPLATZ
+                      </Label>
+                      <p className="font-medium">{slot.workCenter.name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        STATUS
+                      </Label>
+                      <div>
+                        <span
+                          className={`whitespace-nowrap inline-flex items-center rounded-md text-[11px] leading-4 px-2 py-0.5 font-semibold ${getTimeSlotBadgeClass(
+                            slot.status
+                          )}`}
+                        >
+                          {TIMESLOT_STATUS_LABELS[
+                            slot.status as keyof typeof TIMESLOT_STATUS_LABELS
+                          ] || slot.status}
+                        </span>
+                      </div>
+                    </div>
+                    {slot.status === "RUNNING" && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3 inline mr-1" />
+                          LAUFZEIT
+                        </Label>
+                        <p className="font-medium text-green-600">
+                          {formatDuration(elapsedMin)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Tabs with Order Details */}
             <Tabs defaultValue="positions" className="w-full">
@@ -646,114 +685,118 @@ export function ProductionSlotModal({
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            {/* Action Buttons based on status */}
-            {slot.status === "PLANNED" && (
-              <Button
-                onClick={handleStart}
-                disabled={startMutation.isPending}
-                data-testid="button-start"
-              >
-                <Play className="mr-2 h-4 w-4" />
-                {startMutation.isPending ? "Wird gestartet..." : "Starten"}
-              </Button>
-            )}
-
-            {slot.status === "RUNNING" && (
+            {/* Action Buttons based on status - only show if slot exists */}
+            {slot && (
               <>
-                <Button
-                  onClick={handlePause}
-                  variant="outline"
-                  disabled={pauseMutation.isPending}
-                  data-testid="button-pause"
-                >
-                  <Pause className="mr-2 h-4 w-4" />
-                  {pauseMutation.isPending ? "Wird pausiert..." : "Pause"}
-                </Button>
-                <Button
-                  onClick={handleStop}
-                  variant="outline"
-                  disabled={stopMutation.isPending}
-                  data-testid="button-stop"
-                >
-                  <Square className="mr-2 h-4 w-4" />
-                  {stopMutation.isPending ? "Wird beendet..." : "Fertigstellen"}
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="destructive"
-                      data-testid="button-problem-menu"
-                    >
-                      <AlertCircle className="mr-2 h-4 w-4" />
-                      Problem melden
-                      <ChevronDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem
-                      onClick={() => handleProblem("missing_parts")}
-                      data-testid="menu-missing-parts"
-                    >
-                      Fehlteil melden
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleProblem("quality")}
-                      data-testid="menu-quality-problem"
-                    >
-                      Qualitätsproblem
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            )}
+                {slot.status === "PLANNED" && (
+                  <Button
+                    onClick={handleStart}
+                    disabled={startMutation.isPending}
+                    data-testid="button-start"
+                  >
+                    <Play className="mr-2 h-4 w-4" />
+                    {startMutation.isPending ? "Wird gestartet..." : "Starten"}
+                  </Button>
+                )}
 
-            {slot.status === "PAUSED" && (
-              <>
-                <Button
-                  onClick={handleStart}
-                  disabled={startMutation.isPending}
-                  data-testid="button-resume"
-                >
-                  <Play className="mr-2 h-4 w-4" />
-                  {startMutation.isPending
-                    ? "Wird fortgesetzt..."
-                    : "Fortsetzen"}
-                </Button>
-                <Button
-                  onClick={handleStop}
-                  variant="outline"
-                  disabled={stopMutation.isPending}
-                  data-testid="button-stop-paused"
-                >
-                  <Square className="mr-2 h-4 w-4" />
-                  {stopMutation.isPending ? "Wird beendet..." : "Fertigstellen"}
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                {slot.status === "RUNNING" && (
+                  <>
                     <Button
-                      variant="destructive"
-                      data-testid="button-problem-menu-paused"
+                      onClick={handlePause}
+                      variant="outline"
+                      disabled={pauseMutation.isPending}
+                      data-testid="button-pause"
                     >
-                      <AlertCircle className="mr-2 h-4 w-4" />
-                      Problem melden
-                      <ChevronDown className="ml-2 h-4 w-4" />
+                      <Pause className="mr-2 h-4 w-4" />
+                      {pauseMutation.isPending ? "Wird pausiert..." : "Pause"}
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem
-                      onClick={() => handleProblem("missing_parts")}
-                      data-testid="menu-missing-parts-paused"
+                    <Button
+                      onClick={handleStop}
+                      variant="outline"
+                      disabled={stopMutation.isPending}
+                      data-testid="button-stop"
                     >
-                      Fehlteil melden
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleProblem("quality")}
-                      data-testid="menu-quality-problem-paused"
+                      <Square className="mr-2 h-4 w-4" />
+                      {stopMutation.isPending ? "Wird beendet..." : "Fertigstellen"}
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="destructive"
+                          data-testid="button-problem-menu"
+                        >
+                          <AlertCircle className="mr-2 h-4 w-4" />
+                          Problem melden
+                          <ChevronDown className="ml-2 h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem
+                          onClick={() => handleProblem("missing_parts")}
+                          data-testid="menu-missing-parts"
+                        >
+                          Fehlteil melden
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleProblem("quality")}
+                          data-testid="menu-quality-problem"
+                        >
+                          Qualitätsproblem
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                )}
+
+                {slot.status === "PAUSED" && (
+                  <>
+                    <Button
+                      onClick={handleStart}
+                      disabled={startMutation.isPending}
+                      data-testid="button-resume"
                     >
-                      Qualitätsproblem
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      <Play className="mr-2 h-4 w-4" />
+                      {startMutation.isPending
+                        ? "Wird fortgesetzt..."
+                        : "Fortsetzen"}
+                    </Button>
+                    <Button
+                      onClick={handleStop}
+                      variant="outline"
+                      disabled={stopMutation.isPending}
+                      data-testid="button-stop-paused"
+                    >
+                      <Square className="mr-2 h-4 w-4" />
+                      {stopMutation.isPending ? "Wird beendet..." : "Fertigstellen"}
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="destructive"
+                          data-testid="button-problem-menu-paused"
+                        >
+                          <AlertCircle className="mr-2 h-4 w-4" />
+                          Problem melden
+                          <ChevronDown className="ml-2 h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem
+                          onClick={() => handleProblem("missing_parts")}
+                          data-testid="menu-missing-parts-paused"
+                        >
+                          Fehlteil melden
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleProblem("quality")}
+                          data-testid="menu-quality-problem-paused"
+                        >
+                          Qualitätsproblem
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                )}
               </>
             )}
 

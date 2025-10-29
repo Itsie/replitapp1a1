@@ -13,6 +13,7 @@ import { format, addDays, subDays, parseISO, getDay, differenceInCalendarDays } 
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import type { WorkflowState } from "@prisma/client";
 import { 
   DndContext, 
   DragEndEvent,
@@ -49,15 +50,51 @@ interface TimeSlot {
   blocked: boolean;
   note: string | null;
   status: string;
+  startedAt: Date | null;
+  stoppedAt: Date | null;
+  actualDurationMin: number | null;
+  missingPartsNote: string | null;
   order?: {
     id: string;
     displayOrderNumber: string | null;
     title: string;
     customer: string;
     department: Department;
-    workflow: string;
+    workflow: WorkflowState;
     dueDate: string | null;
+    notes?: string | null;
+    printAssets?: Array<{
+      id: string;
+      label: string;
+      url: string;
+      required: boolean;
+    }>;
+    orderAssets?: Array<{
+      id: string;
+      label: string;
+      url: string;
+      required: boolean;
+    }>;
+    sizeTable?: {
+      scheme: string;
+      rowsJson: any[];
+      comment: string | null;
+    } | null;
+    positions?: Array<{
+      id: string;
+      articleName: string;
+      articleNumber: string | null;
+      qty: number;
+      unit: string;
+      unitPriceNet: number;
+    }>;
   } | null;
+  workCenter: {
+    id: string;
+    name: string;
+    department: Department;
+    concurrentCapacity: number;
+  };
 }
 
 interface Order {
@@ -66,8 +103,34 @@ interface Order {
   title: string;
   customer: string;
   department: Department;
-  workflow: string;
+  workflow: WorkflowState;
   dueDate: string | null;
+  notes: string | null;
+  printAssets?: Array<{
+    id: string;
+    label: string;
+    url: string;
+    required: boolean;
+  }>;
+  orderAssets?: Array<{
+    id: string;
+    label: string;
+    url: string;
+    required: boolean;
+  }>;
+  sizeTable?: {
+    scheme: string;
+    rowsJson: any[];
+    comment: string | null;
+  } | null;
+  positions?: Array<{
+    id: string;
+    articleName: string;
+    articleNumber: string | null;
+    qty: number;
+    unit: string;
+    unitPriceNet: number;
+  }>;
 }
 
 const DEPARTMENT_LABELS: Record<DepartmentFilter, string> = {
@@ -211,6 +274,7 @@ export default function Planning() {
 
   // Modals
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [appointmentModalOpen, setAppointmentModalOpen] = useState(false);
   const [appointmentModalData, setAppointmentModalData] = useState<{
     day: number;
@@ -692,7 +756,11 @@ export default function Planning() {
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto space-y-2">
               {unscheduledOrders.map(order => (
-                <DraggableOrderCard key={order.id} order={order} />
+                <DraggableOrderCard 
+                  key={order.id} 
+                  order={order}
+                  onOrderClick={setSelectedOrderId}
+                />
               ))}
               {unscheduledOrders.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-8">
@@ -850,12 +918,50 @@ export default function Planning() {
         </DialogContent>
       </Dialog>
 
-      {/* Production Slot Modal */}
-      <ProductionSlotModal
-        isOpen={!!selectedSlotId}
-        slot={selectedSlotId ? (timeSlots.find(s => s.id === selectedSlotId) || null) : null}
-        onClose={() => setSelectedSlotId(null)}
-      />
+      {/* Production Slot Modal - for scheduled slots */}
+      {selectedSlotId && (() => {
+        const slot = timeSlots.find(s => s.id === selectedSlotId);
+        if (!slot) return null;
+        
+        // Convert string dates to Date objects for modal
+        const convertedSlot = {
+          ...slot,
+          date: typeof slot.date === 'string' ? parseISO(slot.date) : slot.date,
+          order: slot.order ? {
+            ...slot.order,
+            dueDate: slot.order.dueDate ? (typeof slot.order.dueDate === 'string' ? parseISO(slot.order.dueDate) : slot.order.dueDate) : null,
+          } : null,
+        };
+        
+        return (
+          <ProductionSlotModal
+            isOpen={true}
+            slot={convertedSlot as any}
+            onClose={() => setSelectedSlotId(null)}
+          />
+        );
+      })()}
+
+      {/* Production Slot Modal - for unscheduled orders */}
+      {selectedOrderId && (() => {
+        const order = availableOrders.find(o => o.id === selectedOrderId);
+        if (!order) return null;
+        
+        // Convert string dates to Date objects for modal
+        const convertedOrder = {
+          ...order,
+          dueDate: order.dueDate ? (typeof order.dueDate === 'string' ? parseISO(order.dueDate) : order.dueDate) : null,
+        };
+        
+        return (
+          <ProductionSlotModal
+            isOpen={true}
+            slot={null}
+            order={convertedOrder as any}
+            onClose={() => setSelectedOrderId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -1025,6 +1131,7 @@ function GridSlotCard({ slot, dayIdx, onDelete, onSlotClick }: GridSlotCardProps
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `slot-${slot.id}`,
     data: { type: "slot", slotId: slot.id },
+    // @ts-ignore - activationConstraint is valid but not in types
     // Require dragging at least 5px before starting drag, so clicks work
     activationConstraint: {
       distance: 5,
@@ -1135,9 +1242,10 @@ function GridSlotCard({ slot, dayIdx, onDelete, onSlotClick }: GridSlotCardProps
 // ============================================================================
 interface DraggableOrderCardProps {
   order: Order;
+  onOrderClick: (orderId: string) => void;
 }
 
-function DraggableOrderCard({ order }: DraggableOrderCardProps) {
+function DraggableOrderCard({ order, onOrderClick }: DraggableOrderCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `order-${order.id}`,
     data: { type: "order", orderId: order.id },
@@ -1156,6 +1264,12 @@ function DraggableOrderCard({ order }: DraggableOrderCardProps) {
       data-testid={`order-card-${order.id}`}
       {...attributes}
       {...listeners}
+      onClick={(e) => {
+        // Only open modal if not dragging (click detail = 1)
+        if (!isDragging && e.detail === 1) {
+          onOrderClick(order.id);
+        }
+      }}
     >
       <div className="flex items-start gap-2">
         <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
