@@ -252,7 +252,7 @@ export default function Billing() {
                         <div className="space-y-6">
                           {/* Contact Information */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Card className="bg-gradient-to-br from-card to-muted/20">
+                            <Card className="bg-gradient-to-br from-card to-blue-500/10 dark:to-blue-500/20">
                               <CardHeader className="pb-3">
                                 <div className="flex items-center justify-between">
                                   <CardTitle className="text-sm">Rechnungsadresse</CardTitle>
@@ -274,7 +274,7 @@ export default function Billing() {
 
                             {/* Contact Details */}
                             {contactInfo && (
-                              <Card className="bg-gradient-to-br from-card to-muted/20">
+                              <Card className="bg-gradient-to-br from-card to-green-500/10 dark:to-green-500/20">
                                 <CardHeader className="pb-3">
                                   <div className="flex items-center justify-between">
                                     <CardTitle className="text-sm">Kontaktdaten</CardTitle>
@@ -300,7 +300,7 @@ export default function Billing() {
                           </div>
 
                           {/* Positions Table */}
-                          <Card className="bg-gradient-to-br from-card to-muted/20">
+                          <Card className="bg-gradient-to-br from-card to-violet-500/10 dark:to-violet-500/20">
                             <CardHeader className="pb-3">
                               <div className="flex items-center justify-between">
                                 <CardTitle className="text-sm">Positionen</CardTitle>
