@@ -34,17 +34,16 @@ export default function PostCalculationPage() {
   });
 
   return (
-    <div className="flex-1 overflow-auto p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Calculator className="w-6 h-6 text-foreground" />
-            <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
-              Nachkalkulation
-            </h1>
-          </div>
+    <div className="w-full px-4 md:px-6 py-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Calculator className="w-6 h-6 text-foreground" />
+          <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
+            Nachkalkulation
+          </h1>
         </div>
+      </div>
 
         {/* Orders List */}
         <Card>
@@ -124,7 +123,6 @@ export default function PostCalculationPage() {
             )}
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }

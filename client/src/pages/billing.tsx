@@ -174,15 +174,14 @@ export default function Billing() {
   };
 
   return (
-    <div className="flex-1 overflow-auto p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-4">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <Receipt className="w-6 h-6 text-foreground" />
-          <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
-            Abrechnung
-          </h1>
-        </div>
+    <div className="w-full px-4 md:px-6 py-6">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <Receipt className="w-6 h-6 text-foreground" />
+        <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
+          Abrechnung
+        </h1>
+      </div>
 
         {/* Open Orders - Accordion */}
         <Card>
@@ -466,7 +465,6 @@ export default function Billing() {
             )}
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }
