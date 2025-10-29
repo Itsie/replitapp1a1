@@ -6,6 +6,7 @@ import {
   Activity,
   AlertCircle,
   Receipt,
+  Calculator,
   Boxes,
   Settings,
   Users,
@@ -76,6 +77,12 @@ const navigationSections: NavSection[] = [
         url: "/billing",
         icon: Receipt,
         roles: ['ADMIN', 'ACCOUNTING'],
+      },
+      {
+        title: "Nachkalkulation",
+        url: "/post-calculation",
+        icon: Calculator,
+        roles: ['ADMIN', 'SALES_OPS'],
       },
       {
         title: "Lager",

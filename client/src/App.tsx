@@ -17,6 +17,7 @@ import Planning from "@/pages/planning";
 import ProductionToday from "@/pages/production-today";
 import MissingPartsPage from "@/pages/missing-parts";
 import Billing from "@/pages/billing";
+import PostCalculation from "@/pages/post-calculation";
 import Lager from "@/pages/lager";
 import LagerDetail from "@/pages/lager-detail";
 import Settings from "@/pages/settings";
@@ -96,6 +97,13 @@ function Router() {
         {(params) => (
           <AppLayout>
             <ProtectedRoute component={Billing} {...params} />
+          </AppLayout>
+        )}
+      </Route>
+      <Route path="/post-calculation">
+        {(params) => (
+          <AppLayout>
+            <ProtectedRoute component={PostCalculation} {...params} />
           </AppLayout>
         )}
       </Route>
