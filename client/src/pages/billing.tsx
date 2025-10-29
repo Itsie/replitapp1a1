@@ -37,12 +37,26 @@ export default function Billing() {
 
   // Fetch open orders
   const { data: openOrders = [], isLoading: isLoadingOpen } = useQuery<OrderWithRelations[]>({
-    queryKey: ['/api/accounting/orders', { status: 'ZUR_ABRECHNUNG' }],
+    queryKey: ['/api/accounting/orders', 'ZUR_ABRECHNUNG'],
+    queryFn: async () => {
+      const res = await fetch('/api/accounting/orders?status=ZUR_ABRECHNUNG', {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to fetch open orders');
+      return res.json();
+    },
   });
 
   // Fetch closed orders
   const { data: closedOrders = [], isLoading: isLoadingClosed } = useQuery<OrderWithRelations[]>({
-    queryKey: ['/api/accounting/orders', { status: 'ABGERECHNET' }],
+    queryKey: ['/api/accounting/orders', 'ABGERECHNET'],
+    queryFn: async () => {
+      const res = await fetch('/api/accounting/orders?status=ABGERECHNET', {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to fetch closed orders');
+      return res.json();
+    },
   });
 
   // Mutation for updating order status
@@ -161,7 +175,7 @@ export default function Billing() {
 
   return (
     <div className="flex-1 overflow-auto p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-4">
         {/* Header */}
         <div className="flex items-center gap-3">
           <Receipt className="w-6 h-6 text-foreground" />
