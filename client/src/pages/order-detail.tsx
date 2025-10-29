@@ -31,6 +31,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SizeTableEditor } from "@/components/size-table-editor";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AttachmentsTab } from "@/components/attachments-tab";
+import { OrderWorkflowSteps } from "@/components/order-workflow-steps";
 import { Decimal } from "@prisma/client/runtime/library";
 
 export default function OrderDetail() {
@@ -316,11 +317,22 @@ export default function OrderDetail() {
   const isTeamsport = order.department === "TEAMSPORT";
   const canSubmitOrder = hasPositions && hasRequiredAssets && (!isTeamsport || hasSizeTable);
   
+  // Calculate workflow step status
+  const hasPrice = (order.positions?.length || 0) > 0 && order.positions?.every(p => {
+    const price = typeof p.unitPriceNet === 'object' && 'toNumber' in p.unitPriceNet 
+      ? p.unitPriceNet.toNumber() 
+      : Number(p.unitPriceNet || 0);
+    return price > 0;
+  });
+  const hasProduction = order.workflow === "FERTIG" || order.workflow === "ZUR_ABRECHNUNG" || order.workflow === "ABGERECHNET";
+  const hasMissingParts = order.workflow === "WARTET_FEHLTEILE";
+  const isSettled = order.workflow === "ABGERECHNET";
+  
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <div className="border-b">
-        <div className="w-full">
+        <div className="w-full px-6 py-4">
           <Button
             variant="ghost"
             onClick={() => setLocation("/orders")}
@@ -435,9 +447,9 @@ export default function OrderDetail() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
-        <div className="w-full">
+        <div className="w-full px-6 py-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList data-testid="tabs-list">
+            <TabsList className="mb-4" data-testid="tabs-list">
               <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
               <TabsTrigger value="sizes" data-testid="tab-sizes">Größen</TabsTrigger>
               <TabsTrigger value="assets" data-testid="tab-assets">Druckdaten / Anhänge</TabsTrigger>
@@ -453,115 +465,26 @@ export default function OrderDetail() {
                 </Alert>
               )}
               
-              {/* Freigabe-Checkliste - nur bei Status NEU */}
-              {order.workflow === "NEU" && (
-                <Card className="rounded-2xl border-primary/20 bg-primary/5 mb-4">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Package className="h-5 w-5" />
-                      Freigabe-Checkliste
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Prüfen Sie die folgenden Punkte, bevor Sie den Auftrag für die Produktion freigeben:
-                    </p>
-                    <div className="space-y-3">
-                      {/* Positionen */}
-                      <button
-                        onClick={() => setActiveTab("details")}
-                        className="w-full flex items-start gap-3 p-3 rounded-lg hover-elevate active-elevate-2 border border-muted/40 text-left transition-all"
-                        data-testid="checklist-item-positions"
-                      >
-                        <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 ${
-                          hasPositions 
-                            ? 'bg-green-500 border-green-500' 
-                            : 'bg-muted border-muted-foreground/30'
-                        }`}>
-                          {hasPositions && <Check className="h-3 w-3 text-white" />}
-                        </div>
-                        <div className="flex-1">
-                          <div className={`font-medium ${hasPositions ? 'text-foreground' : 'text-muted-foreground'}`}>
-                            {hasPositions ? 'Positionen hinzugefügt' : 'Positionen hinzufügen'}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            {hasPositions 
-                              ? `${order.positions?.length || 0} Position${(order.positions?.length || 0) !== 1 ? 'en' : ''} erfasst`
-                              : 'Klicken Sie hier, um Positionen hinzuzufügen'
-                            }
-                          </div>
-                        </div>
-                      </button>
-
-                      {/* Größentabelle - nur bei TEAMSPORT */}
-                      {isTeamsport && (
-                        <button
-                          onClick={() => setActiveTab("sizes")}
-                          className="w-full flex items-start gap-3 p-3 rounded-lg hover-elevate active-elevate-2 border border-muted/40 text-left transition-all"
-                          data-testid="checklist-item-sizetable"
-                        >
-                          <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 ${
-                            hasSizeTable 
-                              ? 'bg-green-500 border-green-500' 
-                              : 'bg-muted border-muted-foreground/30'
-                          }`}>
-                            {hasSizeTable && <Check className="h-3 w-3 text-white" />}
-                          </div>
-                          <div className="flex-1">
-                            <div className={`font-medium ${hasSizeTable ? 'text-foreground' : 'text-muted-foreground'}`}>
-                              {hasSizeTable ? 'Größentabelle erstellt' : 'Größentabelle erstellen'}
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                              {hasSizeTable 
-                                ? 'Größentabelle für TEAMSPORT erfasst'
-                                : 'Erforderlich für TEAMSPORT-Aufträge'
-                              }
-                            </div>
-                          </div>
-                        </button>
-                      )}
-
-                      {/* Druckdaten */}
-                      <button
-                        onClick={() => setActiveTab("assets")}
-                        className="w-full flex items-start gap-3 p-3 rounded-lg hover-elevate active-elevate-2 border border-muted/40 text-left transition-all"
-                        data-testid="checklist-item-printassets"
-                      >
-                        <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 ${
-                          hasRequiredAssets 
-                            ? 'bg-green-500 border-green-500' 
-                            : 'bg-muted border-muted-foreground/30'
-                        }`}>
-                          {hasRequiredAssets && <Check className="h-3 w-3 text-white" />}
-                        </div>
-                        <div className="flex-1">
-                          <div className={`font-medium ${hasRequiredAssets ? 'text-foreground' : 'text-muted-foreground'}`}>
-                            {hasRequiredAssets ? 'Druckdaten hochgeladen' : 'Erforderliche Druckdaten hochladen'}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            {hasRequiredAssets 
-                              ? 'Alle erforderlichen Druckdaten vorhanden'
-                              : 'Klicken Sie hier, um Druckdaten hochzuladen'
-                            }
-                          </div>
-                        </div>
-                      </button>
-                    </div>
-
-                    {/* Status-Indikator */}
-                    {canSubmitOrder && (
-                      <div className="mt-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                        <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                          <Check className="h-4 w-4" />
-                          <span className="text-sm font-medium">
-                            Auftrag ist bereit für die Freigabe
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
+              {/* Workflow Status - Horizontal Checklist */}
+              <Card className="rounded-2xl mb-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Workflow-Status
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <OrderWorkflowSteps
+                    hasPositions={hasPositions}
+                    hasPrice={hasPrice}
+                    hasAssets={hasRequiredAssets}
+                    hasProduction={hasProduction}
+                    hasMissingParts={hasMissingParts}
+                    isSettled={isSettled}
+                    workflow={order.workflow}
+                  />
+                </CardContent>
+              </Card>
               
               <div className="space-y-4">
                 {/* Combined Card with 3 Gradients */}
