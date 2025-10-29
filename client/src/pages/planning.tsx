@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ChevronLeft, ChevronRight, X, Plus, GripVertical } from "lucide-react";
-import { format, addDays, subDays, startOfWeek, parseISO, getDay, differenceInCalendarDays } from "date-fns";
+import { format, addDays, subDays, parseISO, getDay, differenceInCalendarDays } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -78,47 +78,25 @@ const DEPARTMENT_LABELS: Record<DepartmentFilter, string> = {
   SONSTIGES: "Sonstiges",
 };
 
+const DEPARTMENT_COLORS: Record<Department, string> = {
+  TEAMSPORT: "border-blue-500",
+  TEXTILVEREDELUNG: "border-purple-500",
+  STICKEREI: "border-green-500",
+  DRUCK: "border-orange-500",
+  SONSTIGES: "border-gray-500",
+};
+
 const DAY_LABELS = ["Mo.", "Di.", "Mi.", "Do.", "Fr."];
 const WORKING_HOURS_START = 7 * 60; // 07:00 = 420 min
 const WORKING_HOURS_END = 18 * 60; // 18:00 = 1080 min
 const WORKING_HOURS_TOTAL = WORKING_HOURS_END - WORKING_HOURS_START; // 660 min
 
-// === PIXEL-BASIERTE SKALIERUNG (NEU) ===
-// Skalierungsfaktor: 2 Pixel pro Minute
-const PIXELS_PER_MINUTE = 2;
-// Ableitung: 1rem = 16px (Browser-Standard)
-const REM_PER_MINUTE = PIXELS_PER_MINUTE / 16; // 0.125 rem/min
-const SNAP_MINUTES = 15;
-
-// Gesamthöhe der Timeline in Pixeln
-const TIMELINE_HEIGHT_PX = WORKING_HOURS_TOTAL * PIXELS_PER_MINUTE; // 660 * 2 = 1320px
-
-// Layout-Offset: Abstand vom Grid-Container-Top bis zur visuellen 07:00-Linie
-// Header ist h-12 (3rem = 48px)
-const TIME_AXIS_START_OFFSET_PX = 48;
-
-function calculateSlotStyle(startMin: number, lengthMin: number): React.CSSProperties {
-  // Minuten seit 07:00 Uhr
-  const minutesFromStart = Math.max(0, startMin - WORKING_HOURS_START);
-  
-  // Direkte Berechnung in Pixeln (ohne Offset - Labels werden angepasst)
-  const topPx = minutesFromStart * PIXELS_PER_MINUTE;
-  const heightPx = lengthMin * PIXELS_PER_MINUTE;
-
-  return {
-    // Position relativ zum DroppableDayColumn
-    top: `${topPx}px`,
-    height: `${heightPx}px`,
-    minHeight: '2.5rem', // Mindesthöhe für Lesbarkeit
-    position: 'absolute' as const,
-    left: 0,
-    right: 0,
-    overflow: 'hidden',
-  };
-}
+// Grid configuration: 15-minute intervals
+const GRID_INTERVAL_MIN = 15;
+const GRID_ROWS = WORKING_HOURS_TOTAL / GRID_INTERVAL_MIN; // 44 rows
 
 function snapToGrid(minutes: number): number {
-  return Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;
+  return Math.round(minutes / GRID_INTERVAL_MIN) * GRID_INTERVAL_MIN;
 }
 
 function formatTime(minutes: number): string {
@@ -127,46 +105,67 @@ function formatTime(minutes: number): string {
   return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
 }
 
-// Calculate minutes from Y-coordinate position
+// Calculate grid row from minutes (1-indexed for CSS grid)
+function minutesToGridRow(minutes: number): number {
+  const minutesFromStart = minutes - WORKING_HOURS_START;
+  return Math.floor(minutesFromStart / GRID_INTERVAL_MIN) + 1;
+}
+
+// Calculate minutes from grid row (1-indexed)
+function gridRowToMinutes(row: number): number {
+  return WORKING_HOURS_START + (row - 1) * GRID_INTERVAL_MIN;
+}
+
+// Calculate row span for duration
+function minutesToRowSpan(lengthMin: number): number {
+  return Math.max(1, Math.ceil(lengthMin / GRID_INTERVAL_MIN));
+}
+
+// Calculate minutes from Y-coordinate position for drag & drop
 function calculateMinutesFromY(
   dropClientY: number,
-  droppableNode: HTMLElement | null
+  gridContainer: HTMLElement | null
 ): number {
-  if (!droppableNode) {
-    console.error("Droppable node not found in calculateMinutesFromY");
+  if (!gridContainer) {
+    console.error("Grid container not found");
     return WORKING_HOURS_START;
   }
 
-  // Finde den Grid-Container für präzise Referenz
-  const gridContainer = document.getElementById('planning-grid-container');
-  const gridRect = gridContainer?.getBoundingClientRect();
-
-  if (!gridRect) {
-    console.error("Grid container not found.");
+  const gridRect = gridContainer.getBoundingClientRect();
+  
+  // Find the first day cell to determine where content rows start
+  const firstDayCell = gridContainer.querySelector('[data-day-cell]') as HTMLElement;
+  if (!firstDayCell) {
+    console.error("Could not find day cell for reference");
     return WORKING_HOURS_START;
   }
-
-  // Der visuelle Start der 07:00-Linie im Viewport
-  const timeAxisStartYInViewport = gridRect.top + TIME_AXIS_START_OFFSET_PX;
-
-  // Y-Position des Drops relativ zum Start der 07:00-Linie
-  const relativeY = Math.max(0, dropClientY - timeAxisStartYInViewport);
-
-  // Umrechnung in Minuten
-  const minutesOffset = relativeY / PIXELS_PER_MINUTE;
-  let calculatedMin = WORKING_HOURS_START + minutesOffset;
-
-  // Runden auf Raster
-  calculatedMin = Math.round(calculatedMin / SNAP_MINUTES) * SNAP_MINUTES;
-
+  
+  const firstCellRect = firstDayCell.getBoundingClientRect();
+  
+  // Calculate Y position relative to first content row
+  const relativeY = dropClientY - firstCellRect.top;
+  
+  // Each row is 30px (from gridTemplateRows)
+  const ROW_HEIGHT = 30;
+  
+  // Calculate which row we're in (0-indexed)
+  let targetRow = Math.floor(relativeY / ROW_HEIGHT);
+  
+  // Clamp to valid range (0 to GRID_ROWS-1)
+  targetRow = Math.max(0, Math.min(targetRow, GRID_ROWS - 1));
+  
+  // Convert to minutes (row 0 = 07:00, row 1 = 07:15, etc.)
+  const calculatedMin = gridRowToMinutes(targetRow + 1);
+  
+  // Snap to grid
+  const snappedMin = snapToGrid(calculatedMin);
+  
   // Clamp within working hours
-  const maxStartMin = WORKING_HOURS_END - SNAP_MINUTES;
-  calculatedMin = Math.max(WORKING_HOURS_START, Math.min(calculatedMin, maxStartMin));
-
-  // Debug-Logging
-  console.log(`Drop Y: ${dropClientY.toFixed(0)}, Axis Start Y: ${timeAxisStartYInViewport.toFixed(0)}, Relative Y: ${relativeY.toFixed(1)}, Offset Min: ${minutesOffset.toFixed(1)}, Calculated Min: ${calculatedMin} (${formatTime(calculatedMin)})`);
-
-  return calculatedMin;
+  const result = Math.max(WORKING_HOURS_START, Math.min(snappedMin, WORKING_HOURS_END - GRID_INTERVAL_MIN));
+  
+  console.log(`Drop Y: ${dropClientY.toFixed(0)}, First Cell Y: ${firstCellRect.top.toFixed(0)}, Relative Y: ${relativeY.toFixed(1)}, Target Row: ${targetRow}, Calculated Min: ${result} (${formatTime(result)})`);
+  
+  return result;
 }
 
 // Check for slot collisions
@@ -180,7 +179,6 @@ function checkSlotCollision(
 ): boolean {
   const endMin = startMin + lengthMin;
   
-  // Filter slots for the same work center and date
   const relevantSlots = allSlots.filter(slot => {
     if (slot.id === slotIdToIgnore) return false;
     if (slot.workCenterId !== workCenterId) return false;
@@ -188,18 +186,14 @@ function checkSlotCollision(
     return true;
   });
 
-  // Check for overlap with any existing slot
   for (const slot of relevantSlots) {
     const slotEnd = slot.startMin + slot.lengthMin;
-    
-    // Check if there's any overlap
-    // Overlap occurs if: new slot starts before existing ends AND new slot ends after existing starts
     if (startMin < slotEnd && endMin > slot.startMin) {
-      return true; // Collision detected
+      return true;
     }
   }
 
-  return false; // No collision
+  return false;
 }
 
 export default function Planning() {
@@ -245,7 +239,7 @@ export default function Planning() {
     })
   );
 
-  // Track pointer position during drag (works for mouse, touch, and pen)
+  // Track pointer position during drag
   useEffect(() => {
     const handlePointerMove = (e: PointerEvent) => {
       if (activeId) {
@@ -259,18 +253,16 @@ export default function Planning() {
     }
   }, [activeId]);
 
-  // Get workcenters for department
+  // Get workcenters
   const { data: workCenters = [] } = useQuery<WorkCenter[]>({
     queryKey: ["/api/workcenters", selectedDepartment],
     queryFn: async () => {
       if (selectedDepartment === "TEAMSPORT_TEXTIL") {
-        // Fetch all workcenters and filter in frontend
         const response = await fetch("/api/workcenters");
         if (!response.ok) throw new Error("Failed to fetch workcenters");
         const all: WorkCenter[] = await response.json();
         return all.filter(wc => wc.active && ['TEAMSPORT', 'TEXTILVEREDELUNG'].includes(wc.department));
       } else {
-        // Fetch for single department
         const response = await fetch(`/api/workcenters?department=${selectedDepartment}`);
         if (!response.ok) throw new Error("Failed to fetch workcenters");
         return response.json();
@@ -287,7 +279,6 @@ export default function Planning() {
     queryKey: ["/api/orders", selectedDepartment],
     queryFn: async () => {
       if (selectedDepartment === "TEAMSPORT_TEXTIL") {
-        // Fetch from both departments and merge
         const [teamsport, textil] = await Promise.all([
           fetch("/api/orders?department=TEAMSPORT&workflow=FUER_PROD,WARTET_FEHLTEILE").then(r => {
             if (!r.ok) throw new Error("Failed to fetch TEAMSPORT orders");
@@ -301,7 +292,6 @@ export default function Planning() {
         const mergedOrders = [...teamsport.orders, ...textil.orders];
         return { orders: mergedOrders, totalCount: mergedOrders.length };
       } else {
-        // Fetch for single department
         const response = await fetch(`/api/orders?department=${selectedDepartment}&workflow=FUER_PROD,WARTET_FEHLTEILE`);
         if (!response.ok) throw new Error("Failed to fetch orders");
         return response.json();
@@ -321,7 +311,6 @@ export default function Planning() {
     queryKey: ["/api/timeslots", selectedDepartment, weekStartStr],
     queryFn: async () => {
       if (selectedDepartment === "TEAMSPORT_TEXTIL") {
-        // Fetch from both departments and merge
         const [teamsport, textil] = await Promise.all([
           fetch(`/api/timeslots?department=TEAMSPORT&weekStart=${weekStartStr}`).then(r => {
             if (!r.ok) throw new Error("Failed to fetch TEAMSPORT timeslots");
@@ -334,7 +323,6 @@ export default function Planning() {
         ]);
         return [...teamsport, ...textil];
       } else {
-        // Fetch for single department
         const response = await fetch(`/api/timeslots?department=${selectedDepartment}&weekStart=${weekStartStr}`);
         if (!response.ok) throw new Error("Failed to fetch timeslots");
         return response.json();
@@ -423,22 +411,18 @@ export default function Planning() {
   // Drag handlers
   function handleDragOver(event: DragOverEvent) {
     const { over } = event;
-    const overId = over?.id;
     const overData = over?.data?.current;
 
-    // Finde die Daten der Zelle, über der wir schweben
     let cellData: { day: number; workCenterId: string } | null = null;
 
     if (overData?.type === 'day-cell') {
-      // Wir sind direkt über der Spalte
       const targetDate = overData.date as Date;
       const dayIndex = differenceInCalendarDays(targetDate, weekStart);
       if (dayIndex >= 0 && dayIndex < 5 && departmentWorkCenter) {
         cellData = { day: dayIndex, workCenterId: departmentWorkCenter.id };
       }
-    } else if (overId && typeof overId === 'string' && overId.startsWith('slot-')) {
-      // Wir sind über einem Slot, finde die Zelle darunter
-      const slotId = overId.replace('slot-', '');
+    } else if (over?.id && typeof over.id === 'string' && over.id.startsWith('slot-')) {
+      const slotId = over.id.replace('slot-', '');
       const slot = timeSlots.find(s => s.id === slotId);
       if (slot) {
         const slotDate = parseISO(slot.date);
@@ -455,35 +439,27 @@ export default function Planning() {
   }
 
   function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
+    const { active } = event;
     const pointerY = currentPointerY;
     setActiveId(null);
     setCurrentPointerY(null);
 
-    if (!over || !dragOverData) {
-      // Kein gültiges Ziel gefunden
-      setDragOverData(null);
-      return;
-    }
-
-    if (!departmentWorkCenter) {
+    if (!dragOverData || !departmentWorkCenter) {
       setDragOverData(null);
       return;
     }
 
     const activeData = active.data.current;
     const targetCellData = dragOverData;
-
-    // Berechne das Zieldatum aus dragOverData
     const targetDate = addDays(weekStart, targetCellData.day);
     const targetDateStr = format(targetDate, "yyyy-MM-dd");
     
-    // Get the droppable element for precise position calculation
-    const droppableElement = document.getElementById(`day-${targetDateStr}-timeline`);
+    // Get the grid container for position calculation
+    const gridContainer = document.getElementById('planning-grid');
     
     // Calculate precise start time from Y-coordinate
     const calculatedStartMin = pointerY !== null 
-      ? calculateMinutesFromY(pointerY, droppableElement)
+      ? calculateMinutesFromY(pointerY, gridContainer)
       : WORKING_HOURS_START;
 
     // Order from pool - open modal to get duration
@@ -506,16 +482,14 @@ export default function Planning() {
       return;
     }
 
-    // Moving existing slot - update with new position, keep duration
+    // Moving existing slot
     if (activeData?.type === "slot") {
       const slotId = activeData.slotId as string;
       const slot = timeSlots.find(s => s.id === slotId);
       
       if (slot) {
-        // Clamp start time to ensure slot doesn't overflow past working hours
         const clampedStartMin = Math.min(calculatedStartMin, WORKING_HOURS_END - slot.lengthMin);
         
-        // Check for collision with the new position (keeping existing duration)
         if (checkSlotCollision(slot.id, targetDateStr, clampedStartMin, slot.lengthMin, targetCellData.workCenterId, timeSlots)) {
           toast({ 
             title: "Kollision!", 
@@ -526,7 +500,6 @@ export default function Planning() {
           return;
         }
 
-        // Update the slot with new position
         updateSlotMutation.mutate({ 
           id: slotId, 
           date: targetDate, 
@@ -550,42 +523,29 @@ export default function Planning() {
       return;
     }
 
-    // Round to 15 minute intervals, minimum 15 minutes
     const lengthMin = Math.max(15, Math.round(lengthInput / 15) * 15);
     const targetDate = addDays(weekStart, appointmentModalData.day);
     const targetDateStr = format(targetDate, "yyyy-MM-dd");
-
-    // Clamp start time to ensure slot doesn't overflow past working hours
     const clampedStartMin = Math.min(appointmentModalData.startMin, WORKING_HOURS_END - lengthMin);
 
-    // Validate that the slot fits within working hours
     if (clampedStartMin + lengthMin > WORKING_HOURS_END) {
       toast({ 
         title: "Fehler", 
         description: "Der Termin würde über die Arbeitszeit hinausgehen. Bitte kürzere Dauer wählen.", 
         variant: "destructive" 
       });
-      return; // Don't close modal, let user adjust
+      return;
     }
 
-    // Check for collision
-    if (checkSlotCollision(
-      undefined, 
-      targetDateStr, 
-      clampedStartMin, 
-      lengthMin, 
-      appointmentModalData.workCenterId, 
-      timeSlots
-    )) {
+    if (checkSlotCollision(undefined, targetDateStr, clampedStartMin, lengthMin, appointmentModalData.workCenterId, timeSlots)) {
       toast({ 
         title: "Kollision!", 
         description: "Der Termin überschneidet sich mit einem anderen Zeitslot.", 
         variant: "destructive" 
       });
-      return; // Don't close modal, let user adjust
+      return;
     }
 
-    // Create the slot
     createSlotMutation.mutate({
       workCenterId: appointmentModalData.workCenterId,
       date: targetDate,
@@ -627,7 +587,7 @@ export default function Planning() {
     setBlockerModalOpen(false);
   }
 
-  // Filter orders that are already scheduled
+  // Filter unscheduled orders
   const scheduledOrderIds = new Set(timeSlots.filter(s => s.orderId).map(s => s.orderId));
   const unscheduledOrders = availableOrders.filter(o => !scheduledOrderIds.has(o.id));
 
@@ -641,6 +601,19 @@ export default function Planning() {
     });
     return map;
   }, [timeSlots]);
+
+  // Calculate utilization per day
+  const utilizationByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    weekDates.forEach(date => {
+      const dateKey = format(date, "yyyy-MM-dd");
+      const slots = slotsByDate.get(dateKey) || [];
+      const totalMinutes = slots.reduce((sum, slot) => sum + slot.lengthMin, 0);
+      const percentage = (totalMinutes / WORKING_HOURS_TOTAL) * 100;
+      map.set(dateKey, percentage);
+    });
+    return map;
+  }, [slotsByDate, weekDates]);
 
   const activeOrder = activeId && activeId.startsWith("order-") 
     ? unscheduledOrders.find(o => o.id === activeId.substring(6))
@@ -660,7 +633,7 @@ export default function Planning() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <Label>Bereich:</Label>
-              <Select value={selectedDepartment} onValueChange={(v) => setSelectedDepartment(v as Department)}>
+              <Select value={selectedDepartment} onValueChange={(v) => setSelectedDepartment(v as DepartmentFilter)}>
                 <SelectTrigger className="w-48" data-testid="select-department">
                   <SelectValue />
                 </SelectTrigger>
@@ -727,49 +700,15 @@ export default function Planning() {
             </CardContent>
           </Card>
 
-          {/* Right: Time Matrix */}
+          {/* Right: Planning Grid */}
           <Card className="flex-1 flex flex-col overflow-hidden">
             <CardContent className="flex-1 overflow-auto p-0">
-              <div id="planning-grid-container" className="flex min-w-max">
-                {/* Time column */}
-                <div className="w-16 flex-shrink-0 border-r bg-muted/30">
-                  <div className="h-12 border-b" /> {/* Header spacer */}
-                  <div className="relative" style={{ height: `${TIMELINE_HEIGHT_PX}px` }}>
-                    {Array.from({ length: 12 }, (_, i) => {
-                      const hour = 7 + i;
-                      const minutesFromMidnight = hour * 60;
-                      const minutesFromStart = minutesFromMidnight - WORKING_HOURS_START;
-                      // Verschiebe Labels um 9px nach oben, um mit Slots zu alignieren
-                      const topPx = minutesFromStart * PIXELS_PER_MINUTE - 9;
-                      return (
-                        <div
-                          key={hour}
-                          className="absolute left-0 right-0 text-xs text-muted-foreground px-1 border-t"
-                          style={{ top: `${topPx}px` }}
-                        >
-                          {`${hour}:00`}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Day columns */}
-                {weekDates.map((date, idx) => {
-                  const dateKey = format(date, "yyyy-MM-dd");
-                  const slots = slotsByDate.get(dateKey) || [];
-                  return (
-                    <DayColumn
-                      key={dateKey}
-                      date={date}
-                      dayLabel={DAY_LABELS[idx]}
-                      slots={slots}
-                      onDeleteSlot={(slotId) => deleteSlotMutation.mutate(slotId)}
-                    />
-                  );
-                })}
-              </div>
-
+              <PlanningGrid
+                weekDates={weekDates}
+                slotsByDate={slotsByDate}
+                utilizationByDate={utilizationByDate}
+                onDeleteSlot={(slotId) => deleteSlotMutation.mutate(slotId)}
+              />
             </CardContent>
           </Card>
         </div>
@@ -780,7 +719,7 @@ export default function Planning() {
         </DragOverlay>
       </DndContext>
 
-      {/* Appointment Modal - Only ask for duration with calculated start time */}
+      {/* Appointment Modal */}
       {appointmentModalData && (
         <Dialog open={appointmentModalOpen} onOpenChange={setAppointmentModalOpen}>
           <DialogContent data-testid="dialog-appointment">
@@ -912,55 +851,255 @@ export default function Planning() {
 }
 
 // ============================================================================
-// Day Column Component
+// Planning Grid Component (CSS Grid based)
 // ============================================================================
-interface DayColumnProps {
-  date: Date;
-  dayLabel: string;
-  slots: TimeSlot[];
+interface PlanningGridProps {
+  weekDates: Date[];
+  slotsByDate: Map<string, TimeSlot[]>;
+  utilizationByDate: Map<string, number>;
   onDeleteSlot: (slotId: string) => void;
 }
 
-function DayColumn({ date, dayLabel, slots, onDeleteSlot }: DayColumnProps) {
-  const { setNodeRef } = useDroppable({
-    id: `day-${format(date, "yyyy-MM-dd")}`,
-    data: { type: "day-cell", date },
-  });
+function PlanningGrid({ weekDates, slotsByDate, utilizationByDate, onDeleteSlot }: PlanningGridProps) {
+  return (
+    <div 
+      id="planning-grid"
+      className="grid min-w-max relative"
+      style={{
+        gridTemplateColumns: '4rem repeat(5, minmax(200px, 1fr))',
+        gridTemplateRows: `auto repeat(${GRID_ROWS}, 30px)`,
+      }}
+    >
+      {/* Header Row */}
+      <div className="sticky top-0 z-10 bg-muted/20 border-b border-r" />
+      {weekDates.map((date, idx) => {
+        const dateKey = format(date, "yyyy-MM-dd");
+        const utilization = utilizationByDate.get(dateKey) || 0;
+        
+        return (
+          <div key={dateKey} className="sticky top-0 z-10 bg-muted/20 border-b border-r p-2">
+            <div className="flex flex-col items-center gap-1">
+              <div className="text-xs text-muted-foreground">{DAY_LABELS[idx]}</div>
+              <div className="text-sm font-medium">{format(date, "dd.MM.")}</div>
+              <UtilizationBar percentage={utilization} />
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Time labels + Grid cells */}
+      {Array.from({ length: GRID_ROWS }, (_, rowIdx) => {
+        const row = rowIdx + 1;
+        const minutes = gridRowToMinutes(row);
+        const showLabel = minutes % 60 === 0; // Show label every hour
+        
+        return (
+          <div key={`row-${row}`} className="contents">
+            {/* Time label */}
+            <div
+              className="border-r border-b border-border/20 text-xs text-muted-foreground px-1 flex items-center justify-end bg-muted/10"
+              style={{ gridRow: row + 1 }}
+            >
+              {showLabel && formatTime(minutes)}
+            </div>
+
+            {/* Day cells (droppable background) */}
+            {weekDates.map((date, dayIdx) => {
+              const dateKey = format(date, "yyyy-MM-dd");
+              return (
+                <DayCell
+                  key={`${dateKey}-${row}`}
+                  date={date}
+                  dayIdx={dayIdx}
+                  row={row}
+                />
+              );
+            })}
+          </div>
+        );
+      })}
+
+      {/* Render all slots as direct grid items */}
+      {weekDates.map((date, dayIdx) => {
+        const dateKey = format(date, "yyyy-MM-dd");
+        const slots = slotsByDate.get(dateKey) || [];
+        return slots.map(slot => (
+          <GridSlotCard
+            key={slot.id}
+            slot={slot}
+            dayIdx={dayIdx}
+            onDelete={onDeleteSlot}
+          />
+        ));
+      })}
+    </div>
+  );
+}
+
+// ============================================================================
+// Utilization Bar
+// ============================================================================
+interface UtilizationBarProps {
+  percentage: number;
+}
+
+function UtilizationBar({ percentage }: UtilizationBarProps) {
+  const getColor = () => {
+    if (percentage < 70) return "bg-green-500";
+    if (percentage < 90) return "bg-yellow-500";
+    return "bg-red-500";
+  };
+
+  const clampedPercentage = Math.min(100, percentage);
 
   return (
-    <div className="flex-1 min-w-[200px] border-r">
-      {/* Header */}
-      <div className="h-12 border-b flex flex-col items-center justify-center bg-muted/20">
-        <div className="text-xs text-muted-foreground">{dayLabel}</div>
-        <div className="text-sm font-medium">{format(date, "dd.MM.")}</div>
+    <div className="w-full">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div 
+          className={`h-full transition-all ${getColor()}`}
+          style={{ width: `${clampedPercentage}%` }}
+        />
       </div>
+      <div className="text-xs text-muted-foreground text-center mt-0.5">
+        {Math.round(percentage)}%
+      </div>
+    </div>
+  );
+}
 
-      {/* Time slots area */}
-      <div 
-        ref={setNodeRef} 
-        id={`day-${format(date, "yyyy-MM-dd")}-timeline`}
-        className="relative bg-card" 
-        style={{ height: `${TIMELINE_HEIGHT_PX}px` }}
-      >
-        {/* Hour lines */}
-        {Array.from({ length: 12 }, (_, i) => {
-          const hour = 7 + i;
-          const minutesFromMidnight = hour * 60;
-          const minutesFromStart = minutesFromMidnight - WORKING_HOURS_START;
-          const topPx = minutesFromStart * PIXELS_PER_MINUTE;
-          return (
-            <div
-              key={i}
-              className="absolute left-0 right-0 border-t border-border/30"
-              style={{ top: `${topPx}px` }}
-            />
-          );
-        })}
+// ============================================================================
+// Day Cell Component (droppable background)
+// ============================================================================
+interface DayCellProps {
+  date: Date;
+  dayIdx: number;
+  row: number;
+}
 
-        {/* Slots */}
-        {slots.map(slot => (
-          <DraggableTimeSlot key={slot.id} slot={slot} onDelete={onDeleteSlot} />
-        ))}
+function DayCell({ date, dayIdx, row }: DayCellProps) {
+  const { setNodeRef } = useDroppable({
+    id: `day-${format(date, "yyyy-MM-dd")}-row-${row}`,
+    data: { type: "day-cell", date, row },
+  });
+
+  // Highlight hour boundaries
+  const minutes = gridRowToMinutes(row);
+  const isHourBoundary = minutes % 60 === 0;
+
+  return (
+    <div
+      ref={setNodeRef}
+      data-day-cell
+      className={`border-r ${isHourBoundary ? 'border-b border-border/40' : 'border-b border-border/20'} bg-card hover:bg-accent/5 transition-colors`}
+      style={{ 
+        gridColumn: dayIdx + 2, // +2 because column 1 is time labels
+        gridRow: row + 1 
+      }}
+    />
+  );
+}
+
+// ============================================================================
+// Grid Slot Card (spans multiple rows)
+// ============================================================================
+interface GridSlotCardProps {
+  slot: TimeSlot;
+  dayIdx: number;
+  onDelete: (slotId: string) => void;
+}
+
+function GridSlotCard({ slot, dayIdx, onDelete }: GridSlotCardProps) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `slot-${slot.id}`,
+    data: { type: "slot", slotId: slot.id },
+  });
+
+  const rowStart = minutesToGridRow(slot.startMin);
+  const rowSpan = minutesToRowSpan(slot.lengthMin);
+  
+  const transformStyle = transform ? { transform: CSS.Translate.toString(transform) } : {};
+  
+  const isBlocker = slot.blocked;
+  const isCompact = slot.lengthMin < 45;
+  const department = slot.order?.department;
+  const borderColor = department ? DEPARTMENT_COLORS[department] : "border-gray-500";
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className={`rounded border-l-4 ${borderColor} border-r border-t border-b overflow-hidden group cursor-grab active:cursor-grabbing m-1 z-20 ${
+        isBlocker 
+          ? "bg-muted border-muted-foreground/30" 
+          : "bg-primary/5 border-border/50 hover-elevate"
+      }`}
+      style={{
+        ...transformStyle,
+        opacity: isDragging ? 0.5 : 1,
+        gridColumn: dayIdx + 2, // +2 because column 1 is time labels
+        gridRow: `${rowStart + 1} / span ${rowSpan}`,
+      }}
+      data-testid={`slot-${slot.id}`}
+    >
+      <div className="p-1.5 h-full flex flex-col justify-between">
+        {isBlocker ? (
+          <div className="flex items-start justify-between gap-1">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-muted-foreground">BLOCKER</div>
+              {slot.note && !isCompact && <div className="text-xs text-muted-foreground truncate mt-0.5">{slot.note}</div>}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(slot.id);
+              }}
+              data-testid={`button-delete-slot-${slot.id}`}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Header: Order Number + Delete Button */}
+            <div className="flex items-start justify-between gap-1">
+              <div className="text-sm font-bold truncate leading-tight">
+                {slot.order?.displayOrderNumber || slot.orderId?.slice(0, 8)}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(slot.id);
+                }}
+                data-testid={`button-delete-slot-${slot.id}`}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+            
+            {/* Content: Customer + Time in one line for compact view */}
+            {isCompact ? (
+              <div className="text-xs text-muted-foreground truncate">
+                {slot.order?.customer}
+              </div>
+            ) : (
+              <>
+                <div className="text-xs text-muted-foreground truncate">
+                  {slot.order?.customer}
+                </div>
+                <div className="text-xs text-muted-foreground/80 font-mono mt-auto">
+                  {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
+                </div>
+              </>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
@@ -1022,102 +1161,6 @@ function OrderCardOverlay({ order }: { order: Order }) {
             {order.displayOrderNumber || order.id.slice(0, 8)}
           </div>
           <div className="text-xs text-muted-foreground truncate">{order.title}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Draggable Time Slot
-// ============================================================================
-interface DraggableTimeSlotProps {
-  slot: TimeSlot;
-  onDelete: (slotId: string) => void;
-}
-
-function DraggableTimeSlot({ slot, onDelete }: DraggableTimeSlotProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `slot-${slot.id}`,
-    data: { type: "slot", slotId: slot.id },
-  });
-
-  const slotStyle = calculateSlotStyle(slot.startMin, slot.lengthMin);
-  const transformStyle = transform ? { transform: CSS.Translate.toString(transform) } : {};
-  const finalStyle = { ...slotStyle, ...transformStyle, opacity: isDragging ? 0.5 : 1 };
-
-  const isBlocker = slot.blocked;
-  
-  // Calculate if slot is compact based on duration
-  // < 30 min = very compact, < 45 min = compact
-  const isVeryCompact = slot.lengthMin < 30;
-  const isCompact = slot.lengthMin < 45;
-
-  return (
-    <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      className={`absolute left-1 right-1 rounded border overflow-hidden group ${
-        isBlocker 
-          ? "bg-muted border-muted-foreground/50 bg-stripes" 
-          : "bg-primary/10 border-primary hover-elevate"
-      }`}
-      style={finalStyle}
-      data-testid={`slot-${slot.id}`}
-    >
-      <div className={`${isVeryCompact ? 'p-1' : 'p-2'} h-full flex flex-col cursor-grab active:cursor-grabbing`}>
-        <div className="flex items-start justify-between gap-1">
-          <div className="flex-1 min-w-0">
-            {isVeryCompact ? (
-              <>
-                {/* Ultra-compact for very short slots */}
-                <div className="flex items-center gap-1">
-                  <span className="text-xs font-semibold truncate">
-                    {isBlocker ? 'BLOCKER' : (slot.order?.displayOrderNumber || slot.order?.title)}
-                  </span>
-                </div>
-              </>
-            ) : isBlocker ? (
-              <>
-                <div className="text-xs font-semibold text-muted-foreground">BLOCKER</div>
-                {slot.note && <div className="text-xs text-muted-foreground truncate">{slot.note}</div>}
-                {!isCompact && (
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="flex flex-col gap-0.5">
-                  <div className="text-xs font-semibold truncate">
-                    {slot.order?.displayOrderNumber || slot.orderId?.slice(0, 8)}
-                  </div>
-                  <div className="text-xs truncate">{slot.order?.title}</div>
-                  {!isCompact && (
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {formatTime(slot.startMin)} - {formatTime(slot.startMin + slot.lengthMin)}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-          {!isVeryCompact && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(slot.id);
-              }}
-              data-testid={`button-delete-slot-${slot.id}`}
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          )}
         </div>
       </div>
     </div>
