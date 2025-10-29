@@ -7,7 +7,7 @@ export type { Order, SizeTable, PrintAsset, OrderAsset, OrderPosition, OrderSour
 // Enum schemas
 export const orderSourceSchema = z.enum(["JTL", "INTERNAL"]);
 export const departmentSchema = z.enum(["TEAMSPORT", "TEXTILVEREDELUNG", "STICKEREI", "DRUCK", "SONSTIGES"]);
-export const workflowStateSchema = z.enum(["ENTWURF", "NEU", "PRUEFUNG", "FUER_PROD", "IN_PROD", "WARTET_FEHLTEILE", "FERTIG", "ZUR_ABRECHNUNG", "ABGERECHNET"]);
+export const workflowStateSchema = z.enum(["ENTWURF", "NEU", "PRUEFUNG", "FUER_PROD", "IN_PROD", "WARTET_FEHLTEILE", "FERTIG", "ZUR_ABRECHNUNG", "NACHKALKULATION", "ABGERECHNET"]);
 export const qcStateSchema = z.enum(["IO", "NIO", "UNGEPRUEFT"]);
 
 // ===== MODERNIZED STATUS LABELS & COLORS =====
@@ -21,6 +21,7 @@ export const WORKFLOW_LABELS: Record<WorkflowState, string> = {
   WARTET_FEHLTEILE: "Fehlteil (Material)",
   FERTIG: "Zur Auslieferung bereit",
   ZUR_ABRECHNUNG: "Ausgeliefert (Abrechnung offen)",
+  NACHKALKULATION: "Nachkalkulation",
   ABGERECHNET: "Abgerechnet",
 };
 
@@ -68,6 +69,7 @@ export const WORKFLOW_BADGE_CLASSES: Record<string, string> = {
   WARTET_FEHLTEILE: "bg-red-600 text-white border-transparent dark:bg-red-500", // "Fehlteil" ist Rot
   FERTIG: "bg-emerald-600 text-white border-transparent dark:bg-emerald-500", // "Zur Auslieferung bereit" ist Grün
   ZUR_ABRECHNUNG: "bg-fuchsia-600 text-white border-transparent dark:bg-fuchsia-500",
+  NACHKALKULATION: "bg-yellow-600 text-white border-transparent dark:bg-yellow-500",
   ABGERECHNET: "bg-zinc-700 text-white border-transparent dark:bg-zinc-600",
 
   // Virtuelle Status (basierend auf Logik)
