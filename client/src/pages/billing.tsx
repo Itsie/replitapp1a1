@@ -25,14 +25,6 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { OrderWithRelations } from "@shared/schema";
 import type { Decimal } from "@prisma/client/runtime/library";
 
-// Static bank data
-const BANK_DATA = {
-  name: "1aShirt GmbH",
-  bank: "Sparkasse Beispielstadt",
-  iban: "DE89 3704 0044 0532 0130 00",
-  bic: "COBADEFFXXX",
-};
-
 export default function Billing() {
   const { toast } = useToast();
 
