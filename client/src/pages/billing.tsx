@@ -25,6 +25,38 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { OrderWithRelations } from "@shared/schema";
 import type { Decimal } from "@prisma/client/runtime/library";
 
+// Copyable text component
+function CopyableText({ text, label, testId }: { text: string; label?: string; testId?: string }) {
+  const { toast } = useToast();
+  
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: "Kopiert!",
+        description: label || "Text wurde kopiert",
+      });
+    } catch (err) {
+      toast({
+        title: "Fehler",
+        description: "Kopieren fehlgeschlagen",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <span
+      onClick={handleCopy}
+      className="cursor-pointer hover:underline decoration-dotted underline-offset-2 transition-all"
+      title="Klicken zum Kopieren"
+      data-testid={testId}
+    >
+      {text}
+    </span>
+  );
+}
+
 export default function Billing() {
   const { toast } = useToast();
 
@@ -268,7 +300,41 @@ export default function Billing() {
                                 </div>
                               </CardHeader>
                               <CardContent>
-                                <pre className="text-sm whitespace-pre-wrap">{invoiceAddress}</pre>
+                                <div className="text-sm space-y-1">
+                                  {order.company && (
+                                    <div>
+                                      <CopyableText text={order.company} label="Firma kopiert" testId={`span-copy-company-${order.id}`} />
+                                    </div>
+                                  )}
+                                  {(order.contactFirstName || order.contactLastName) && (
+                                    <div>
+                                      <CopyableText 
+                                        text={`${order.contactFirstName || ''} ${order.contactLastName || ''}`.trim()} 
+                                        label="Name kopiert"
+                                        testId={`span-copy-name-${order.id}`}
+                                      />
+                                    </div>
+                                  )}
+                                  {order.billStreet && (
+                                    <div>
+                                      <CopyableText text={order.billStreet} label="Straße kopiert" testId={`span-copy-street-${order.id}`} />
+                                    </div>
+                                  )}
+                                  {(order.billZip || order.billCity) && (
+                                    <div>
+                                      <CopyableText 
+                                        text={`${order.billZip || ''} ${order.billCity || ''}`.trim()} 
+                                        label="PLZ/Ort kopiert"
+                                        testId={`span-copy-city-${order.id}`}
+                                      />
+                                    </div>
+                                  )}
+                                  {order.billCountry && order.billCountry !== 'DE' && (
+                                    <div>
+                                      <CopyableText text={order.billCountry} label="Land kopiert" testId={`span-copy-country-${order.id}`} />
+                                    </div>
+                                  )}
+                                </div>
                               </CardContent>
                             </Card>
 
@@ -291,8 +357,16 @@ export default function Billing() {
                                 </CardHeader>
                                 <CardContent>
                                   <div className="text-sm space-y-1">
-                                    {order.customerEmail && <div>E-Mail: {order.customerEmail}</div>}
-                                    {order.customerPhone && <div>Tel: {order.customerPhone}</div>}
+                                    {order.customerEmail && (
+                                      <div>
+                                        E-Mail: <CopyableText text={order.customerEmail} label="E-Mail kopiert" testId={`span-copy-email-${order.id}`} />
+                                      </div>
+                                    )}
+                                    {order.customerPhone && (
+                                      <div>
+                                        Tel: <CopyableText text={order.customerPhone} label="Telefon kopiert" testId={`span-copy-phone-${order.id}`} />
+                                      </div>
+                                    )}
                                   </div>
                                 </CardContent>
                               </Card>
