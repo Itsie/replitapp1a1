@@ -71,6 +71,8 @@ interface Order {
 
 const DEPARTMENT_LABELS: Record<DepartmentFilter, string> = {
   TEAMSPORT_TEXTIL: "Teamsport / Textil",
+  TEAMSPORT: "Teamsport",
+  TEXTILVEREDELUNG: "Textilveredelung",
   STICKEREI: "Stickerei",
   DRUCK: "Druck",
   SONSTIGES: "Sonstiges",
@@ -81,20 +83,37 @@ const WORKING_HOURS_START = 7 * 60; // 07:00 = 420 min
 const WORKING_HOURS_END = 18 * 60; // 18:00 = 1080 min
 const WORKING_HOURS_TOTAL = WORKING_HOURS_END - WORKING_HOURS_START; // 660 min
 
-// STABLE GEOMETRY: 1rem = 5 minutes
-const MINUTES_PER_REM = 5;
+// === PIXEL-BASIERTE SKALIERUNG (NEU) ===
+// Skalierungsfaktor: 2 Pixel pro Minute
+const PIXELS_PER_MINUTE = 2;
+// Ableitung: 1rem = 16px (Browser-Standard)
+const REM_PER_MINUTE = PIXELS_PER_MINUTE / 16; // 0.125 rem/min
 const SNAP_MINUTES = 15;
-const TIMELINE_HEIGHT_REM = WORKING_HOURS_TOTAL / MINUTES_PER_REM; // 132rem
 
-// Pixel-based calculation for precise drop positioning
-const PIXELS_PER_MINUTE = 16 / MINUTES_PER_REM; // 16px per rem / 5 min per rem = 3.2px per minute
+// Gesamthöhe der Timeline in Pixeln
+const TIMELINE_HEIGHT_PX = WORKING_HOURS_TOTAL * PIXELS_PER_MINUTE; // 660 * 2 = 1320px
 
-function calculateSlotStyle(startMin: number, lengthMin: number) {
-  const topRem = (startMin - WORKING_HOURS_START) / MINUTES_PER_REM;
-  const heightRem = lengthMin / MINUTES_PER_REM;
+// Layout-Offset: Abstand vom Grid-Container-Top bis zur visuellen 07:00-Linie
+// Header ist h-12 (3rem = 48px)
+const TIME_AXIS_START_OFFSET_PX = 48;
+
+function calculateSlotStyle(startMin: number, lengthMin: number): React.CSSProperties {
+  // Minuten seit 07:00 Uhr
+  const minutesFromStart = Math.max(0, startMin - WORKING_HOURS_START);
+  
+  // Direkte Berechnung in Pixeln (ohne Offset - Labels werden angepasst)
+  const topPx = minutesFromStart * PIXELS_PER_MINUTE;
+  const heightPx = lengthMin * PIXELS_PER_MINUTE;
+
   return {
-    top: `${topRem}rem`,
-    height: `${heightRem}rem`,
+    // Position relativ zum DroppableDayColumn
+    top: `${topPx}px`,
+    height: `${heightPx}px`,
+    minHeight: '2.5rem', // Mindesthöhe für Lesbarkeit
+    position: 'absolute' as const,
+    left: 0,
+    right: 0,
+    overflow: 'hidden',
   };
 }
 
@@ -113,20 +132,41 @@ function calculateMinutesFromY(
   dropClientY: number,
   droppableNode: HTMLElement | null
 ): number {
-  if (!droppableNode) return WORKING_HOURS_START;
+  if (!droppableNode) {
+    console.error("Droppable node not found in calculateMinutesFromY");
+    return WORKING_HOURS_START;
+  }
 
-  const rect = droppableNode.getBoundingClientRect();
-  const relativeY = dropClientY - rect.top;
+  // Finde den Grid-Container für präzise Referenz
+  const gridContainer = document.getElementById('planning-grid-container');
+  const gridRect = gridContainer?.getBoundingClientRect();
 
-  // Convert pixels to minutes
-  let minutesOffset = relativeY / PIXELS_PER_MINUTE;
-  let minutes = WORKING_HOURS_START + minutesOffset;
+  if (!gridRect) {
+    console.error("Grid container not found.");
+    return WORKING_HOURS_START;
+  }
 
-  // Snap to 15-minute grid
-  minutes = Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;
+  // Der visuelle Start der 07:00-Linie im Viewport
+  const timeAxisStartYInViewport = gridRect.top + TIME_AXIS_START_OFFSET_PX;
 
-  // Ensure within working hours (with space for minimum 15 min slot)
-  return Math.max(WORKING_HOURS_START, Math.min(minutes, WORKING_HOURS_END - 15));
+  // Y-Position des Drops relativ zum Start der 07:00-Linie
+  const relativeY = Math.max(0, dropClientY - timeAxisStartYInViewport);
+
+  // Umrechnung in Minuten
+  const minutesOffset = relativeY / PIXELS_PER_MINUTE;
+  let calculatedMin = WORKING_HOURS_START + minutesOffset;
+
+  // Runden auf Raster
+  calculatedMin = Math.round(calculatedMin / SNAP_MINUTES) * SNAP_MINUTES;
+
+  // Clamp within working hours
+  const maxStartMin = WORKING_HOURS_END - SNAP_MINUTES;
+  calculatedMin = Math.max(WORKING_HOURS_START, Math.min(calculatedMin, maxStartMin));
+
+  // Debug-Logging
+  console.log(`Drop Y: ${dropClientY.toFixed(0)}, Axis Start Y: ${timeAxisStartYInViewport.toFixed(0)}, Relative Y: ${relativeY.toFixed(1)}, Offset Min: ${minutesOffset.toFixed(1)}, Calculated Min: ${calculatedMin} (${formatTime(calculatedMin)})`);
+
+  return calculatedMin;
 }
 
 // Check for slot collisions
@@ -690,20 +730,22 @@ export default function Planning() {
           {/* Right: Time Matrix */}
           <Card className="flex-1 flex flex-col overflow-hidden">
             <CardContent className="flex-1 overflow-auto p-0">
-              <div className="flex min-w-max">
+              <div id="planning-grid-container" className="flex min-w-max">
                 {/* Time column */}
                 <div className="w-16 flex-shrink-0 border-r bg-muted/30">
                   <div className="h-12 border-b" /> {/* Header spacer */}
-                  <div className="relative" style={{ height: `${TIMELINE_HEIGHT_REM}rem` }}>
+                  <div className="relative" style={{ height: `${TIMELINE_HEIGHT_PX}px` }}>
                     {Array.from({ length: 12 }, (_, i) => {
                       const hour = 7 + i;
                       const minutesFromMidnight = hour * 60;
-                      const topRem = (minutesFromMidnight - WORKING_HOURS_START) / MINUTES_PER_REM;
+                      const minutesFromStart = minutesFromMidnight - WORKING_HOURS_START;
+                      // Verschiebe Labels um 9px nach oben, um mit Slots zu alignieren
+                      const topPx = minutesFromStart * PIXELS_PER_MINUTE - 9;
                       return (
                         <div
                           key={hour}
                           className="absolute left-0 right-0 text-xs text-muted-foreground px-1 border-t"
-                          style={{ top: `${topRem}rem` }}
+                          style={{ top: `${topPx}px` }}
                         >
                           {`${hour}:00`}
                         </div>
@@ -898,18 +940,19 @@ function DayColumn({ date, dayLabel, slots, onDeleteSlot }: DayColumnProps) {
         ref={setNodeRef} 
         id={`day-${format(date, "yyyy-MM-dd")}-timeline`}
         className="relative bg-card" 
-        style={{ height: `${TIMELINE_HEIGHT_REM}rem` }}
+        style={{ height: `${TIMELINE_HEIGHT_PX}px` }}
       >
         {/* Hour lines */}
         {Array.from({ length: 12 }, (_, i) => {
           const hour = 7 + i;
           const minutesFromMidnight = hour * 60;
-          const topRem = (minutesFromMidnight - WORKING_HOURS_START) / MINUTES_PER_REM;
+          const minutesFromStart = minutesFromMidnight - WORKING_HOURS_START;
+          const topPx = minutesFromStart * PIXELS_PER_MINUTE;
           return (
             <div
               key={i}
               className="absolute left-0 right-0 border-t border-border/30"
-              style={{ top: `${topRem}rem` }}
+              style={{ top: `${topPx}px` }}
             />
           );
         })}
